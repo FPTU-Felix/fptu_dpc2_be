@@ -13,8 +13,8 @@ services:
       POSTGRES_PASSWORD: root
       POSTGRES_DB: fptu_dpc2_db
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data # Lưu dữ liệu bền vững
-      - ./db-init:/docker-entrypoint-initdb.d   # <--- Tự nạp file SQL của ông vào đây
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d  
     networks:
       - party-network
 
