@@ -1,10 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto'; // Có thể xóa nếu chưa dùng
-import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { User } from './entities/user.entity';
 import { Repository } from 'typeorm';
+import { User } from './entities/user.entity';
 import { RegisterDto } from '../auth/dto/register.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -13,27 +12,43 @@ export class UsersService {
     private usersRepository: Repository<User>,
   ) {}
 
-  findAll() {
-    return `This action returns all users`;
+  // 1. Tạo User mới (Dùng cho Register)
+  async create(registerDto: RegisterDto): Promise<User> {
+    const newUser = this.usersRepository.create(registerDto);
+    return await this.usersRepository.save(newUser);
   }
 
-  // SỬA Ở ĐÂY: Đổi undefined thành null
-  findOneByUsername(username: string): Promise<User | null> {
+  // 2. Tìm theo Username (Dùng cho Login)
+  async findOneByUsername(username: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { username } });
   }
 
-  // SỬA THÊM: id là string (UUID) chứ không phải number
+  // 3. [MỚI] Tìm theo ID (Dùng cho JWT Strategy xác thực user từ token)
+  async findOneById(id: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { id } });
+  }
+
+  // 4. [MỚI] Cập nhật Refresh Token (Lưu vào DB khi login, xóa khi logout)
+  async updateRefreshToken(
+    userId: string,
+    hashedRefreshToken: string | null,
+  ): Promise<void> {
+    await this.usersRepository.update(userId, {
+      hashedRefreshToken: hashedRefreshToken,
+    });
+  }
+
+  // --- Các hàm CRUD cơ bản khác ---
+
+  findAll() {
+    return this.usersRepository.find();
+  }
+
   update(id: string, updateUserDto: UpdateUserDto) {
     return `This action updates a #${id} user`;
   }
 
-  // SỬA THÊM: id là string (UUID)
   remove(id: string) {
     return `This action removes a #${id} user`;
-  }
-
-  async create(registerDto: RegisterDto): Promise<User> {
-    const newUser = this.usersRepository.create(registerDto);
-    return await this.usersRepository.save(newUser);
   }
 }

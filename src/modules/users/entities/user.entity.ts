@@ -27,8 +27,8 @@ export class User {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
-  @Column({ name: 'hashed_refresh_token', nullable: true })
-  hashedRefreshToken: string;
+  @Column({ name: 'hashed_refresh_token', nullable: true, type: 'varchar' })
+  hashedRefreshToken: string | null;
 
   @Column({ name: 'role_id', nullable: true })
   roleId: string;
