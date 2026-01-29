@@ -26,7 +26,7 @@ export class TransformInterceptor<T> implements NestInterceptor<
       map((data) => ({
         statusCode: context.switchToHttp().getResponse().statusCode,
         message: data?.message || 'Thành công', // Nếu trong data có message thì lấy, ko thì default
-        data: data, // Nhét toàn bộ dữ liệu trả về vào key "data"
+        data: data,
       })),
     );
   }

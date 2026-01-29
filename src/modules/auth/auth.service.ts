@@ -73,7 +73,7 @@ export class AuthService {
     // 3. Lưu User mới vào Database
     const newUser = await this.usersService.create({
       ...registerDto,
-      password: hashedPassword, // Nhớ lưu pass đã mã hóa, đừng lưu pass thường
+      password: hashedPassword,
     });
 
     // 4. Tạo luôn cặp Token (để User đăng ký xong là vào luôn, đỡ phải login lại)
@@ -88,8 +88,6 @@ export class AuthService {
 
     return tokens;
   }
-
-  // --- HÀM BỔ TRỢ (HELPER) ---
 
   async updateRefreshTokenHash(userId: string, rt: string) {
     const hash = await bcrypt.hash(rt, 10);
