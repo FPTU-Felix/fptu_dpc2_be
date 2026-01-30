@@ -114,3 +114,7 @@ npm run migration:run
 # 4. Start Server
 npm run start:dev
 ```
+
+//For Dev:
+username: Admin
+pass: 123456

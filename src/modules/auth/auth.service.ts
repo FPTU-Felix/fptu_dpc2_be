@@ -1,12 +1,8 @@
-import {
-  Injectable,
-  ForbiddenException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { RegisterDto } from './dto/register.dto';
+import { SigninDto } from './dto/signin.dto';
 
 @Injectable()
 export class AuthService {
@@ -16,18 +12,21 @@ export class AuthService {
   ) {}
 
   // --- 1. ĐĂNG NHẬP ---
-  async signin(dto: RegisterDto) {
+  async signin(dto: SigninDto) {
     const user = await this.usersService.findOneByUsername(dto.username);
     if (!user) throw new ForbiddenException('Sai tài khoản hoặc mật khẩu');
 
     const passwordMatches = await bcrypt.compare(dto.password, user.password);
     if (!passwordMatches)
       throw new ForbiddenException('Sai tài khoản hoặc mật khẩu');
+    if (user.isActive === false)
+      throw new ForbiddenException('Tài khoản của bạn đã bị khóa');
     const tokens = await this.generateTokens(
       user.id,
       user.username,
-      user.roleId,
+      user.role?.name,
     );
+
     await this.updateRefreshTokenHash(user.id, tokens.refreshToken);
     return tokens;
   }
@@ -46,45 +45,12 @@ export class AuthService {
 
     const rtMatches = await bcrypt.compare(rt, user.hashedRefreshToken);
     if (!rtMatches) throw new ForbiddenException('Token không hợp lệ');
-
     const tokens = await this.generateTokens(
       user.id,
       user.username,
-      user.roleId,
+      user.role?.name,
     );
     await this.updateRefreshTokenHash(user.id, tokens.refreshToken);
-
-    return tokens;
-  }
-
-  async register(registerDto: RegisterDto) {
-    // 1. Kiểm tra xem username đã tồn tại chưa
-    const existingUser = await this.usersService.findOneByUsername(
-      registerDto.username,
-    );
-    if (existingUser) {
-      throw new ForbiddenException('Username này đã được sử dụng!');
-    }
-
-    // 2. Mã hóa mật khẩu (Hashing)
-    const salt = await bcrypt.genSalt();
-    const hashedPassword = await bcrypt.hash(registerDto.password, salt);
-
-    // 3. Lưu User mới vào Database
-    const newUser = await this.usersService.create({
-      ...registerDto,
-      password: hashedPassword,
-    });
-
-    // 4. Tạo luôn cặp Token (để User đăng ký xong là vào luôn, đỡ phải login lại)
-    const tokens = await this.generateTokens(
-      newUser.id,
-      newUser.username,
-      newUser.roleId,
-    );
-
-    // 5. Lưu Hash của Refresh Token xuống DB (để sau này cấp lại token mới)
-    await this.updateRefreshTokenHash(newUser.id, tokens.refreshToken);
 
     return tokens;
   }
@@ -94,27 +60,24 @@ export class AuthService {
     await this.usersService.updateRefreshToken(userId, hash);
   }
 
-  async generateTokens(userId: string, username: string, roleId: string) {
-    const payload = { sub: userId, username, roleId };
+  async generateTokens(userId: string, username: string, roleName: string) {
+    const payload = {
+      sub: userId,
+      username,
+      roleName,
+    };
 
     const [at, rt] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret:
-          process.env.JWT_ACCESS_SECRET ||
-          'bi_mat_access_token_khong_duoc_tiet_lo',
-        expiresIn: '15m', // Access Token sống 15 phút
+        secret: process.env.JWT_ACCESS_SECRET,
+        expiresIn: '15m',
       }),
       this.jwtService.signAsync(payload, {
-        secret:
-          process.env.JWT_REFRESH_SECRET ||
-          'bi_mat_refresh_token_khong_duoc_tiet_lo',
-        expiresIn: '7d', // Refresh Token sống 7 ngày
+        secret: process.env.JWT_REFRESH_SECRET,
+        expiresIn: '7d',
       }),
     ]);
 
-    return {
-      accessToken: at,
-      refreshToken: rt,
-    };
+    return { accessToken: at, refreshToken: rt };
   }
 }

@@ -15,6 +15,7 @@ import { AnnualAssessmentsModule } from './modules/annual-assessments/annual-ass
 import { CommendationsModule } from './modules/commendations/commendations.module';
 import { PartyFeesModule } from './modules/party-fees/party-fees.module';
 import { PartyPositionsModule } from './modules/party-positions/party-positions.module';
+import { HandbooksModule } from './modules/handbooks/handbooks.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { PartyPositionsModule } from './modules/party-positions/party-positions.
     CommendationsModule,
     PartyFeesModule,
     PartyPositionsModule,
+    HandbooksModule,
   ],
   controllers: [AppController],
   providers: [AppService],
