@@ -33,6 +33,12 @@ export class User {
   @Column({ name: 'role_id', nullable: true })
   roleId: string;
 
+  @Column({ unique: true })
+  email: string;
+
+  @Column({ default: true }) // Mặc định là true khi Admin tạo mới
+  isFirstLogin: boolean;
+
   @ManyToOne(() => Role, (role) => role.users)
   @JoinColumn({ name: 'role_id' })
   role: Role;

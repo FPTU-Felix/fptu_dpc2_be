@@ -16,14 +16,16 @@ import { CommendationsModule } from './modules/commendations/commendations.modul
 import { PartyFeesModule } from './modules/party-fees/party-fees.module';
 import { PartyPositionsModule } from './modules/party-positions/party-positions.module';
 import { HandbooksModule } from './modules/handbooks/handbooks.module';
+import { MailerModule } from '@nestjs-modules/mailer';
 
 @Module({
   imports: [
-    // Load biến môi trường từ .env
+    // 1. Load biến môi trường từ .env
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    // Kết nối Database
+
+    // 2. Kết nối Database
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -35,9 +37,36 @@ import { HandbooksModule } from './modules/handbooks/handbooks.module';
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: false, // Để false vì ta dùng file SQL init rồi
+        synchronize: false, // Để false vì dự án dùng file SQL init hoặc migration
       }),
     }),
+
+    // 3. Cấu hình Mailer (Dùng forRootAsync để inject ConfigService)
+    MailerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (config: ConfigService) => ({
+        transport: {
+          host: 'smtp.gmail.com',
+          port: 587, // Đổi sang 587
+          secure: false, // Port 587 BẮT BUỘC để false
+          auth: {
+            user: config.get('MAIL_USER'),
+            // Xử lý xóa dấu cách ngay tại đây
+            pass: config.get('MAIL_PASS')?.replace(/\s/g, ''),
+          },
+          tls: {
+            // Giúp vượt qua lỗi chứng chỉ SSL/TLS không khớp
+            rejectUnauthorized: false,
+          },
+        },
+        defaults: {
+          from: config.get('MAIL_FROM'),
+        },
+      }),
+    }),
+
+    // 4. Các Module chức năng
     PartyMembersModule,
     UsersModule,
     AuthModule,
