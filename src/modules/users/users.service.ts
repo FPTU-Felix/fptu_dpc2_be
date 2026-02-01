@@ -63,7 +63,6 @@ export class UsersService {
         'Đã có người dùng với vai trò ADMIN. Chỉ được phép có 1 ADMIN trong hệ thống.',
       );
 
-    // 2. Tạo mật khẩu tạm
     const tempPassword = Math.random().toString(36).slice(-8);
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
@@ -150,7 +149,7 @@ export class UsersService {
       // 3. Tạo bản ghi PartyMember (Hồ sơ Đảng viên)
       const member = queryRunner.manager.create(PartyMember, {
         ...dto,
-        gender: dto.gender as GenderEnum, // Ép kiểu để tránh lỗi TS2769
+        gender: dto.gender as GenderEnum,
         user: user, // Gán quan hệ trực tiếp thay vì chỉ gán ID
       });
       await queryRunner.manager.save(member);
