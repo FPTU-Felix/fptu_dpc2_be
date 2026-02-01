@@ -116,5 +116,5 @@ npm run start:dev
 ```
 
 //For Dev:
-username: Admin
+username: admin
 pass: 123456
