@@ -55,6 +55,13 @@ export class UsersService {
     });
     if (existing)
       throw new BadRequestException('Username hoặc Email đã tồn tại');
+    const existingRoleUser = await this.usersRepository.findOne({
+      where: { roleId },
+    });
+    if (existingRoleUser && roleId === 'ADMIN')
+      throw new BadRequestException(
+        'Đã có người dùng với vai trò ADMIN. Chỉ được phép có 1 ADMIN trong hệ thống.',
+      );
 
     // 2. Tạo mật khẩu tạm
     const tempPassword = Math.random().toString(36).slice(-8);
