@@ -65,9 +65,6 @@ export class PartyMember {
   phone: string;
 
   @Column({ nullable: true })
-  email: string;
-
-  @Column({ nullable: true })
   hometown: string;
 
   @Column({ name: 'permanent_address', nullable: true })
