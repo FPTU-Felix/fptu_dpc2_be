@@ -146,10 +146,23 @@ export class UsersService {
         const salt = await bcrypt.genSalt();
         user.password = await bcrypt.hash(dto.newPassword, salt);
       }
+      const existingMember = await queryRunner.manager.findOne(PartyMember, {
+        where: { userId: userId },
+      });
+      if (existingMember) {
+        // Nếu đã có bản ghi thì không cho tạo nữa, cập nhật luôn isFirstLogin cho đồng bộ
+        user.isFirstLogin = false;
+        await queryRunner.manager.save(user);
+        await queryRunner.commitTransaction();
+        throw new BadRequestException(
+          'Hồ sơ Đảng viên đã tồn tại trong hệ thống',
+        );
+      }
       // 3. Tạo bản ghi PartyMember (Hồ sơ Đảng viên)
       const member = queryRunner.manager.create(PartyMember, {
         ...dto,
         gender: dto.gender as GenderEnum,
+        partyCellId: 'fcfb8c30-6379-412f-9932-5e2759213832',
         user: user, // Gán quan hệ trực tiếp thay vì chỉ gán ID
       });
       await queryRunner.manager.save(member);

@@ -11,7 +11,7 @@ export class UsersController {
   @Post('complete-profile')
   @UseGuards(AuthGuard('jwt'))
   async completeProfile(
-    @GetCurrentUser('id') userId: string, // Lấy ID trực tiếp ở đây
+    @GetCurrentUser('id') userId: string,
     @Body() dto: CompleteProfileDto,
   ) {
     return await this.usersService.completeProfile(userId, dto);
