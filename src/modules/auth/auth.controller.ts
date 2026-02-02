@@ -14,6 +14,7 @@ import { Roles } from './decorators/roles.decorator';
 import { RolesGuard } from './guards/roles.guard';
 import { UsersService } from '../users/users.service';
 import { SigninDto } from './dto/signin.dto';
+import { ApiBody } from '@nestjs/swagger';
 
 @Controller('auth')
 export class AuthController {
@@ -22,6 +23,16 @@ export class AuthController {
     private readonly usersService: UsersService,
   ) {}
 
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        username: { type: 'string', example: 'Nguyen Van A' },
+        // email: { type: 'string', example: 'user@example.com' },
+        password: { type: 'string', example: 'P@ssw0rd123' },
+      },
+    },
+  })
   @Post('signin')
   @HttpCode(HttpStatus.OK)
   signin(@Body() dto: SigninDto) {

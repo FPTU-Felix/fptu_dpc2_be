@@ -7,7 +7,7 @@ import {
   MinLength,
   IsPhoneNumber,
 } from 'class-validator';
-import { GenderEnum } from 'src/modules/party-members/entities/party-member.entity';
+import { GenderEnum } from 'src/common/enums';
 
 export class CompleteProfileDto {
   @IsString()

@@ -17,6 +17,7 @@ import { AnnualAssessment } from 'src/modules/annual-assessments/entities/annual
 import { Commendation } from 'src/modules/commendations/entities/commendation.entity';
 import { Discipline } from 'src/modules/disciplines/entities/discipline.entity';
 import { PartyMemberPosition } from 'src/modules/party-positions/entities/party-member-position.entity';
+import { GenderEnum } from 'src/common/enums';
 
 export enum MemberStatusEnum {
   MASSES = 'MASSES',
@@ -25,12 +26,6 @@ export enum MemberStatusEnum {
   OFFICIAL = 'OFFICIAL',
   TRANSFERRED = 'TRANSFERRED',
   DELETED = 'DELETED',
-}
-
-export enum GenderEnum {
-  MALE = 'MALE',
-  FEMALE = 'FEMALE',
-  OTHER = 'OTHER',
 }
 
 @Entity('party_members')
