@@ -1,4 +1,5 @@
-import { IsEmail, IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, IsEnum } from 'class-validator';
+import { UserRole } from '../../../common/enums';
 
 export class AdminCreateUserDto {
   @IsString()
@@ -9,7 +10,7 @@ export class AdminCreateUserDto {
   @IsNotEmpty({ message: 'Email không được để trống' })
   email: string;
 
-  @IsUUID('4', { message: 'RoleId phải là UUID hợp lệ' })
-  @IsNotEmpty({ message: 'RoleId không được để trống' })
-  roleId: string;
+  @IsEnum(UserRole, { message: 'Vai trò không hợp lệ' })
+  @IsNotEmpty({ message: 'roleName không được để trống' })
+  roleName: UserRole;
 }

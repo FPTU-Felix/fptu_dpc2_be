@@ -5,19 +5,23 @@ import { MailerService } from '@nestjs-modules/mailer';
 import * as bcrypt from 'bcrypt';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { AdminCreateUserDto } from './dto/admin-create-user.dto';
-import {
-  GenderEnum,
-  PartyMember,
-} from '../party-members/entities/party-member.entity';
+import { PartyMember } from '../party-members/entities/party-member.entity';
 import { Repository, DataSource } from 'typeorm';
+import { BaseService } from 'src/common/base.service';
+import { Role } from '../roles/entities/role.entity';
+import { GenderEnum } from 'src/common/enums';
 @Injectable()
-export class UsersService {
+export class UsersService extends BaseService<User> {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly mailerService: MailerService,
     private dataSource: DataSource,
-  ) {}
+    @InjectRepository(Role)
+    private readonly roleRepository: Repository<Role>,
+  ) {
+    super(usersRepository);
+  }
   async findOneByUsername(username: string): Promise<User | null> {
     return await this.usersRepository.findOne({
       where: { username },
@@ -47,18 +51,26 @@ export class UsersService {
     });
   }
   async createByAdmin(dto: AdminCreateUserDto) {
-    const { username, email, roleId } = dto;
+    const { username, email, roleName } = dto;
 
     // 1. Kiểm tra tồn tại
     const existing = await this.usersRepository.findOne({
       where: [{ username }, { email }],
     });
+    const role = await this.roleRepository.findOne({
+      where: { name: roleName },
+    });
+    if (!role) {
+      throw new BadRequestException(
+        `Vai trò "${roleName}" chưa được cấu hình trong hệ thống`,
+      );
+    }
     if (existing)
       throw new BadRequestException('Username hoặc Email đã tồn tại');
     const existingRoleUser = await this.usersRepository.findOne({
-      where: { roleId },
+      where: { roleId: role.id },
     });
-    if (existingRoleUser && roleId === 'ADMIN')
+    if (existingRoleUser && role.name === 'ADMIN')
       throw new BadRequestException(
         'Đã có người dùng với vai trò ADMIN. Chỉ được phép có 1 ADMIN trong hệ thống.',
       );
@@ -69,7 +81,7 @@ export class UsersService {
     const user = this.usersRepository.create({
       username,
       email,
-      roleId,
+      roleId: role.id,
       password: hashedPassword,
       isFirstLogin: true,
     });
@@ -136,15 +148,18 @@ export class UsersService {
       });
 
       if (!user) throw new BadRequestException('Người dùng không tồn tại');
-      if (!user.isFirstLogin) {
-        throw new BadRequestException('Hồ sơ đã được hoàn thiện trước đó');
-      }
       if (dto.newPassword !== dto.confirmPassword) {
         throw new BadRequestException('Mật khẩu xác nhận không khớp');
       }
       if (dto.newPassword) {
         const salt = await bcrypt.genSalt();
-        user.password = await bcrypt.hash(dto.newPassword, salt);
+        try {
+          await bcrypt.hash(dto.newPassword, salt);
+          user.password = await bcrypt.hash(dto.newPassword, salt);
+        } catch (err) {
+          console.error('Lỗi băm mật khẩu:', err);
+          throw new BadRequestException('Lỗi xử lý mật khẩu mới');
+        }
       }
       const existingMember = await queryRunner.manager.findOne(PartyMember, {
         where: { userId: userId },
@@ -160,9 +175,12 @@ export class UsersService {
       }
       // 3. Tạo bản ghi PartyMember (Hồ sơ Đảng viên)
       const member = queryRunner.manager.create(PartyMember, {
-        ...dto,
+        fullName: dto.fullName,
         gender: dto.gender as GenderEnum,
-        partyCellId: 'fcfb8c30-6379-412f-9932-5e2759213832',
+        dateOfBirth: dto.dateOfBirth,
+        hometown: dto.hometown,
+        phone: dto.phone,
+        partyCellId: '4dc9d414-0e5d-47dc-828a-e0a249b2b888',
         user: user, // Gán quan hệ trực tiếp thay vì chỉ gán ID
       });
       await queryRunner.manager.save(member);
