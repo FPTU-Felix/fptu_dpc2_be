@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
@@ -19,6 +20,7 @@ import { GenderEnum } from 'src/common/enums';
 import { IPaginationOptions, paginate } from 'nestjs-typeorm-paginate';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 @Injectable()
 export class UsersService extends BaseService<User> {
   constructor(
@@ -319,5 +321,22 @@ export class UsersService extends BaseService<User> {
 
     await this.usersRepository.save(user);
     return { message: 'Đổi mật khẩu thành công!' };
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    const member = await this.dataSource.getRepository(PartyMember).findOne({
+      where: { userId: userId },
+    });
+
+    if (!member) {
+      throw new NotFoundException(
+        'Không tìm thấy thông tin hồ sơ của đồng chí',
+      );
+    }
+    console.log('Cập nhật hồ sơ với dữ liệu:', dto);
+    console.log('Trước khi cập nhật, hồ sơ hiện tại:', member);
+    // Object.assign sẽ chỉ ghi đè những trường có trong dto
+    Object.assign(member, dto);
+    return await this.dataSource.getRepository(PartyMember).save(member);
   }
 }

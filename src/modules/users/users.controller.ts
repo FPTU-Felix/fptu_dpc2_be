@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Patch } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard } from '@nestjs/passport';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
@@ -8,6 +8,7 @@ import { ApiBearerAuth, ApiBody, ApiOperation } from '@nestjs/swagger';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @ApiBearerAuth()
 @Controller('users')
@@ -108,5 +109,49 @@ export class UsersController {
   })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.usersService.resetPassword(dto);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Patch('profile')
+  @ApiOperation({ summary: 'Đảng viên tự cập nhật thông tin cá nhân' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        fullName: {
+          type: 'string',
+          example: 'Nguyễn Văn A',
+          description: 'Họ và tên đầy đủ',
+        },
+        gender: {
+          type: 'string',
+          enum: Object.values(GenderEnum),
+          example: GenderEnum.MALE,
+          description: 'Giới tính',
+        },
+        dob: {
+          type: 'string',
+          format: 'date',
+          example: '2005-01-01',
+          description: 'Ngày sinh theo định dạng YYYY-MM-DD',
+        },
+        hometown: {
+          type: 'string',
+          example: 'Hà Nội',
+          description: 'Quê quán',
+        },
+        phone: {
+          type: 'string',
+          example: '0987654321',
+          description: 'Số điện thoại (định dạng VN)',
+        },
+      },
+    },
+  })
+  updateMyProfile(
+    @GetCurrentUser('sub') userId: string,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.usersService.updateProfile(userId, dto);
   }
 }
