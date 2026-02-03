@@ -39,6 +39,19 @@ export class User {
   @Column({ default: true }) // Mặc định là true khi Admin tạo mới
   isFirstLogin: boolean;
 
+  @Column({ name: 'reset_password_token', type: 'varchar', nullable: true })
+  resetPasswordToken: string | null;
+
+  @Column({ name: 'reset_password_expires', nullable: true, type: 'timestamp' })
+  resetPasswordExpires: Date | null;
+
+  @Column({
+    name: 'last_forgot_password_at',
+    nullable: true,
+    type: 'timestamp',
+  })
+  lastForgotPasswordAt: Date | null;
+
   @ManyToOne(() => Role, (role) => role.users)
   @JoinColumn({ name: 'role_id' })
   role: Role;

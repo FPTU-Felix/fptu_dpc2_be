@@ -1,15 +1,24 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { MailerService } from '@nestjs-modules/mailer';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { AdminCreateUserDto } from './dto/admin-create-user.dto';
 import { PartyMember } from '../party-members/entities/party-member.entity';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, MoreThan } from 'typeorm';
 import { BaseService } from 'src/common/base.service';
 import { Role } from '../roles/entities/role.entity';
 import { GenderEnum } from 'src/common/enums';
+import { IPaginationOptions, paginate } from 'nestjs-typeorm-paginate';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 @Injectable()
 export class UsersService extends BaseService<User> {
   constructor(
@@ -202,5 +211,114 @@ export class UsersService extends BaseService<User> {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  // src/modules/users/users.service.ts
+  async paginateMembersByCell(
+    requesterId: string,
+    options: IPaginationOptions,
+  ) {
+    // 1. Lấy partyCellId của người yêu cầu
+    const requesterProfile = await this.dataSource
+      .getRepository(PartyMember)
+      .findOne({
+        where: { userId: requesterId },
+        select: ['partyCellId'],
+      });
+
+    if (!requesterProfile) {
+      throw new ForbiddenException('Tài khoản không thuộc Chi bộ nào');
+    }
+
+    // 2. Khởi tạo QueryBuilder với việc chọn lọc cột
+    const queryBuilder = this.usersRepository
+      .createQueryBuilder('user')
+      // Chỉ join chứ chưa select hết
+      .innerJoin('user.member', 'member')
+      .leftJoin('user.role', 'role')
+      // 3. CHỈ ĐỊNH CÁC CỘT CẦN LẤY
+      .select([
+        'user.id',
+        'user.username',
+        'user.email',
+        'user.isActive',
+        'user.createdAt',
+        'member.fullName',
+        'member.gender',
+        'member.dateOfBirth',
+        'member.hometown',
+        'member.phone',
+        'role.name', // Chỉ lấy tên Role, không lấy các trường rác khác
+      ])
+      .where('member.partyCellId = :cellId', {
+        cellId: requesterProfile.partyCellId,
+      })
+      .orderBy('user.createdAt', 'DESC');
+
+    // 4. Phân trang
+    return paginate<User>(queryBuilder, options);
+  }
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.usersRepository.findOne({
+      where: { email: dto.email },
+    });
+    if (!user)
+      throw new BadRequestException('Email không tồn tại trong hệ thống');
+    if (user.lastForgotPasswordAt) {
+      const secondsPassed = Math.floor(
+        (Date.now() - user.lastForgotPasswordAt.getTime()) / 1000,
+      );
+      if (secondsPassed < 60) {
+        throw new BadRequestException(
+          `Vui lòng đợi ${60 - secondsPassed} giây nữa để yêu cầu mã mới`,
+        );
+      }
+    }
+    // 1. Tạo token ngẫu nhiên và đặt hạn dùng 15 phút
+    const token = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = token;
+    user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000);
+    user.lastForgotPasswordAt = new Date();
+    await this.usersRepository.save(user);
+
+    // 2. Gửi mail (nhớ cấu hình SMTP trong .env)
+    try {
+      await this.mailerService.sendMail({
+        to: user.email,
+        subject: 'Khôi phục mật khẩu - Hệ thống Đảng viên',
+        html: `
+        <p>Đồng chí đã yêu cầu khôi phục mật khẩu.</p>
+        <p>Mã xác nhận của đồng chí là: <b>${token}</b></p>
+        <p>Mã này có hiệu lực trong 15 phút.</p>
+      `,
+      });
+      return { message: 'Mã khôi phục đã được gửi vào Email của đồng chí' };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Lỗi gửi mail, vui lòng thử lại sau',
+      );
+    }
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    // Tìm user có token khớp và chưa hết hạn
+    const user = await this.usersRepository.findOne({
+      where: {
+        resetPasswordToken: dto.token,
+        resetPasswordExpires: MoreThan(new Date()), // Phải còn hạn dùng
+      },
+    });
+
+    if (!user)
+      throw new BadRequestException('Mã xác nhận không hợp lệ hoặc đã hết hạn');
+
+    // Băm mật khẩu mới và xóa token cũ
+    const salt = await bcrypt.genSalt();
+    user.password = await bcrypt.hash(dto.newPassword, salt);
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+
+    await this.usersRepository.save(user);
+    return { message: 'Đổi mật khẩu thành công!' };
   }
 }

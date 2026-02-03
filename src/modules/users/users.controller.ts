@@ -5,6 +5,9 @@ import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { GetCurrentUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { GenderEnum } from 'src/common/enums';
 import { ApiBearerAuth, ApiBody, ApiOperation } from '@nestjs/swagger';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ThrottlerGuard } from '@nestjs/throttler';
 
 @ApiBearerAuth()
 @Controller('users')
@@ -73,5 +76,37 @@ export class UsersController {
     @Body() dto: CompleteProfileDto,
   ) {
     return await this.usersService.completeProfile(userId, dto);
+  }
+
+  @UseGuards(ThrottlerGuard)
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Yêu cầu khôi phục mật khẩu qua Email' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', example: 'vana.fptu@gmail.com' },
+      },
+      required: ['email'],
+    },
+  })
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.usersService.forgotPassword(dto);
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Đặt lại mật khẩu mới bằng Token' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        token: { type: 'string', example: 'abc123... (lấy từ email)' },
+        newPassword: { type: 'string', example: 'NewPass123!' },
+      },
+      required: ['token', 'newPassword'],
+    },
+  })
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.usersService.resetPassword(dto);
   }
 }

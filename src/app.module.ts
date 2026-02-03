@@ -17,15 +17,22 @@ import { CommendationsModule } from './modules/commendations/commendations.modul
 import { PartyFeesModule } from './modules/party-fees/party-fees.module';
 import { PartyPositionsModule } from './modules/party-positions/party-positions.module';
 import { HandbooksModule } from './modules/handbooks/handbooks.module';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
   imports: [
-    // 1. Cấu hình biến môi trường toàn cục
+    // Cấu hình biến môi trường toàn cục
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // 1 phút
+        limit: 10, // 10 requests
+      },
+    ]),
 
-    // 2. Cấu hình kết nối Database (PostgreSQL)
+    // Cấu hình kết nối Database (PostgreSQL)
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -65,8 +72,6 @@ import { HandbooksModule } from './modules/handbooks/handbooks.module';
         },
       }),
     }),
-
-    // 4. Khai báo các modules đã tạo
     PartyMembersModule,
     UsersModule,
     AuthModule,
