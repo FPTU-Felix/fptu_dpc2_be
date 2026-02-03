@@ -50,7 +50,7 @@ export class PartyMember {
   @Column({ name: 'full_name' })
   fullName: string;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'date_of_birth', type: 'date', nullable: true })
   dob: Date;
 
   @Column({ type: 'enum', enum: GenderEnum, nullable: true })

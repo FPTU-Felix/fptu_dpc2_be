@@ -186,7 +186,7 @@ export class UsersService extends BaseService<User> {
       const member = queryRunner.manager.create(PartyMember, {
         fullName: dto.fullName,
         gender: dto.gender as GenderEnum,
-        dateOfBirth: dto.dateOfBirth,
+        dob: dto.dateOfBirth,
         hometown: dto.hometown,
         phone: dto.phone,
         partyCellId: '4dc9d414-0e5d-47dc-828a-e0a249b2b888',
@@ -213,7 +213,6 @@ export class UsersService extends BaseService<User> {
     }
   }
 
-  // src/modules/users/users.service.ts
   async paginateMembersByCell(
     requesterId: string,
     options: IPaginationOptions,
