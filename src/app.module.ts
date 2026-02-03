@@ -18,6 +18,7 @@ import { PartyFeesModule } from './modules/party-fees/party-fees.module';
 import { PartyPositionsModule } from './modules/party-positions/party-positions.module';
 import { HandbooksModule } from './modules/handbooks/handbooks.module';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AiKnowledgeModule } from './modules/ai-knowledge/ai-knowledge.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
     PartyFeesModule,
     PartyPositionsModule,
     HandbooksModule,
+    AiKnowledgeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

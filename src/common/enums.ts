@@ -12,3 +12,9 @@ export enum GenderEnum {
   FEMALE = 'FEMALE',
   OTHER = 'OTHER',
 }
+
+export enum AiDataStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
