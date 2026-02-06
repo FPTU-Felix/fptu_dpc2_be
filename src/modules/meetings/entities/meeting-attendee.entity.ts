@@ -9,12 +9,8 @@ import {
 import { Meeting } from './meeting.entity';
 import { PartyMember } from '../../party-members/entities/party-member.entity';
 import { MeetingSession } from './meeting-session.entity';
-
-export enum AttendeeStatusEnum {
-  PRESENT = 'PRESENT',
-  ABSENT = 'ABSENT',
-  EXCUSED = 'EXCUSED',
-}
+import { AttendeeStatus } from 'src/common/enums';
+import { CheckInMethod } from 'src/common/enums';
 
 @Entity('meeting_attendees')
 export class MeetingAttendee {
@@ -39,10 +35,20 @@ export class MeetingAttendee {
 
   @Column({
     type: 'enum',
-    enum: AttendeeStatusEnum,
-    default: AttendeeStatusEnum.ABSENT,
+    enum: AttendeeStatus,
+    default: AttendeeStatus.ABSENT,
   })
-  status: AttendeeStatusEnum;
+  status: AttendeeStatus;
+
+  @Column({
+    type: 'enum',
+    enum: CheckInMethod,
+    nullable: true, // Null nếu chưa điểm danh
+  })
+  method: CheckInMethod;
+
+  @Column({ name: 'check_in_time', type: 'timestamp', nullable: true })
+  checkInTime: Date; // Thời điểm nhập mã PIN thành công
 
   @Column({ nullable: true })
   reason: string;
