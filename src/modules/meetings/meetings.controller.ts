@@ -1,16 +1,7 @@
 // src/modules/meetings/meetings.controller.ts
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  Param,
-  Patch,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { MeetingsService } from './meetings.service';
-import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { CheckInDto } from './dto/check-in.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -25,35 +16,27 @@ import { UserRole } from 'src/common/enums';
 export class MeetingsController {
   constructor(private readonly meetingsService: MeetingsService) {}
 
-  @Post()
-  @Roles(UserRole.SECRETARY, UserRole.COMMITTEE_MEMBER)
-  @ApiOperation({ summary: 'Tạo cuộc họp mới (Tự động sinh mã điểm danh)' })
-  create(@GetCurrentUser('id') userId: string, @Body() dto: CreateMeetingDto) {
-    return this.meetingsService.create(userId, dto);
-  }
-
-  @Get(':id/pin')
-  @Roles(UserRole.SECRETARY, UserRole.COMMITTEE_MEMBER) // Chỉ Chi ủy mới được xem PIN để chiếu
-  @ApiOperation({ summary: 'Lấy mã PIN hiện tại (Gọi mỗi 5s để cập nhật)' })
-  getPin(@Param('id') id: string) {
-    return this.meetingsService.getCurrentPin(id);
-  }
-
-  @Patch(':id/toggle-checkin')
-  @Roles(UserRole.SECRETARY, UserRole.COMMITTEE_MEMBER)
-  @ApiOperation({ summary: 'Bật/Tắt chế độ điểm danh' })
-  toggleCheckIn(@Param('id') id: string, @Body('isActive') isActive: boolean) {
-    return this.meetingsService.toggleCheckIn(id, isActive);
-  }
-
   @Post(':id/check-in')
+  @Roles(UserRole.PARTY_MEMBER)
   // User bình thường cũng gọi được
   @ApiOperation({ summary: 'Đảng viên nhập mã PIN để điểm danh' })
   checkIn(
-    @GetCurrentUser('id') userId: string,
+    @GetCurrentUser('sub') userId: string,
     @Param('id') meetingId: string,
     @Body() dto: CheckInDto,
   ) {
     return this.meetingsService.submitCheckIn(userId, meetingId, dto);
+  }
+
+  // @Get()
+  // @ApiOperation({ summary: '1. Xem danh sách cuộc họp (Lọc Sắp tới/Lịch sử)' })
+  // findAll(@Query() filter: FilterMeetingDto) {
+  //   return this.meetingsService.findAll(filter);
+  // }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Xem chi tiết 1 cuộc họp' })
+  findOne(@Param('id') id: string) {
+    return this.meetingsService.findOne(id);
   }
 }

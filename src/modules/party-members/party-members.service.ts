@@ -8,13 +8,13 @@ import { Repository, DataSource } from 'typeorm';
 
 // Entities
 import { PartyMember } from './entities/party-member.entity';
-import { PartyMemberPosition } from './entities/party-member-position.entity'; // Kiểm tra lại đường dẫn import này
+import { PartyMemberPosition } from 'src/modules/party-positions/entities/party-member-position.entity';
 import { PartyPosition as PartyPositionEntity } from '../party-positions/entities/party-position.entity';
 import { User } from '../users/entities/user.entity';
+import { Role } from '../roles/entities/role.entity';
 
 // DTOs & Enums
 import { AssignPositionDto } from './dto/assign-position.dto';
-// Đảm bảo import đúng file Enum chung của dự án
 import { PartyPosition, UserRole } from '../../common/enums';
 
 @Injectable()
@@ -36,7 +36,7 @@ export class PartyMembersService {
     dto: AssignPositionDto,
   ) {
     return this.dataSource.transaction(async (manager) => {
-      // 1. Validate: Tìm chức vụ
+      // 1. Validate: Tìm chức vụ (Metadata)
       const positionMeta = await manager.findOne(PartyPositionEntity, {
         where: { code: dto.positionCode },
       });
@@ -86,46 +86,57 @@ export class PartyMembersService {
       await manager.save(newAssignment);
 
       // 5. Đồng bộ quyền User (System Role)
-      // FIX LỖI SCOPE: Khai báo biến này bên ngoài block if
-      let newSystemRole: any = UserRole.PARTY_MEMBER;
+      // FIX LỖI NULL ROLE: Tìm Role Entity từ DB rồi mới update
+      let targetRoleName: any = UserRole.PARTY_MEMBER;
 
       if (member.userId) {
-        // FIX LỖI TYPE: Ép kiểu switch variable sang any để tránh lỗi comparison
+        // A. Xác định tên quyền cần gán (Mapping)
         switch (dto.positionCode as any) {
           case PartyPosition.ADMIN:
-            newSystemRole = UserRole.ADMIN;
+            targetRoleName = UserRole.ADMIN;
             break;
 
           case PartyPosition.SECRETARY:
           case PartyPosition.DEPUTY_SECRETARY:
-            newSystemRole = UserRole.SECRETARY;
+            targetRoleName = UserRole.SECRETARY;
             break;
 
           case PartyPosition.COMMITTEE_MEMBER:
-            newSystemRole = UserRole.COMMITTEE_MEMBER;
+            targetRoleName = UserRole.COMMITTEE_MEMBER;
             break;
 
           case PartyPosition.PARTY_MEMBER:
-          case PartyPosition.OUTSTANDING_INDIVIDUAL: // FIX LỖI TÊN ENUM
-            newSystemRole = UserRole.PARTY_MEMBER;
+          case PartyPosition.OUTSTANDING_INDIVIDUAL:
+            targetRoleName = UserRole.PARTY_MEMBER;
             break;
 
           default:
-            newSystemRole = UserRole.PARTY_MEMBER;
+            targetRoleName = UserRole.PARTY_MEMBER;
             break;
         }
 
-        // FIX LỖI UPDATE: Ép kiểu as any
-        await manager.update(User, member.userId, {
-          role: newSystemRole as any,
+        // B. Query bảng Roles để lấy ID của role đó
+        // Lưu ý: Giả định cột tên trong bảng roles là 'name'. Nếu là 'slug' hay 'code' thì ông sửa lại nhé.
+        const roleEntity = await manager.findOne(Role, {
+          where: { name: targetRoleName } as any,
         });
+
+        // C. Update User
+        if (roleEntity) {
+          await manager.update(User, member.userId, {
+            role: roleEntity, // TypeORM sẽ tự lấy ID từ entity này để nhét vào cột role_id
+          });
+        } else {
+          console.warn(
+            `⚠️ Cảnh báo: Không tìm thấy Role có tên "${targetRoleName}" trong DB! User chưa được cập nhật quyền.`,
+          );
+        }
       }
 
       return {
         message: 'Bổ nhiệm thành công',
         data: newAssignment,
-        // Giờ biến newSystemRole đã được định nghĩa bên ngoài nên gọi được ở đây
-        systemRoleUpdatedTo: member.userId ? newSystemRole : 'No User Linked',
+        roleAssigned: targetRoleName,
       };
     });
   }
