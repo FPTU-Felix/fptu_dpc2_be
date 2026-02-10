@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { MailerModule } from '@nestjs-modules/mailer';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { MailModule } from './modules/mail/mail.module';
 import { PartyMembersModule } from './modules/party-members/party-members.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -17,15 +18,16 @@ import { CommendationsModule } from './modules/commendations/commendations.modul
 import { PartyFeesModule } from './modules/party-fees/party-fees.module';
 import { PartyPositionsModule } from './modules/party-positions/party-positions.module';
 import { HandbooksModule } from './modules/handbooks/handbooks.module';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { AiKnowledgeModule } from './modules/ai-knowledge/ai-knowledge.module';
 
 @Module({
   imports: [
-    // Cấu hình biến môi trường toàn cục
+    // 1. Cấu hình biến môi trường
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+
+    // 2. Chống Spam request (Throttler)
     ThrottlerModule.forRoot([
       {
         ttl: 60000, // 1 phút
@@ -33,7 +35,7 @@ import { AiKnowledgeModule } from './modules/ai-knowledge/ai-knowledge.module';
       },
     ]),
 
-    // Cấu hình kết nối Database (PostgreSQL)
+    // 3. Cấu hình Database
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -45,36 +47,10 @@ import { AiKnowledgeModule } from './modules/ai-knowledge/ai-knowledge.module';
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: false,
+        synchronize: false, // Production nên để false
       }),
     }),
-
-    MailerModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: async (config: ConfigService) => ({
-        transport: {
-          host: config.get('MAIL_HOST', 'smtp.gmail.com'),
-          port: config.get<number>('MAIL_PORT', 587),
-          secure: false,
-          auth: {
-            user: config.get('MAIL_USER'),
-            pass: config.get('MAIL_PASS')?.replace(/\s/g, ''),
-          },
-          family: 4,
-          tls: {
-            ciphers: 'SSLv3',
-            rejectUnauthorized: false,
-          },
-        },
-        defaults: {
-          from: config.get(
-            'MAIL_FROM',
-            '"Hệ thống Quản lý Đảng viên" <no-reply@gmail.com>',
-          ),
-        },
-      }),
-    }),
+    MailModule,
     PartyMembersModule,
     UsersModule,
     AuthModule,
