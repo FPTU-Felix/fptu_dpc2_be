@@ -7,8 +7,6 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
-// ❌ Đã xóa: import { MailerService } from '@nestjs-modules/mailer';
-// ✅ Thêm mới:
 import { MailService } from '../mail/mail.service';
 
 import * as bcrypt from 'bcrypt';
@@ -31,7 +29,6 @@ export class UsersService extends BaseService<User> {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
 
-    // ✅ Sử dụng MailService của SendGrid
     private readonly mailService: MailService,
 
     private dataSource: DataSource,
@@ -39,6 +36,17 @@ export class UsersService extends BaseService<User> {
     private readonly roleRepository: Repository<Role>,
   ) {
     super(usersRepository);
+  }
+
+  // 👇 HÀM RIÊNG: Validate mật khẩu (Ít nhất 6 ký tự, có chữ và số)
+  private validatePassword(password: string) {
+    // Regex: Tối thiểu 6 ký tự, chứa ít nhất 1 chữ cái và 1 số
+    const regex = /^(?=.*[A-Za-z])(?=.*\d).{6,}$/;
+    if (!regex.test(password)) {
+      throw new BadRequestException(
+        'Mật khẩu phải có ít nhất 6 ký tự, bao gồm cả chữ cái và số.',
+      );
+    }
   }
 
   async findOneByUsername(username: string): Promise<User | null> {
@@ -113,9 +121,8 @@ export class UsersService extends BaseService<User> {
     });
     const savedUser = await this.usersRepository.save(user);
 
-    // 4. Gửi Email (Giao diện mới xịn xò hơn)
+    // 4. Gửi Email
     try {
-      // Tạo nội dung HTML chuyên nghiệp
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
           <div style="background-color: #ce0000; padding: 20px; text-align: center;">
@@ -184,7 +191,6 @@ export class UsersService extends BaseService<User> {
     }
   }
 
-  // Hàm bổ trợ để "Bấm gửi lại mail"
   async resendWelcomeEmail(userId: string, tempPass: string) {
     const user = await this.usersRepository.findOne({ where: { id: userId } });
     if (!user) throw new BadRequestException('Không tìm thấy người dùng');
@@ -204,30 +210,33 @@ export class UsersService extends BaseService<User> {
     await queryRunner.startTransaction();
 
     try {
-      // 1. Tìm user kèm theo kiểm tra quyền hạn
       const user = await queryRunner.manager.findOne(User, {
         where: { id: userId },
       });
 
       if (!user) throw new BadRequestException('Người dùng không tồn tại');
-      if (dto.newPassword !== dto.confirmPassword) {
-        throw new BadRequestException('Mật khẩu xác nhận không khớp');
-      }
+
+      // ✅ CHECK MỚI: Validate mật khẩu tại đây
       if (dto.newPassword) {
+        this.validatePassword(dto.newPassword);
+
+        if (dto.newPassword !== dto.confirmPassword) {
+          throw new BadRequestException('Mật khẩu xác nhận không khớp');
+        }
+
         const salt = await bcrypt.genSalt();
         try {
-          await bcrypt.hash(dto.newPassword, salt);
           user.password = await bcrypt.hash(dto.newPassword, salt);
         } catch (err) {
           console.error('Lỗi băm mật khẩu:', err);
           throw new BadRequestException('Lỗi xử lý mật khẩu mới');
         }
       }
+
       const existingMember = await queryRunner.manager.findOne(PartyMember, {
         where: { userId: userId },
       });
       if (existingMember) {
-        // Nếu đã có bản ghi thì không cho tạo nữa, cập nhật luôn isFirstLogin cho đồng bộ
         user.isFirstLogin = false;
         await queryRunner.manager.save(user);
         await queryRunner.commitTransaction();
@@ -235,7 +244,7 @@ export class UsersService extends BaseService<User> {
           'Hồ sơ Đảng viên đã tồn tại trong hệ thống',
         );
       }
-      // 3. Tạo bản ghi PartyMember (Hồ sơ Đảng viên)
+
       const member = queryRunner.manager.create(PartyMember, {
         fullName: dto.fullName,
         gender: dto.gender as GenderEnum,
@@ -243,11 +252,10 @@ export class UsersService extends BaseService<User> {
         hometown: dto.hometown,
         phone: dto.phone,
         partyCellId: '4dc9d414-0e5d-47dc-828a-e0a249b2b888',
-        user: user, // Gán quan hệ trực tiếp thay vì chỉ gán ID
+        user: user,
       });
       await queryRunner.manager.save(member);
 
-      // 4. Cập nhật trạng thái User
       user.isFirstLogin = false;
       await queryRunner.manager.save(user);
 
@@ -269,7 +277,6 @@ export class UsersService extends BaseService<User> {
     requesterId: string,
     options: IPaginationOptions,
   ) {
-    // 1. Lấy partyCellId của người yêu cầu
     const requesterProfile = await this.dataSource
       .getRepository(PartyMember)
       .findOne({
@@ -281,7 +288,6 @@ export class UsersService extends BaseService<User> {
       throw new ForbiddenException('Tài khoản không thuộc Chi bộ nào');
     }
 
-    // 2. Khởi tạo QueryBuilder
     const queryBuilder = this.usersRepository
       .createQueryBuilder('user')
       .innerJoin('user.member', 'member')
@@ -324,14 +330,13 @@ export class UsersService extends BaseService<User> {
         );
       }
     }
-    // 1. Tạo token ngẫu nhiên
+
     const token = crypto.randomBytes(32).toString('hex');
     user.resetPasswordToken = token;
     user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000);
     user.lastForgotPasswordAt = new Date();
     await this.usersRepository.save(user);
 
-    // 2. Gửi mail (Giao diện xịn xò)
     try {
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
@@ -374,7 +379,7 @@ export class UsersService extends BaseService<User> {
 
       return { message: 'Mã khôi phục đã được gửi vào Email của đồng chí' };
     } catch (error) {
-      console.error(error); // Log lỗi để debug
+      console.error(error);
       throw new InternalServerErrorException(
         'Lỗi gửi mail, vui lòng thử lại sau',
       );
@@ -391,6 +396,9 @@ export class UsersService extends BaseService<User> {
 
     if (!user)
       throw new BadRequestException('Mã xác nhận không hợp lệ hoặc đã hết hạn');
+
+    // ✅ CHECK MỚI: Validate mật khẩu tại đây nữa
+    this.validatePassword(dto.newPassword);
 
     const salt = await bcrypt.genSalt();
     user.password = await bcrypt.hash(dto.newPassword, salt);
