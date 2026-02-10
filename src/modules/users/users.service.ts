@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
-import { MailerService } from '@nestjs-modules/mailer';
+import { MailService } from '../mail/mail.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
@@ -21,18 +21,23 @@ import { IPaginationOptions, paginate } from 'nestjs-typeorm-paginate';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+
 @Injectable()
 export class UsersService extends BaseService<User> {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-    private readonly mailerService: MailerService,
+
+    // ✅ Sử dụng MailService của SendGrid
+    private readonly mailService: MailService,
+
     private dataSource: DataSource,
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
   ) {
     super(usersRepository);
   }
+
   async findOneByUsername(username: string): Promise<User | null> {
     return await this.usersRepository.findOne({
       where: { username },
@@ -46,6 +51,7 @@ export class UsersService extends BaseService<User> {
       relations: ['role'],
     });
   }
+
   async updateRefreshToken(
     userId: string,
     hashedRefreshToken: string | null,
@@ -57,10 +63,11 @@ export class UsersService extends BaseService<User> {
 
   async findAll(): Promise<User[]> {
     return await this.usersRepository.find({
-      select: ['id', 'username', 'isActive', 'roleId', 'createdAt'], // Chỉ lấy các cột cần thiết
-      relations: ['role'], // Lấy luôn thông tin role liên kết
+      select: ['id', 'username', 'isActive', 'roleId', 'createdAt'],
+      relations: ['role'],
     });
   }
+
   async createByAdmin(dto: AdminCreateUserDto) {
     const { username, email, roleName } = dto;
 
@@ -68,19 +75,24 @@ export class UsersService extends BaseService<User> {
     const existing = await this.usersRepository.findOne({
       where: [{ username }, { email }],
     });
+
     const role = await this.roleRepository.findOne({
       where: { name: roleName },
     });
+
     if (!role) {
       throw new BadRequestException(
         `Vai trò "${roleName}" chưa được cấu hình trong hệ thống`,
       );
     }
+
     if (existing)
       throw new BadRequestException('Username hoặc Email đã tồn tại');
+
     const existingRoleUser = await this.usersRepository.findOne({
       where: { roleId: role.id },
     });
+
     if (existingRoleUser && role.name === 'ADMIN')
       throw new BadRequestException(
         'Đã có người dùng với vai trò ADMIN. Chỉ được phép có 1 ADMIN trong hệ thống.',
@@ -98,17 +110,17 @@ export class UsersService extends BaseService<User> {
     });
     const savedUser = await this.usersRepository.save(user);
 
-    // 4. Thử gửi Email
+    // 4. Gửi Email (Đã cập nhật theo hàm mới)
     try {
-      await this.mailerService.sendMail({
-        to: email,
-        subject: 'Cấp tài khoản Hệ thống Quản lý Đảng viên',
-        html: `
+      await this.mailService.sendMail(
+        email, // To
+        'Cấp tài khoản Hệ thống Quản lý Đảng viên', // Subject
+        `
           <h3>Tài khoản của đồng chí đã sẵn sàng!</h3>
           <p>Tên đăng nhập: <b>${username}</b></p>
           <p>Mật khẩu tạm thời: <b>${tempPassword}</b></p>
-        `,
-      });
+        `, // HTML Content
+      );
 
       return {
         success: true,
@@ -116,9 +128,8 @@ export class UsersService extends BaseService<User> {
         data: { userId: savedUser.id },
       };
     } catch (error) {
-      // Nếu lỗi mail, LOG ra lỗi và trả về thông tin để Admin xử lý tay
       console.error('--- LỖI GỬI MAIL ---');
-      console.error(error.message);
+      console.error(error);
 
       return {
         success: false,
@@ -133,16 +144,17 @@ export class UsersService extends BaseService<User> {
       };
     }
   }
+
   // Hàm bổ trợ để "Bấm gửi lại mail"
   async resendWelcomeEmail(userId: string, tempPass: string) {
     const user = await this.usersRepository.findOne({ where: { id: userId } });
     if (!user) throw new BadRequestException('Không tìm thấy người dùng');
 
-    await this.mailerService.sendMail({
-      to: user.email,
-      subject: 'Gửi lại: Thông tin tài khoản Đảng viên',
-      html: `<p>Mật khẩu tạm thời của đồng chí là: <b>${tempPass}</b></p>`,
-    });
+    await this.mailService.sendMail(
+      user.email,
+      'Gửi lại: Thông tin tài khoản Đảng viên',
+      `<p>Mật khẩu tạm thời của đồng chí là: <b>${tempPass}</b></p>`,
+    );
 
     return { message: 'Đã gửi lại email thành công!' };
   }
@@ -207,7 +219,6 @@ export class UsersService extends BaseService<User> {
       };
     } catch (err) {
       await queryRunner.rollbackTransaction();
-      // Log lỗi chi tiết để dễ debug
       console.error('Lỗi Hoàn thiện hồ sơ:', err.message);
       throw err;
     } finally {
@@ -231,13 +242,11 @@ export class UsersService extends BaseService<User> {
       throw new ForbiddenException('Tài khoản không thuộc Chi bộ nào');
     }
 
-    // 2. Khởi tạo QueryBuilder với việc chọn lọc cột
+    // 2. Khởi tạo QueryBuilder
     const queryBuilder = this.usersRepository
       .createQueryBuilder('user')
-      // Chỉ join chứ chưa select hết
       .innerJoin('user.member', 'member')
       .leftJoin('user.role', 'role')
-      // 3. CHỈ ĐỊNH CÁC CỘT CẦN LẤY
       .select([
         'user.id',
         'user.username',
@@ -249,22 +258,23 @@ export class UsersService extends BaseService<User> {
         'member.dateOfBirth',
         'member.hometown',
         'member.phone',
-        'role.name', // Chỉ lấy tên Role, không lấy các trường rác khác
+        'role.name',
       ])
       .where('member.partyCellId = :cellId', {
         cellId: requesterProfile.partyCellId,
       })
       .orderBy('user.createdAt', 'DESC');
 
-    // 4. Phân trang
     return paginate<User>(queryBuilder, options);
   }
+
   async forgotPassword(dto: ForgotPasswordDto) {
     const user = await this.usersRepository.findOne({
       where: { email: dto.email },
     });
     if (!user)
       throw new BadRequestException('Email không tồn tại trong hệ thống');
+
     if (user.lastForgotPasswordAt) {
       const secondsPassed = Math.floor(
         (Date.now() - user.lastForgotPasswordAt.getTime()) / 1000,
@@ -275,24 +285,24 @@ export class UsersService extends BaseService<User> {
         );
       }
     }
-    // 1. Tạo token ngẫu nhiên và đặt hạn dùng 15 phút
+    // 1. Tạo token ngẫu nhiên
     const token = crypto.randomBytes(32).toString('hex');
     user.resetPasswordToken = token;
     user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000);
     user.lastForgotPasswordAt = new Date();
     await this.usersRepository.save(user);
 
-    // 2. Gửi mail (nhớ cấu hình SMTP trong .env)
+    // 2. Gửi mail (Đã cập nhật)
     try {
-      await this.mailerService.sendMail({
-        to: user.email,
-        subject: 'Khôi phục mật khẩu - Hệ thống Đảng viên',
-        html: `
-        <p>Đồng chí đã yêu cầu khôi phục mật khẩu.</p>
-        <p>Mã xác nhận của đồng chí là: <b>${token}</b></p>
-        <p>Mã này có hiệu lực trong 15 phút.</p>
-      `,
-      });
+      await this.mailService.sendMail(
+        user.email,
+        'Khôi phục mật khẩu - Hệ thống Đảng viên',
+        `
+          <p>Đồng chí đã yêu cầu khôi phục mật khẩu.</p>
+          <p>Mã xác nhận của đồng chí là: <b>${token}</b></p>
+          <p>Mã này có hiệu lực trong 15 phút.</p>
+        `,
+      );
       return { message: 'Mã khôi phục đã được gửi vào Email của đồng chí' };
     } catch (error) {
       throw new InternalServerErrorException(
@@ -302,18 +312,16 @@ export class UsersService extends BaseService<User> {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    // Tìm user có token khớp và chưa hết hạn
     const user = await this.usersRepository.findOne({
       where: {
         resetPasswordToken: dto.token,
-        resetPasswordExpires: MoreThan(new Date()), // Phải còn hạn dùng
+        resetPasswordExpires: MoreThan(new Date()),
       },
     });
 
     if (!user)
       throw new BadRequestException('Mã xác nhận không hợp lệ hoặc đã hết hạn');
 
-    // Băm mật khẩu mới và xóa token cũ
     const salt = await bcrypt.genSalt();
     user.password = await bcrypt.hash(dto.newPassword, salt);
     user.resetPasswordToken = null;
@@ -335,7 +343,6 @@ export class UsersService extends BaseService<User> {
     }
     console.log('Cập nhật hồ sơ với dữ liệu:', dto);
     console.log('Trước khi cập nhật, hồ sơ hiện tại:', member);
-    // Object.assign sẽ chỉ ghi đè những trường có trong dto
     Object.assign(member, dto);
     return await this.dataSource.getRepository(PartyMember).save(member);
   }
