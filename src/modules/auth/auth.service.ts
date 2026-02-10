@@ -40,6 +40,7 @@ export class AuthService {
   // --- 3. LẤY TOKEN MỚI (REFRESH) ---
   async refreshTokens(userId: string, rt: string) {
     const user = await this.usersService.findOneById(userId);
+    console.log('USER REFRESH', user);
     if (!user || !user.hashedRefreshToken)
       throw new ForbiddenException('Từ chối truy cập');
 

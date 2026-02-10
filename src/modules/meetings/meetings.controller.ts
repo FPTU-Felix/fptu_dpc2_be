@@ -9,7 +9,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { GetCurrentUser } from '../../modules/auth/decorators/get-user.decorator';
 import { UserRole } from 'src/common/enums';
 
-@ApiTags('Meetings - Attendance')
+@ApiTags('Meetings - API Cuộc họp của Đảng viên')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('meetings')

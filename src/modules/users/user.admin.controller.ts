@@ -13,11 +13,12 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UsersService } from './users.service';
 import { AdminCreateUserDto } from './dto/admin-create-user.dto';
-import { ApiBody, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { UserRole } from 'src/common/enums';
 
 @ApiBearerAuth()
+@ApiTags('Users - Quản lý người dùng (Admin)')
 @Controller('admin/users')
 export class UsersAdminController {
   constructor(private readonly usersService: UsersService) {}

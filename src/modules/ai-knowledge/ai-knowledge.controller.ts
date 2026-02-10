@@ -16,7 +16,7 @@ import { UserRole } from 'src/common/enums';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApproveAiDataDto } from './dto/approve-ai-data.dto';
 
-@ApiTags('AI Knowledge Management')
+@ApiTags('AI Knowledge Management - API Quản lý Kiến thức AI')
 @ApiBearerAuth()
 @Controller('ai-knowledge')
 @UseGuards(AuthGuard('jwt'), RolesGuard)

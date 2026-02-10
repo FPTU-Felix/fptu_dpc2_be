@@ -3,7 +3,6 @@ import {
   Post,
   Body,
   UseGuards,
-  Req,
   HttpCode,
   HttpStatus,
   Get,
@@ -14,8 +13,10 @@ import { Roles } from './decorators/roles.decorator';
 import { RolesGuard } from './guards/roles.guard';
 import { UsersService } from '../users/users.service';
 import { SigninDto } from './dto/signin.dto';
-import { ApiBody } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiTags } from '@nestjs/swagger';
+import { GetCurrentUser } from './decorators/get-user.decorator';
 
+@ApiTags('Auth - Authentication')
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -38,27 +39,28 @@ export class AuthController {
   signin(@Body() dto: SigninDto) {
     return this.authService.signin(dto);
   }
-
+  @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  logout(@Req() req: any) {
-    const userId = req.user['sub'];
+  logout(@GetCurrentUser('sub') userId: string) {
     return this.authService.logout(userId);
   }
-
+  @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt-refresh'))
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  refreshTokens(@Req() req: any) {
-    const userId = req.user['sub'];
-    const refreshToken = req.user['refreshToken'];
+  refreshTokens(
+    @GetCurrentUser('sub') userId: string,
+    @GetCurrentUser('refreshToken') refreshToken: string,
+  ) {
     return this.authService.refreshTokens(userId, refreshToken);
   }
 
   @Get()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN')
+  @ApiBearerAuth()
   async findAll() {
     return await this.usersService.findAll();
   }
