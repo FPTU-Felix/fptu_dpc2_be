@@ -61,7 +61,9 @@ import { AiKnowledgeModule } from './modules/ai-knowledge/ai-knowledge.module';
             user: config.get('MAIL_USER'),
             pass: config.get('MAIL_PASS')?.replace(/\s/g, ''),
           },
+          family: 4,
           tls: {
+            ciphers: 'SSLv3',
             rejectUnauthorized: false,
           },
         },

@@ -4,13 +4,14 @@ import { AuthGuard } from '@nestjs/passport';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { GetCurrentUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { GenderEnum } from 'src/common/enums';
-import { ApiBearerAuth, ApiBody, ApiOperation } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @ApiBearerAuth()
+@ApiTags('Users - API Cho User')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}

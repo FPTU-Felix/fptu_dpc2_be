@@ -4,10 +4,16 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../../common/enums';
-import { ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { GetCurrentUser } from '../../modules/auth/decorators/get-user.decorator';
 import { DefaultValuePipe, ParseIntPipe } from '@nestjs/common/pipes';
 @ApiBearerAuth()
+@ApiTags('Users - Api cho Chi ủy liên quan đến Users')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('committee/members')
 export class UsersCommitteeController {

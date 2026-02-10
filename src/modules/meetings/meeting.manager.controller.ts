@@ -18,7 +18,7 @@ import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
 import { UserRole } from 'src/common/enums';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 
-@ApiTags('Meetings - Attendance')
+@ApiTags('Meetings - Api Quản lý Cuộc họp của Chi ủy')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('meetings')
