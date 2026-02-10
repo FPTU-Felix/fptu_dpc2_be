@@ -7,7 +7,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
+// ❌ Đã xóa: import { MailerService } from '@nestjs-modules/mailer';
+// ✅ Thêm mới:
 import { MailService } from '../mail/mail.service';
+
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
@@ -110,16 +113,52 @@ export class UsersService extends BaseService<User> {
     });
     const savedUser = await this.usersRepository.save(user);
 
-    // 4. Gửi Email (Đã cập nhật theo hàm mới)
+    // 4. Gửi Email (Giao diện mới xịn xò hơn)
     try {
+      // Tạo nội dung HTML chuyên nghiệp
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #ce0000; padding: 20px; text-align: center;">
+            <h2 style="color: #ffffff; margin: 0; font-size: 20px; text-transform: uppercase;">Thông báo cấp tài khoản</h2>
+          </div>
+          
+          <div style="padding: 30px; background-color: #ffffff;">
+            <p style="font-size: 16px; color: #333;">Kính gửi đồng chí,</p>
+            <p style="font-size: 15px; color: #555; line-height: 1.6;">
+              Ban Quản trị xin thông báo tài khoản của đồng chí trên <strong>Hệ thống Quản lý Đảng viên</strong> đã được khởi tạo thành công.
+            </p>
+            
+            <div style="background-color: #f8f9fa; border-left: 4px solid #ce0000; padding: 20px; margin: 25px 0;">
+              <p style="margin: 5px 0; font-size: 15px;">
+                <strong>Tên đăng nhập:</strong> 
+                <span style="color: #333;">${username}</span>
+              </p>
+              <p style="margin: 15px 0 5px 0; font-size: 15px;">
+                <strong>Mật khẩu tạm thời:</strong> 
+                <span style="font-size: 18px; color: #ce0000; font-weight: bold; letter-spacing: 1px; background: #fff; padding: 2px 8px; border: 1px dashed #ce0000; border-radius: 4px;">${tempPassword}</span>
+              </p>
+            </div>
+
+            <p style="font-size: 14px; color: #666; font-style: italic;">
+              * Lưu ý: Để bảo mật thông tin, vui lòng đăng nhập và đổi mật khẩu ngay trong lần truy cập đầu tiên.
+            </p>
+            
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="#" style="background-color: #ce0000; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold;">Truy cập Hệ thống</a>
+            </div>
+          </div>
+
+          <div style="background-color: #f1f1f1; padding: 15px; text-align: center; font-size: 12px; color: #888;">
+            <p style="margin: 0;">Hệ thống Quản lý Đảng viên - Đại học FPT</p>
+            <p style="margin: 5px 0 0 0;">Đây là email tự động, vui lòng không trả lời.</p>
+          </div>
+        </div>
+      `;
+
       await this.mailService.sendMail(
-        email, // To
-        'Cấp tài khoản Hệ thống Quản lý Đảng viên', // Subject
-        `
-          <h3>Tài khoản của đồng chí đã sẵn sàng!</h3>
-          <p>Tên đăng nhập: <b>${username}</b></p>
-          <p>Mật khẩu tạm thời: <b>${tempPassword}</b></p>
-        `, // HTML Content
+        email,
+        'Thông báo cấp tài khoản - Hệ thống Quản lý Đảng viên',
+        htmlContent,
       );
 
       return {
@@ -292,19 +331,50 @@ export class UsersService extends BaseService<User> {
     user.lastForgotPasswordAt = new Date();
     await this.usersRepository.save(user);
 
-    // 2. Gửi mail (Đã cập nhật)
+    // 2. Gửi mail (Giao diện xịn xò)
     try {
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #ce0000; padding: 20px; text-align: center;">
+            <h2 style="color: #ffffff; margin: 0; font-size: 20px; text-transform: uppercase;">Yêu cầu khôi phục mật khẩu</h2>
+          </div>
+          
+          <div style="padding: 30px; background-color: #ffffff;">
+            <p style="font-size: 16px; color: #333;">Kính gửi đồng chí,</p>
+            <p style="font-size: 15px; color: #555; line-height: 1.6;">
+              Hệ thống đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản của đồng chí.
+            </p>
+            <p style="font-size: 15px; color: #555;">Dưới đây là Mã xác nhận (Token) để thực hiện đổi mật khẩu:</p>
+            
+            <div style="background-color: #f0f0f0; border: 2px dashed #ce0000; padding: 15px; text-align: center; margin: 25px 0; border-radius: 5px;">
+              <span style="font-size: 24px; color: #ce0000; font-weight: bold; font-family: monospace; letter-spacing: 2px;">${token}</span>
+            </div>
+
+            <div style="background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 5px; font-size: 14px;">
+              <strong>⚠️ Lưu ý quan trọng:</strong>
+              <ul style="margin: 5px 0 0 0; padding-left: 20px;">
+                <li>Mã này có hiệu lực trong vòng <strong>15 phút</strong>.</li>
+                <li>Tuyệt đối không chia sẻ mã này cho bất kỳ ai (kể cả quản trị viên).</li>
+              </ul>
+            </div>
+          </div>
+
+          <div style="background-color: #f1f1f1; padding: 15px; text-align: center; font-size: 12px; color: #888;">
+            <p style="margin: 0;">Ban Quản Trị Hệ thống - Đại học FPT</p>
+            <p style="margin: 5px 0 0 0;">Nếu đồng chí không yêu cầu đổi mật khẩu, vui lòng bỏ qua email này.</p>
+          </div>
+        </div>
+      `;
+
       await this.mailService.sendMail(
         user.email,
         'Khôi phục mật khẩu - Hệ thống Đảng viên',
-        `
-          <p>Đồng chí đã yêu cầu khôi phục mật khẩu.</p>
-          <p>Mã xác nhận của đồng chí là: <b>${token}</b></p>
-          <p>Mã này có hiệu lực trong 15 phút.</p>
-        `,
+        htmlContent,
       );
+
       return { message: 'Mã khôi phục đã được gửi vào Email của đồng chí' };
     } catch (error) {
+      console.error(error); // Log lỗi để debug
       throw new InternalServerErrorException(
         'Lỗi gửi mail, vui lòng thử lại sau',
       );
@@ -341,8 +411,6 @@ export class UsersService extends BaseService<User> {
         'Không tìm thấy thông tin hồ sơ của đồng chí',
       );
     }
-    console.log('Cập nhật hồ sơ với dữ liệu:', dto);
-    console.log('Trước khi cập nhật, hồ sơ hiện tại:', member);
     Object.assign(member, dto);
     return await this.dataSource.getRepository(PartyMember).save(member);
   }
