@@ -10,16 +10,8 @@ import {
 import { PartyCell } from '../../party-cells/entities/party-cell.entity';
 import { MeetingAttendee } from './meeting-attendee.entity';
 import { MeetingOpinion } from './meeting-opinion.entity';
-
-export enum MeetingTypeEnum {
-  REGULAR = 'REGULAR',
-  EXTRAORDINARY = 'EXTRAORDINARY',
-}
-export enum MeetingStatusEnum {
-  SCHEDULED = 'SCHEDULED',
-  HAPPENING = 'HAPPENING',
-  COMPLETED = 'COMPLETED',
-}
+import { MeetingType } from 'src/common/enums';
+import { MeetingStatus } from 'src/common/enums';
 
 @Entity('meetings')
 export class Meeting {
@@ -38,10 +30,10 @@ export class Meeting {
 
   @Column({
     type: 'enum',
-    enum: MeetingTypeEnum,
-    default: MeetingTypeEnum.REGULAR,
+    enum: MeetingType,
+    default: MeetingType.PERIODIC,
   })
-  type: MeetingTypeEnum;
+  type: MeetingType;
 
   @Column({ name: 'online_link', nullable: true })
   onlineLink: string;
@@ -57,13 +49,26 @@ export class Meeting {
 
   @Column({
     type: 'enum',
-    enum: MeetingStatusEnum,
-    default: MeetingStatusEnum.SCHEDULED,
+    enum: MeetingStatus,
+    default: MeetingStatus.SCHEDULED,
   })
-  status: MeetingStatusEnum;
+  status: MeetingStatus;
 
   @Column({ name: 'created_by', nullable: true })
   createdBy: string;
+
+  // Secret dùng để sinh mã PIN 6 số (TOTP).
+  // Để select: false để khi query list meeting nó không lộ ra ngoài
+  @Column({ name: 'attendance_secret', select: false, nullable: true })
+  attendanceSecret: string;
+
+  // Cờ để Chi ủy bật/tắt chức năng điểm danh
+  @Column({ name: 'is_checkin_active', default: false })
+  isCheckinActive: boolean;
+
+  // Mở rộng thêm location nếu họp Offline
+  @Column({ nullable: true })
+  location: string;
 
   @OneToMany(() => MeetingAttendee, (attendee) => attendee.meeting)
   attendees: MeetingAttendee[];

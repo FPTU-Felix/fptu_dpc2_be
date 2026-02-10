@@ -14,6 +14,6 @@ import { PartyMemberPosition } from './entities/party-member-position.entity'; /
   ],
   controllers: [PartyPositionsController],
   providers: [PartyPositionsService],
-  exports: [PartyPositionsService], // Export ra nếu module khác cần check chức vụ
+  exports: [PartyPositionsService, TypeOrmModule], // Export ra nếu module khác cần check chức vụ
 })
 export class PartyPositionsModule {}
