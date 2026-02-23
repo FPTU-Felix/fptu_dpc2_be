@@ -1,5 +1,13 @@
 // src/modules/meetings/meetings.controller.ts
-import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { MeetingsService } from './meetings.service';
 import { CheckInDto } from './dto/check-in.dto';
@@ -8,6 +16,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { GetCurrentUser } from '../../modules/auth/decorators/get-user.decorator';
 import { UserRole } from 'src/common/enums';
+import { GetMeetingsQueryDto } from './dto/get-meetings-query.dto';
 
 @ApiTags('Meetings - API Cuộc họp của Đảng viên')
 @ApiBearerAuth()
@@ -38,5 +47,13 @@ export class MeetingsController {
   @ApiOperation({ summary: 'Xem chi tiết 1 cuộc họp' })
   findOne(@Param('id') id: string) {
     return this.meetingsService.findOne(id);
+  }
+
+  @Get() // Route sẽ là GET /meetings
+  @ApiOperation({
+    summary: 'Lấy danh sách lịch họp (hỗ trợ lọc theo tháng/năm)',
+  })
+  async getMeetingsSchedule(@Query() query: GetMeetingsQueryDto) {
+    return this.meetingsService.getMeetingsSchedule(query);
   }
 }
