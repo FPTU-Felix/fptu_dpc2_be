@@ -18,6 +18,7 @@ import { CheckInDto } from './dto/check-in.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { MeetingResponseDto } from './dto/meeting-response.dto';
 import { plainToInstance } from 'class-transformer';
+import { GetMeetingsQueryDto } from './dto/get-meetings-query.dto';
 
 @Injectable()
 export class MeetingsService {
@@ -240,5 +241,47 @@ export class MeetingsService {
       relations: ['member', 'member.user'],
       order: { checkInTime: 'ASC' }, // Ai đến trước xếp trước
     });
+  }
+
+  async getMeetingsSchedule(query: GetMeetingsQueryDto) {
+    const { month, year } = query;
+
+    const queryBuilder = this.meetingRepo.createQueryBuilder('meeting');
+
+    // Nếu Client truyền lên cả tháng và năm thì lọc theo khoảng thời gian đó
+    if (month && year) {
+      const numMonth = parseInt(month, 10);
+      const numYear = parseInt(year, 10);
+
+      // Ngày đầu tiên của tháng (VD: 01/02/2026 00:00:00)
+      const startDate = new Date(numYear, numMonth - 1, 1);
+
+      // Ngày cuối cùng của tháng (VD: 28/02/2026 23:59:59)
+      const endDate = new Date(numYear, numMonth, 0, 23, 59, 59);
+
+      queryBuilder
+        .where('meeting.startTime >= :startDate', { startDate })
+        .andWhere('meeting.startTime <= :endDate', { endDate });
+    }
+
+    // Sắp xếp cuộc họp gần nhất lên đầu hoặc theo thời gian tăng dần
+    queryBuilder.orderBy('meeting.startTime', 'ASC');
+
+    // Select các trường cần thiết để hiển thị trên Calendar cho nhẹ
+    queryBuilder.select([
+      'meeting.id',
+      'meeting.title',
+      'meeting.startTime',
+      'meeting.endTime',
+      'meeting.location',
+      'meeting.status',
+    ]);
+
+    const meetings = await queryBuilder.getMany();
+
+    return {
+      message: 'Lấy lịch họp thành công',
+      data: meetings,
+    };
   }
 }
