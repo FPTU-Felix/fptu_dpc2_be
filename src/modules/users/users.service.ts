@@ -216,6 +216,18 @@ export class UsersService extends BaseService<User> {
 
       if (!user) throw new BadRequestException('Người dùng không tồn tại');
 
+      if (!user.isFirstLogin) {
+        throw new BadRequestException(
+          'Hồ sơ đã được hoàn thiện trước đó, không thể chỉnh sửa tại đây',
+        );
+      }
+
+      if (user.id !== userId) {
+        throw new ForbiddenException(
+          'Không có quyền chỉnh sửa hồ sơ của người khác',
+        );
+      }
+
       // ✅ CHECK MỚI: Validate mật khẩu tại đây
       if (dto.newPassword) {
         this.validatePassword(dto.newPassword);
@@ -421,5 +433,63 @@ export class UsersService extends BaseService<User> {
     }
     Object.assign(member, dto);
     return await this.dataSource.getRepository(PartyMember).save(member);
+  }
+
+  async banUser(userId: string) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      relations: ['role'],
+    });
+
+    if (!user) {
+      throw new NotFoundException(
+        'Không tìm thấy người dùng này trong hệ thống',
+      );
+    }
+
+    // (Tùy chọn) Bảo vệ: Không cho phép khóa tài khoản ADMIN để tránh tự hủy diệt hệ thống
+    if (user.role?.name === 'ADMIN') {
+      throw new BadRequestException(
+        'Không thể khóa tài khoản Quản trị viên cấp cao',
+      );
+    }
+
+    if (!user.isActive) {
+      throw new BadRequestException('Tài khoản này đã bị khóa từ trước rồi');
+    }
+
+    user.isActive = false;
+    await this.usersRepository.save(user);
+
+    return {
+      success: true,
+      message: `Đã KHÓA tài khoản của đồng chí ${user.username} thành công!`,
+    };
+  }
+
+  async unbanUser(userId: string) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(
+        'Không tìm thấy người dùng này trong hệ thống',
+      );
+    }
+
+    if (user.isActive) {
+      throw new BadRequestException(
+        'Tài khoản này hiện vẫn đang hoạt động bình thường',
+      );
+    }
+
+    user.isActive = true;
+    await this.usersRepository.save(user);
+
+    return {
+      success: true,
+      message: `Đã MỞ KHÓA tài khoản của đồng chí ${user.username} thành công!`,
+    };
   }
 }
