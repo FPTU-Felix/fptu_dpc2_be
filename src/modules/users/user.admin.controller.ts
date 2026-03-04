@@ -7,6 +7,8 @@ import {
   DefaultValuePipe,
   ParseIntPipe,
   Query,
+  Patch,
+  Param,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -88,5 +90,19 @@ export class UsersAdminController {
       body.userId,
       body.tempPass,
     );
+  }
+
+  @Patch(':id/ban')
+  @ApiOperation({ summary: 'Khóa (Ban) tài khoản người dùng' })
+  @Roles('ADMIN', 'SECRETARY')
+  async banUser(@Param('id') id: string) {
+    return this.usersService.banUser(id);
+  }
+
+  @Patch(':id/unban')
+  @ApiOperation({ summary: 'Mở khóa (Unban) tài khoản người dùng' })
+  @Roles('ADMIN', 'SECRETARY')
+  async unbanUser(@Param('id') id: string) {
+    return this.usersService.unbanUser(id);
   }
 }
