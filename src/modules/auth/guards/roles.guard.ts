@@ -12,19 +12,24 @@ export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    // 1. Lấy danh sách các Role được phép từ Decorator @Roles()
     const requiredRoles = this.reflector.getAllAndOverride<string[]>(
       ROLES_KEY,
       [context.getHandler(), context.getClass()],
     );
 
-    // Nếu API không gắn @Roles thì cho qua (public hoặc chỉ cần login)
     if (!requiredRoles) {
       return true;
     }
-    // 2. Lấy thông tin User từ Request (do AuthGuard nhét vào trước đó)
+
     const { user } = context.switchToHttp().getRequest();
-    // 3. Kiểm tra xem Role của User có nằm trong danh sách được phép không
+
+    // 👇 ĐÂY LÀ ĐOẠN ĐẶC QUYỀN CHO ADMIN 👇
+    // Nếu role của user là ADMIN thì Auto Pass, không cần check requiredRoles nữa
+    if (user?.roleName?.includes('ADMIN') || user?.roleName === 'ADMIN') {
+      return true;
+    }
+    // 👆 KẾT THÚC ĐOẠN ĐẶC QUYỀN 👆
+
     const hasRole = requiredRoles.some((role) => user.roleName?.includes(role));
 
     if (!hasRole) {

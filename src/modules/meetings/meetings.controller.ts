@@ -17,6 +17,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { GetCurrentUser } from '../../modules/auth/decorators/get-user.decorator';
 import { UserRole } from 'src/common/enums';
 import { GetMeetingsQueryDto } from './dto/get-meetings-query.dto';
+import { SubmitLeaveRequestDto } from './dto/leave-request.dto';
 
 @ApiTags('Meetings - API Cuộc họp của Đảng viên')
 @ApiBearerAuth()
@@ -55,5 +56,15 @@ export class MeetingsController {
   })
   async getMeetingsSchedule(@Query() query: GetMeetingsQueryDto) {
     return this.meetingsService.getMeetingsSchedule(query);
+  }
+
+  @Post(':id/leave-requests')
+  @ApiOperation({ summary: 'Đảng viên nộp đơn xin vắng mặt' })
+  async submitLeaveRequest(
+    @Param('id') meetingId: string,
+    @Body() dto: SubmitLeaveRequestDto,
+    @GetCurrentUser('sub') userId: string,
+  ) {
+    return this.meetingsService.submitLeaveRequest(meetingId, userId, dto);
   }
 }

@@ -17,6 +17,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
 import { UserRole } from 'src/common/enums';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
+import { ReviewLeaveRequestDto } from './dto/leave-request.dto';
 
 @ApiTags('Meetings - Api Quản lý Cuộc họp của Chi ủy')
 @ApiBearerAuth()
@@ -26,40 +27,81 @@ export class MeetingsManagerController {
   constructor(private readonly meetingsService: MeetingsService) {}
 
   @Post()
-  @Roles(UserRole.SECRETARY, UserRole.COMMITTEE_MEMBER)
+  @Roles(
+    UserRole.SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.DEPUTY_SECRETARY,
+  )
   @ApiOperation({ summary: 'Tạo cuộc họp mới (Tự động sinh mã điểm danh)' })
   create(@GetCurrentUser('sub') userId: string, @Body() dto: CreateMeetingDto) {
     return this.meetingsService.create(userId, dto);
   }
 
   @Get(':id/pin')
-  @Roles(UserRole.SECRETARY, UserRole.COMMITTEE_MEMBER) // Chỉ Chi ủy mới được xem PIN để chiếu
+  @Roles(
+    UserRole.SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.DEPUTY_SECRETARY,
+  )
   @ApiOperation({ summary: 'Lấy mã PIN hiện tại (Gọi mỗi 5s để cập nhật)' })
   getPin(@Param('id') id: string) {
     return this.meetingsService.getCurrentPin(id);
   }
 
   @Patch(':id/toggle-checkin')
-  @Roles(UserRole.SECRETARY, UserRole.COMMITTEE_MEMBER)
+  @Roles(
+    UserRole.SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.DEPUTY_SECRETARY,
+  )
   @ApiOperation({ summary: 'Bật/Tắt chế độ điểm danh' })
   toggleCheckIn(@Param('id') id: string, @Body('isActive') isActive: boolean) {
     return this.meetingsService.toggleCheckIn(id, isActive);
   }
   @Patch(':id')
   @ApiOperation({ summary: 'Sửa nội dung cuộc họp' })
+  @Roles(
+    UserRole.SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.DEPUTY_SECRETARY,
+  )
   update(@Param('id') id: string, @Body() updateMeetingDto: UpdateMeetingDto) {
     return this.meetingsService.update(id, updateMeetingDto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Hủy/Xóa cuộc họp' })
+  @Roles(
+    UserRole.SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.DEPUTY_SECRETARY,
+  )
   remove(@Param('id') id: string) {
     return this.meetingsService.remove(id);
   }
 
   @Get(':id/attendees')
   @ApiOperation({ summary: 'Xem báo cáo điểm danh (Ai đến, ai vắng)' })
+  @Roles(
+    UserRole.SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.DEPUTY_SECRETARY,
+  )
   getAttendees(@Param('id') id: string) {
     return this.meetingsService.getAttendees(id);
+  }
+
+  @Patch('leave-requests/:attendeeId/review')
+  @ApiOperation({ summary: 'Chi ủy phê duyệt đơn xin vắng mặt' })
+  @Roles(
+    UserRole.SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.DEPUTY_SECRETARY,
+  )
+  async reviewLeaveRequest(
+    @Param('attendeeId') attendeeId: string,
+    @Body() dto: ReviewLeaveRequestDto,
+  ) {
+    return this.meetingsService.reviewLeaveRequest(attendeeId, dto);
   }
 }

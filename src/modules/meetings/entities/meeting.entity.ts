@@ -10,8 +10,7 @@ import {
 import { PartyCell } from '../../party-cells/entities/party-cell.entity';
 import { MeetingAttendee } from './meeting-attendee.entity';
 import { MeetingOpinion } from './meeting-opinion.entity';
-import { MeetingType } from 'src/common/enums';
-import { MeetingStatus } from 'src/common/enums';
+import { MeetingType, MeetingStatus, MeetingFormat } from 'src/common/enums';
 
 @Entity('meetings')
 export class Meeting {
@@ -34,6 +33,13 @@ export class Meeting {
     default: MeetingType.PERIODIC,
   })
   type: MeetingType;
+
+  @Column({
+    type: 'enum',
+    enum: MeetingFormat,
+    default: MeetingFormat.OFFLINE,
+  })
+  format: MeetingFormat;
 
   @Column({ name: 'online_link', nullable: true })
   onlineLink: string;
@@ -69,6 +75,9 @@ export class Meeting {
   // Mở rộng thêm location nếu họp Offline
   @Column({ nullable: true })
   location: string;
+
+  @Column({ name: 'minutes_url', type: 'varchar', nullable: true })
+  minutesUrl: string;
 
   @OneToMany(() => MeetingAttendee, (attendee) => attendee.meeting)
   attendees: MeetingAttendee[];
