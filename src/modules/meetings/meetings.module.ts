@@ -8,6 +8,7 @@ import { MeetingSession } from './entities/meeting-session.entity';
 import { MeetingOpinion } from './entities/meeting-opinion.entity';
 import { PartyMember } from '../party-members/entities/party-member.entity';
 import { MeetingsManagerController } from './meeting.manager.controller';
+import { PartyCell } from '../party-cells/entities/party-cell.entity';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { MeetingsManagerController } from './meeting.manager.controller';
       MeetingSession,
       MeetingOpinion,
       PartyMember,
+      PartyCell,
     ]),
   ],
   controllers: [MeetingsController, MeetingsManagerController],
