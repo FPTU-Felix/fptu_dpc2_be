@@ -201,13 +201,8 @@ export class MeetingsService {
   async findOne(id: string): Promise<MeetingResponseDto> {
     const meeting = await this.meetingRepo.findOne({
       where: { id },
-      relations: ['createdBy'], // Nếu muốn hiện người tạo
     });
-
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
-
-    // CHUẨN BÀI: Map từ Entity -> DTO
-    // excludeExtraneousValues: true -> Đảm bảo chỉ lấy những field có @Expose
     return plainToInstance(MeetingResponseDto, meeting, {
       excludeExtraneousValues: true,
     });
@@ -221,6 +216,13 @@ export class MeetingsService {
     // B1: Lấy Entity từ DB lên
     const meetingEntity = await this.meetingRepo.findOne({ where: { id } });
     if (!meetingEntity) throw new NotFoundException('Không tìm thấy cuộc họp');
+
+    const partyCell = await this.partyCellRepo.findOne({
+      where: { id: updateMeetingDto.partyCellId },
+    });
+    if (!partyCell) {
+      throw new NotFoundException('Không tìm thấy chi bộ');
+    }
 
     // B2: Merge dữ liệu mới vào Entity
     this.meetingRepo.merge(meetingEntity, updateMeetingDto);
