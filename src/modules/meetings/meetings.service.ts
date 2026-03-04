@@ -82,9 +82,6 @@ export class MeetingsService {
         encoding: 'base32',
         digits: 6, // Mã 6 số
       });
-
-      // Tính thời gian còn lại của chu kỳ 30s hiện tại
-      // Công thức: 30 - (giây hiện tại % 30)
       const timeRemaining = 30 - (Math.floor(Date.now() / 1000) % 30);
 
       return {
@@ -150,19 +147,22 @@ export class MeetingsService {
   }
 
   // BẬT/TẮT ĐIỂM DANH
-  async toggleCheckIn(meetingId: string, isActive: boolean) {
+  async toggleCheckIn(meetingId: string) {
+    // 👈 Bỏ biến isActive ở đây đi
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
     });
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+    const currentState = !!meeting.isCheckinActive;
+    const newState = !currentState;
 
-    meeting.isCheckinActive = isActive;
+    meeting.isCheckinActive = newState;
     await this.meetingRepo.save(meeting);
 
     return {
-      message: isActive ? 'Đã MỞ phiên điểm danh' : 'Đã ĐÓNG phiên điểm danh',
+      message: newState ? 'Đã MỞ phiên điểm danh' : 'Đã ĐÓNG phiên điểm danh',
       meetingId,
-      isCheckinActive: isActive,
+      isCheckinActive: newState,
     };
   }
 
