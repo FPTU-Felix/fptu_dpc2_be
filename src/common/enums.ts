@@ -19,9 +19,15 @@ export enum AiDataStatus {
   REJECTED = 'REJECTED',
 }
 
+// Giữ nguyên của ông: Loại cuộc họp (Định kỳ / Đột xuất)
 export enum MeetingType {
   PERIODIC = 'PERIODIC',
   EXTRAORDINARY = 'EXTRAORDINARY',
+}
+
+export enum MeetingFormat {
+  OFFLINE = 'OFFLINE',
+  ONLINE = 'ONLINE',
 }
 
 export enum MeetingStatus {
@@ -32,9 +38,11 @@ export enum MeetingStatus {
 }
 
 export enum AttendeeStatus {
-  PRESENT = 'PRESENT',
-  ABSENT = 'ABSENT',
-  EXCUSED = 'EXCUSED', // Có phép
+  PENDING = 'PENDING', // Mới lên lịch, chưa đến giờ điểm danh (Default)
+  PENDING_EXCUSE = 'PENDING_EXCUSE', // Vừa gửi đơn xin nghỉ, chờ Chi ủy duyệt
+  PRESENT = 'PRESENT', // Có mặt
+  ABSENT = 'ABSENT', // Vắng mặt (Không phép / Không đủ 2/3 thời gian)
+  EXCUSED = 'EXCUSED', // Vắng mặt (Có phép - Đã duyệt)
 }
 
 export enum CheckInMethod {
@@ -44,10 +52,10 @@ export enum CheckInMethod {
 }
 
 export enum PartyPosition {
-  ADMIN = 'ADMIN', // Quản trị kỹ thuật
-  SECRETARY = 'SECRETARY', // Bí thư
-  DEPUTY_SECRETARY = 'DEPUTY_SECRETARY', // Phó Bí thư
-  COMMITTEE_MEMBER = 'COMMITTEE_MEMBER', // Ủy viên
-  PARTY_MEMBER = 'PARTY_MEMBER', // Đảng viên
-  OUTSTANDING_INDIVIDUAL = 'OUTSTANDING_INDIVIDUAL', // Quần chúng ưu tú
+  ADMIN = 'ADMIN',
+  SECRETARY = 'SECRETARY',
+  DEPUTY_SECRETARY = 'DEPUTY_SECRETARY',
+  COMMITTEE_MEMBER = 'COMMITTEE_MEMBER',
+  PARTY_MEMBER = 'PARTY_MEMBER',
+  OUTSTANDING_INDIVIDUAL = 'OUTSTANDING_INDIVIDUAL',
 }

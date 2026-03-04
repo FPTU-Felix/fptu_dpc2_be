@@ -24,7 +24,7 @@ export class AiKnowledgeController {
   constructor(private readonly aiKnowledgeService: AiKnowledgeService) {}
 
   @Post()
-  @Roles(UserRole.PARTY_MEMBER)
+  @Roles(UserRole.PARTY_MEMBER, UserRole.COMMITTEE_MEMBER, UserRole.SECRETARY)
   @ApiOperation({ summary: 'Đảng viên gửi dữ liệu đóng góp cho AI' })
   @ApiBody({ type: CreateAiDataDto })
   create(@GetCurrentUser('sub') userId: string, @Body() dto: CreateAiDataDto) {

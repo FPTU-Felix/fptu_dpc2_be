@@ -10,7 +10,7 @@ import * as speakeasy from 'speakeasy'; // Import cái này là chạy luôn, kh
 
 import { Meeting } from './entities/meeting.entity';
 import { MeetingAttendee } from './entities/meeting-attendee.entity';
-import { AttendeeStatus } from 'src/common/enums';
+import { AttendeeStatus, MeetingStatus } from 'src/common/enums';
 import { CheckInMethod } from 'src/common/enums';
 import { PartyMember } from '../party-members/entities/party-member.entity';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
@@ -19,6 +19,10 @@ import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { MeetingResponseDto } from './dto/meeting-response.dto';
 import { plainToInstance } from 'class-transformer';
 import { GetMeetingsQueryDto } from './dto/get-meetings-query.dto';
+import {
+  ReviewLeaveRequestDto,
+  SubmitLeaveRequestDto,
+} from './dto/leave-request.dto';
 
 @Injectable()
 export class MeetingsService {
@@ -282,6 +286,81 @@ export class MeetingsService {
     return {
       message: 'Lấy lịch họp thành công',
       data: meetings,
+    };
+  }
+  // =========================================================
+  // NGHIỆP VỤ: XIN PHÉP VẮNG MẶT
+  // =========================================================
+
+  // 1. Đảng viên nộp đơn
+  async submitLeaveRequest(
+    meetingId: string,
+    memberId: string,
+    dto: SubmitLeaveRequestDto,
+  ) {
+    const meeting = await this.meetingRepo.findOne({
+      where: { id: meetingId },
+    });
+    if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+
+    if (
+      meeting.status === MeetingStatus.FINISHED ||
+      meeting.status === MeetingStatus.HAPPENING
+    ) {
+      throw new BadRequestException(
+        'Chỉ có thể xin phép trước khi cuộc họp diễn ra',
+      );
+    }
+
+    // Tìm bản ghi điểm danh (Nếu chưa có thì tạo mới)
+    let attendee = await this.attendeeRepo.findOne({
+      where: { meetingId, memberId },
+    });
+
+    if (!attendee) {
+      attendee = this.attendeeRepo.create({
+        meetingId,
+        memberId,
+      });
+    }
+
+    // Cập nhật trạng thái thành "Chờ duyệt"
+    attendee.status = AttendeeStatus.PENDING_EXCUSE;
+    attendee.reason = dto.reason;
+    attendee.proofUrl = dto.proofUrl;
+
+    await this.attendeeRepo.save(attendee);
+
+    return {
+      success: true,
+      message: 'Đã gửi đơn xin vắng mặt, vui lòng chờ Chi ủy phê duyệt.',
+    };
+  }
+
+  // 2. Chi ủy duyệt đơn
+  async reviewLeaveRequest(attendeeId: string, dto: ReviewLeaveRequestDto) {
+    const attendee = await this.attendeeRepo.findOne({
+      where: { id: attendeeId },
+    });
+
+    if (!attendee)
+      throw new NotFoundException('Không tìm thấy thông tin người tham dự');
+
+    if (attendee.status !== AttendeeStatus.PENDING_EXCUSE) {
+      throw new BadRequestException(
+        'Chỉ có thể duyệt các đơn đang ở trạng thái chờ (PENDING_EXCUSE).',
+      );
+    }
+
+    attendee.status = dto.status; // Nhận EXCUSED hoặc ABSENT
+    await this.attendeeRepo.save(attendee);
+
+    const statusText =
+      dto.status === AttendeeStatus.EXCUSED ? 'CHẤP NHẬN' : 'TỪ CHỐI';
+
+    return {
+      success: true,
+      message: `Đã ${statusText} đơn xin vắng mặt!`,
     };
   }
 }
