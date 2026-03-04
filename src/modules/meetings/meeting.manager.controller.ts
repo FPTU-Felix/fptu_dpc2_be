@@ -55,8 +55,8 @@ export class MeetingsManagerController {
     UserRole.DEPUTY_SECRETARY,
   )
   @ApiOperation({ summary: 'Bật/Tắt chế độ điểm danh' })
-  toggleCheckIn(@Param('id') id: string, @Body('isActive') isActive: boolean) {
-    return this.meetingsService.toggleCheckIn(id, isActive);
+  toggleCheckIn(@Param('id') id: string) {
+    return this.meetingsService.toggleCheckIn(id);
   }
   @Patch(':id')
   @ApiOperation({ summary: 'Sửa nội dung cuộc họp' })
