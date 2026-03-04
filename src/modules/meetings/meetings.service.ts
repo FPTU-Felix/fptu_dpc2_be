@@ -23,6 +23,7 @@ import {
   ReviewLeaveRequestDto,
   SubmitLeaveRequestDto,
 } from './dto/leave-request.dto';
+import { PartyCell } from '../party-cells/entities/party-cell.entity';
 
 @Injectable()
 export class MeetingsService {
@@ -33,6 +34,8 @@ export class MeetingsService {
     private readonly attendeeRepo: Repository<MeetingAttendee>,
     @InjectRepository(PartyMember)
     private readonly partyMemberRepo: Repository<PartyMember>,
+    @InjectRepository(PartyCell)
+    private readonly partyCellRepo: Repository<PartyCell>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -41,7 +44,12 @@ export class MeetingsService {
     // Speakeasy sinh ra object, ta chỉ lấy chuỗi base32 làm secret
     const secretObj = speakeasy.generateSecret({ length: 20 });
     const secret = secretObj.base32; // Lưu cái này vào DB
-
+    const partyCell = await this.partyCellRepo.findOne({
+      where: { id: createMeetingDto.partyCellId },
+    });
+    if (!partyCell) {
+      throw new NotFoundException('Không tìm thấy chi bộ');
+    }
     const meeting = this.meetingRepo.create({
       ...createMeetingDto,
       attendanceSecret: secret,
