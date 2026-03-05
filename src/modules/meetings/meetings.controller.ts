@@ -7,6 +7,7 @@ import {
   Param,
   UseGuards,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { MeetingsService } from './meetings.service';
@@ -46,7 +47,9 @@ export class MeetingsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Xem chi tiết 1 cuộc họp' })
-  findOne(@Param('id') id: string) {
+  @Roles(UserRole.PARTY_MEMBER, UserRole.ADMIN)
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    console.log('Received request to find meeting with ID:', id);
     return this.meetingsService.findOne(id);
   }
 
@@ -66,5 +69,16 @@ export class MeetingsController {
     @GetCurrentUser('sub') userId: string,
   ) {
     return this.meetingsService.submitLeaveRequest(meetingId, userId, dto);
+  }
+
+  @Post(':id/heartbeat')
+  @ApiOperation({
+    summary: 'Extension gửi Heartbeat duy trì online (Gọi mỗi 1 phút)',
+  })
+  async recordHeartbeat(
+    @Param('id') meetingId: string,
+    @GetCurrentUser('sub') userId: string,
+  ) {
+    return this.meetingsService.recordHeartbeat(meetingId, userId);
   }
 }

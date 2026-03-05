@@ -10,7 +10,7 @@ import * as speakeasy from 'speakeasy'; // Import cái này là chạy luôn, kh
 
 import { Meeting } from './entities/meeting.entity';
 import { MeetingAttendee } from './entities/meeting-attendee.entity';
-import { AttendeeStatus, MeetingStatus } from 'src/common/enums';
+import { AttendeeStatus, MeetingFormat, MeetingStatus } from 'src/common/enums';
 import { CheckInMethod } from 'src/common/enums';
 import { PartyMember } from '../party-members/entities/party-member.entity';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
@@ -24,6 +24,7 @@ import {
   SubmitLeaveRequestDto,
 } from './dto/leave-request.dto';
 import { PartyCell } from '../party-cells/entities/party-cell.entity';
+import { console } from 'inspector';
 
 @Injectable()
 export class MeetingsService {
@@ -199,9 +200,11 @@ export class MeetingsService {
 
   // GET ONE (Xem chi tiết)
   async findOne(id: string): Promise<MeetingResponseDto> {
+    console.log('Finding meeting with ID:', id);
     const meeting = await this.meetingRepo.findOne({
       where: { id },
     });
+    console.log('Meeting found:', meeting);
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
     return plainToInstance(MeetingResponseDto, meeting, {
       excludeExtraneousValues: true,
@@ -258,24 +261,35 @@ export class MeetingsService {
   }
 
   async getMeetingsSchedule(query: GetMeetingsQueryDto) {
-    const { month, year } = query;
+    const { month, year, startDate, endDate } = query;
 
     const queryBuilder = this.meetingRepo.createQueryBuilder('meeting');
 
-    // Nếu Client truyền lên cả tháng và năm thì lọc theo khoảng thời gian đó
-    if (month && year) {
+    // 1. Ưu tiên lọc theo khoảng ngày cụ thể (startDate -> endDate) nếu có
+    if (startDate && endDate) {
+      // Đảm bảo startDate bắt đầu từ 00:00:00 và endDate kết thúc lúc 23:59:59
+      const parsedStartDate = new Date(`${startDate}T00:00:00.000Z`);
+      const parsedEndDate = new Date(`${endDate}T23:59:59.999Z`);
+
+      queryBuilder
+        .where('meeting.startTime >= :startDate', {
+          startDate: parsedStartDate,
+        })
+        .andWhere('meeting.startTime <= :endDate', { endDate: parsedEndDate });
+    }
+    // 2. Nếu không có ngày cụ thể, fallback về lọc theo Tháng / Năm
+    else if (month && year) {
       const numMonth = parseInt(month, 10);
       const numYear = parseInt(year, 10);
 
-      // Ngày đầu tiên của tháng (VD: 01/02/2026 00:00:00)
-      const startDate = new Date(numYear, numMonth - 1, 1);
-
-      // Ngày cuối cùng của tháng (VD: 28/02/2026 23:59:59)
-      const endDate = new Date(numYear, numMonth, 0, 23, 59, 59);
+      // Ngày đầu tiên của tháng
+      const calcStartDate = new Date(numYear, numMonth - 1, 1);
+      // Ngày cuối cùng của tháng
+      const calcEndDate = new Date(numYear, numMonth, 0, 23, 59, 59);
 
       queryBuilder
-        .where('meeting.startTime >= :startDate', { startDate })
-        .andWhere('meeting.startTime <= :endDate', { endDate });
+        .where('meeting.startTime >= :startDate', { startDate: calcStartDate })
+        .andWhere('meeting.startTime <= :endDate', { endDate: calcEndDate });
     }
 
     // Sắp xếp cuộc họp gần nhất lên đầu hoặc theo thời gian tăng dần
@@ -289,6 +303,7 @@ export class MeetingsService {
       'meeting.endTime',
       'meeting.location',
       'meeting.status',
+      'meeting.format', // Nên thêm format (ONLINE/OFFLINE) để FE biết đường hiển thị icon
     ]);
 
     const meetings = await queryBuilder.getMany();
@@ -371,6 +386,109 @@ export class MeetingsService {
     return {
       success: true,
       message: `Đã ${statusText} đơn xin vắng mặt!`,
+    };
+  }
+
+  // =========================================================
+  // NGHIỆP VỤ ONLINE: HEARTBEAT & CHỐT 2/3 THỜI GIAN
+  // =========================================================
+
+  // 1. API Nhận nhịp tim từ Extension (Bắn liên tục)
+  async recordHeartbeat(meetingId: string, memberId: string) {
+    const meeting = await this.meetingRepo.findOne({
+      where: { id: meetingId },
+    });
+    if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+
+    // Tìm bản ghi điểm danh
+    let attendee = await this.attendeeRepo.findOne({
+      where: { meetingId, memberId },
+    });
+
+    // Nếu Extension lỡ quên gọi Check-in lúc mới vào, tự động tạo mới luôn cho chắc cốp
+    if (!attendee) {
+      attendee = this.attendeeRepo.create({
+        meetingId,
+        memberId,
+        checkInTime: new Date(),
+        method: CheckInMethod.ONLINE_EXT,
+        status: AttendeeStatus.PENDING,
+      });
+    }
+
+    // Liên tục ghi đè thời gian rút lui (checkOutTime) bằng thời gian hiện tại
+    attendee.checkOutTime = new Date();
+    await this.attendeeRepo.save(attendee);
+
+    return { success: true, message: 'Đã cập nhật Heartbeat' };
+  }
+
+  // 2. API Kết thúc cuộc họp và tự động tính điểm danh
+  async endMeeting(meetingId: string) {
+    const meeting = await this.meetingRepo.findOne({
+      where: { id: meetingId },
+      relations: ['attendees'], // Kéo theo toàn bộ danh sách điểm danh để tính toán
+    });
+
+    if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+    if (meeting.status === MeetingStatus.FINISHED) {
+      throw new BadRequestException('Cuộc họp này đã kết thúc từ trước rồi');
+    }
+
+    // 1. Đóng băng cuộc họp
+    meeting.status = MeetingStatus.FINISHED;
+    meeting.endTime = new Date(); // Chốt giờ kết thúc THỰC TẾ
+    meeting.isCheckinActive = false; // Đóng cổng nhập PIN/Heartbeat
+
+    // 2. LOGIC TÍNH TOÁN 2/3 THỜI GIAN CHO HỌP ONLINE
+    if (meeting.format === MeetingFormat.ONLINE) {
+      // Tính tổng thời lượng cuộc họp (Miligiây)
+      const meetingDuration =
+        meeting.endTime.getTime() - meeting.startTime.getTime();
+      const requiredDuration = (2 / 3) * meetingDuration; // Mốc 2/3
+
+      const attendeesToUpdate = meeting.attendees.map((attendee) => {
+        // Ai đã có phép thì tha, không tính toán
+        if (attendee.status === AttendeeStatus.EXCUSED) return attendee;
+
+        if (attendee.checkInTime && attendee.checkOutTime) {
+          // Tính thời gian online thực tế của người này
+          const userDuration =
+            attendee.checkOutTime.getTime() - attendee.checkInTime.getTime();
+
+          // Quyết định số phận: Đủ 2/3 thì CÓ MẶT, không đủ thì VẮNG KHÔNG PHÉP
+          if (userDuration >= requiredDuration) {
+            attendee.status = AttendeeStatus.PRESENT;
+          } else {
+            attendee.status = AttendeeStatus.ABSENT;
+          }
+        } else {
+          // Vào mà không có giờ ra, hoặc chưa từng check-in -> Cho bay màu
+          attendee.status = AttendeeStatus.ABSENT;
+        }
+
+        return attendee;
+      });
+
+      // Lưu lại toàn bộ trạng thái mới xuống DB
+      await this.attendeeRepo.save(attendeesToUpdate);
+    } else {
+      // Nếu là họp OFFLINE, ai còn PENDING (chưa quét PIN) thì quét thành ABSENT hết
+      const attendeesToUpdate = meeting.attendees.map((attendee) => {
+        if (attendee.status === AttendeeStatus.PENDING) {
+          attendee.status = AttendeeStatus.ABSENT;
+        }
+        return attendee;
+      });
+      await this.attendeeRepo.save(attendeesToUpdate);
+    }
+
+    await this.meetingRepo.save(meeting);
+
+    return {
+      message: 'Đã kết thúc cuộc họp và tự động chốt sổ điểm danh!',
+      meetingId: meeting.id,
+      format: meeting.format,
     };
   }
 }

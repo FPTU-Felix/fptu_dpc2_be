@@ -104,4 +104,13 @@ export class MeetingsManagerController {
   ) {
     return this.meetingsService.reviewLeaveRequest(attendeeId, dto);
   }
+
+  @Patch(':id/end')
+  @ApiOperation({
+    summary: 'Kết thúc cuộc họp và tự động chốt danh sách vắng/có mặt',
+  })
+  @Roles('ADMIN', 'SECRETARY')
+  async endMeeting(@Param('id') meetingId: string) {
+    return this.meetingsService.endMeeting(meetingId);
+  }
 }
