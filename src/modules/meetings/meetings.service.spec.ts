@@ -22,8 +22,9 @@ import {
 // Mock thư viện speakeasy
 jest.mock('speakeasy', () => ({
   generateSecret: jest.fn().mockReturnValue({ base32: 'MOCK_SECRET' }),
-  totp: jest.fn().mockReturnValue('123456'),
-  'totp.verify': jest.fn()
+  totp: Object.assign(jest.fn().mockReturnValue('123456'), {
+    verify: jest.fn()
+  })
 }));
 
 describe('MeetingsService', () => {
@@ -148,15 +149,15 @@ describe('MeetingsService', () => {
     it('nên chặn xin phép nếu cuộc họp đã hoặc đang diễn ra', async () => {
       (meetingRepo.findOne as jest.Mock).mockResolvedValue({ status: MeetingStatus.HAPPENING });
 
-      await expect(service.submitLeaveRequest('m-1', 'mem-1', { reason: 'Busy' }))
+      await expect(service.submitLeaveRequest('m-1', 'mem-1', { reason: 'Busy', proofUrl: 'http://example.com' } as any))
         .rejects.toThrow(BadRequestException);
     });
 
     it('nên nộp đơn xin phép thành công', async () => {
-      (meetingRepo.findOne as jest.Mock).mockResolvedValue({ status: MeetingStatus.UPCOMING });
+      (meetingRepo.findOne as jest.Mock).mockResolvedValue({ status: MeetingStatus.SCHEDULED });
       (attendeeRepo.findOne as jest.Mock).mockResolvedValue(null);
 
-      const result = await service.submitLeaveRequest('m-1', 'mem-1', { reason: 'Medical' });
+      const result = await service.submitLeaveRequest('m-1', 'mem-1', { reason: 'Medical', proofUrl: 'http://example.com' } as any);
       expect(result.success).toBe(true);
       expect(attendeeRepo.save).toHaveBeenCalled();
     });
@@ -175,9 +176,9 @@ describe('MeetingsService', () => {
     });
 
     it('endMeeting: nên chốt PRESENT nếu online đủ 2/3 thời gian', async () => {
-      const startTime = new Date('2024-01-01T08:00:00Z');
-      const endTime = new Date('2024-01-01T11:00:00Z'); // Họp 3 tiếng
-      const checkOutTime = new Date('2024-01-01T10:30:00Z'); // Online 2.5 tiếng ( > 2/3)
+      const now = Date.now();
+      const startTime = new Date(now - 3 * 60 * 60 * 1000); // 3 hours ago
+      const checkOutTime = new Date(now - 0.5 * 60 * 60 * 1000); // 30 min ago, online 2.5 hours
 
       const mockMeeting = {
         id: 'm-1',
@@ -200,9 +201,9 @@ describe('MeetingsService', () => {
     });
 
     it('endMeeting: nên chốt ABSENT nếu online không đủ 2/3 thời gian', async () => {
-      const startTime = new Date('2024-01-01T08:00:00Z');
-      const endTime = new Date('2024-01-01T11:00:00Z'); // Họp 3 tiếng
-      const checkOutTime = new Date('2024-01-01T09:00:00Z'); // Online 1 tiếng ( < 2/3)
+      const now = Date.now();
+      const startTime = new Date(now - 3 * 60 * 60 * 1000); // 3 hours ago
+      const checkOutTime = new Date(now - 2 * 60 * 60 * 1000); // 2 hours ago, online 1 hour
 
       const mockMeeting = {
         id: 'm-1',
