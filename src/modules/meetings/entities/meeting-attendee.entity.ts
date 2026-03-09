@@ -59,6 +59,10 @@ export class MeetingAttendee {
   @Column({ name: 'check_out_time', type: 'timestamp', nullable: true })
   checkOutTime: Date;
 
+  // Lưu tổng thời gian online hợp lệ (tính bằng mili-giây)
+  @Column({ name: 'online_duration', type: 'int', default: 0 })
+  onlineDuration: number;
+
   @OneToMany(() => MeetingSession, (session) => session.attendee)
   sessions: MeetingSession[];
 }
