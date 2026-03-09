@@ -19,6 +19,7 @@ import { GetCurrentUser } from '../../modules/auth/decorators/get-user.decorator
 import { UserRole } from 'src/common/enums';
 import { GetMeetingsQueryDto } from './dto/get-meetings-query.dto';
 import { SubmitLeaveRequestDto } from './dto/leave-request.dto';
+import { OnlineAttendanceDto } from './dto/online-attendance.dto';
 
 @ApiTags('Meetings - API Cuộc họp của Đảng viên')
 @ApiBearerAuth()
@@ -28,7 +29,12 @@ export class MeetingsController {
   constructor(private readonly meetingsService: MeetingsService) {}
 
   @Post(':id/check-in')
-  @Roles(UserRole.PARTY_MEMBER)
+  @Roles(
+    UserRole.PARTY_MEMBER,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.SECRETARY,
+    UserRole.DEPUTY_SECRETARY,
+  )
   // User bình thường cũng gọi được
   @ApiOperation({ summary: 'Đảng viên nhập mã PIN để điểm danh' })
   checkIn(
@@ -39,6 +45,28 @@ export class MeetingsController {
     return this.meetingsService.submitCheckIn(userId, meetingId, dto);
   }
 
+  @Post(':id/check-in-online')
+  @Roles(
+    UserRole.PARTY_MEMBER,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.SECRETARY,
+    UserRole.DEPUTY_SECRETARY,
+  )
+  @ApiOperation({
+    summary: 'FE Extension: Bắn 1 lần duy nhất khi vừa join Meet',
+  })
+  async onlineCheckIn(
+    @GetCurrentUser('sub') userId: string,
+    @Param('id') meetingId: string,
+    @Body() dto: OnlineAttendanceDto,
+  ) {
+    return this.meetingsService.onlineCheckIn(
+      meetingId,
+      userId,
+      dto.currentUrl,
+    );
+  }
+
   // @Get()
   // @ApiOperation({ summary: '1. Xem danh sách cuộc họp (Lọc Sắp tới/Lịch sử)' })
   // findAll(@Query() filter: FilterMeetingDto) {
@@ -47,7 +75,12 @@ export class MeetingsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Xem chi tiết 1 cuộc họp' })
-  @Roles(UserRole.PARTY_MEMBER, UserRole.ADMIN)
+  @Roles(
+    UserRole.PARTY_MEMBER,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.SECRETARY,
+    UserRole.DEPUTY_SECRETARY,
+  )
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     console.log('Received request to find meeting with ID:', id);
     return this.meetingsService.findOne(id);
@@ -63,6 +96,12 @@ export class MeetingsController {
 
   @Post(':id/leave-requests')
   @ApiOperation({ summary: 'Đảng viên nộp đơn xin vắng mặt' })
+  @Roles(
+    UserRole.PARTY_MEMBER,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.SECRETARY,
+    UserRole.DEPUTY_SECRETARY,
+  )
   async submitLeaveRequest(
     @Param('id') meetingId: string,
     @Body() dto: SubmitLeaveRequestDto,
@@ -70,15 +109,25 @@ export class MeetingsController {
   ) {
     return this.meetingsService.submitLeaveRequest(meetingId, userId, dto);
   }
-
+  @Roles(
+    UserRole.PARTY_MEMBER,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.SECRETARY,
+    UserRole.DEPUTY_SECRETARY,
+  )
   @Post(':id/heartbeat')
   @ApiOperation({
-    summary: 'Extension gửi Heartbeat duy trì online (Gọi mỗi 1 phút)',
+    summary: 'FE Extension: Bắn lặp lại mỗi 60s để cộng dồn giờ',
   })
   async recordHeartbeat(
     @Param('id') meetingId: string,
+    @Body() dto: OnlineAttendanceDto,
     @GetCurrentUser('sub') userId: string,
   ) {
-    return this.meetingsService.recordHeartbeat(meetingId, userId);
+    return this.meetingsService.recordHeartbeat(
+      meetingId,
+      userId,
+      dto.currentUrl,
+    );
   }
 }

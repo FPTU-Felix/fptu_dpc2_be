@@ -24,7 +24,6 @@ import {
   SubmitLeaveRequestDto,
 } from './dto/leave-request.dto';
 import { PartyCell } from '../party-cells/entities/party-cell.entity';
-import { console } from 'inspector';
 
 @Injectable()
 export class MeetingsService {
@@ -42,15 +41,34 @@ export class MeetingsService {
 
   // 1. TẠO CUỘC HỌP & SINH SECRET
   async create(userId: string, createMeetingDto: CreateMeetingDto) {
-    // Speakeasy sinh ra object, ta chỉ lấy chuỗi base32 làm secret
-    const secretObj = speakeasy.generateSecret({ length: 20 });
-    const secret = secretObj.base32; // Lưu cái này vào DB
+    const { format, onlineLink, location, startTime, endTime } =
+      createMeetingDto;
+    // Check Hình thức họp
+    if (format === MeetingFormat.ONLINE && !onlineLink) {
+      throw new BadRequestException(
+        'Họp trực tuyến (ONLINE) bắt buộc phải nhập đường link Google Meet/Zoom!',
+      );
+    }
+    if (format === MeetingFormat.OFFLINE && !location) {
+      throw new BadRequestException(
+        'Họp trực tiếp (OFFLINE) bắt buộc phải nhập địa điểm phòng họp!',
+      );
+    }
+    // Check Logic Thời gian
+    if (endTime && new Date(endTime) <= new Date(startTime)) {
+      throw new BadRequestException(
+        'Thời gian kết thúc phải diễn ra SAU thời gian bắt đầu cuộc họp!',
+      );
+    }
     const partyCell = await this.partyCellRepo.findOne({
       where: { id: createMeetingDto.partyCellId },
     });
+
     if (!partyCell) {
       throw new NotFoundException('Không tìm thấy chi bộ');
     }
+    const secretObj = speakeasy.generateSecret({ length: 20 });
+    const secret = secretObj.base32; // Lưu cái này vào DB
     const meeting = this.meetingRepo.create({
       ...createMeetingDto,
       attendanceSecret: secret,
@@ -390,105 +408,141 @@ export class MeetingsService {
   }
 
   // =========================================================
-  // NGHIỆP VỤ ONLINE: HEARTBEAT & CHỐT 2/3 THỜI GIAN
+  // LOGIC ONLINE: CHECK-IN, HEARTBEAT & KẾT THÚC
   // =========================================================
 
-  // 1. API Nhận nhịp tim từ Extension (Bắn liên tục)
-  async recordHeartbeat(meetingId: string, memberId: string) {
+  //Kiểm tra gian lận URL
+  private validateMeetUrl(dbLink: string, currentUrl: string) {
+    const meetCodeRegex = /[a-z0-9]{3}-[a-z0-9]{4}-[a-z0-9]{3}/;
+    const dbMeetCode = dbLink?.match(meetCodeRegex)?.[0];
+    const currentMeetCode = currentUrl?.match(meetCodeRegex)?.[0];
+
+    if (!currentMeetCode || dbMeetCode !== currentMeetCode) {
+      throw new BadRequestException('Phát hiện gian lận: Sai phòng họp!');
+    }
+  }
+
+  // API Check-in
+  async onlineCheckIn(meetingId: string, memberId: string, currentUrl: string) {
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
     });
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+    if (meeting.format !== MeetingFormat.ONLINE) {
+      throw new BadRequestException(
+        'API này chỉ dành cho họp trực tuyến (ONLINE)!',
+      );
+    }
+    if (!meeting.isCheckinActive)
+      throw new BadRequestException('Cổng điểm danh đang đóng!');
 
-    // Tìm bản ghi điểm danh
+    // Check chống đổi link
+    this.validateMeetUrl(meeting.onlineLink, currentUrl);
+
     let attendee = await this.attendeeRepo.findOne({
       where: { meetingId, memberId },
     });
+    const now = new Date();
 
-    // Nếu Extension lỡ quên gọi Check-in lúc mới vào, tự động tạo mới luôn cho chắc cốp
     if (!attendee) {
       attendee = this.attendeeRepo.create({
         meetingId,
         memberId,
-        checkInTime: new Date(),
+        checkInTime: now,
+        checkOutTime: now,
+        onlineDuration: 0,
         method: CheckInMethod.ONLINE_EXT,
         status: AttendeeStatus.PENDING,
       });
+    } else {
+      attendee.checkOutTime = now;
     }
 
-    // Liên tục ghi đè thời gian rút lui (checkOutTime) bằng thời gian hiện tại
-    attendee.checkOutTime = new Date();
     await this.attendeeRepo.save(attendee);
-
-    return { success: true, message: 'Đã cập nhật Heartbeat' };
+    return { success: true, message: 'Check-in thành công, bắt đầu tính giờ!' };
   }
 
-  // 2. API Kết thúc cuộc họp và tự động tính điểm danh
+  // API Heartbeat (FE gọi LẶP LẠI mỗi 60s)
+  async recordHeartbeat(
+    meetingId: string,
+    memberId: string,
+    currentUrl: string,
+  ) {
+    const meeting = await this.meetingRepo.findOne({
+      where: { id: meetingId },
+    });
+    if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+    if (meeting.format !== MeetingFormat.ONLINE) {
+      throw new BadRequestException(
+        'API này chỉ dành cho họp trực tuyến (ONLINE)!',
+      );
+    }
+    if (!meeting.isCheckinActive)
+      return { success: false, message: 'Bỏ qua (Meeting đóng)' };
+    this.validateMeetUrl(meeting.onlineLink, currentUrl);
+    const attendee = await this.attendeeRepo.findOne({
+      where: { meetingId, memberId },
+    });
+    if (!attendee)
+      throw new BadRequestException('Vui lòng gọi API Check-in trước!');
+
+    const now = new Date();
+    const timeSinceLastPing = now.getTime() - attendee.checkOutTime.getTime();
+
+    // Chỉ cộng nếu <= 2 phút (cho phép mạng lag tối đa 120s)
+    // Nếu > 2 phút (tức là thoát ra đi chơi r chui lại vào) -> Bỏ qua không cộng.
+    if (timeSinceLastPing <= 120000) {
+      attendee.onlineDuration += timeSinceLastPing;
+    }
+    attendee.checkOutTime = now;
+    await this.attendeeRepo.save(attendee);
+
+    return { success: true, message: 'Đã đập nhịp tim & cộng dồn giờ!' };
+  }
+
+  // API Kết thúc họp & Chốt sổ 2/3
   async endMeeting(meetingId: string) {
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
-      relations: ['attendees'], // Kéo theo toàn bộ danh sách điểm danh để tính toán
+      relations: ['attendees'],
     });
-
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
     if (meeting.status === MeetingStatus.FINISHED) {
-      throw new BadRequestException('Cuộc họp này đã kết thúc từ trước rồi');
+      throw new BadRequestException('Cuộc họp này đã kết thúc từ trước rồi!');
     }
 
-    // 1. Đóng băng cuộc họp
     meeting.status = MeetingStatus.FINISHED;
-    meeting.endTime = new Date(); // Chốt giờ kết thúc THỰC TẾ
-    meeting.isCheckinActive = false; // Đóng cổng nhập PIN/Heartbeat
+    meeting.endTime = new Date();
+    meeting.isCheckinActive = false; // Đóng cổng điểm danh
 
-    // 2. LOGIC TÍNH TOÁN 2/3 THỜI GIAN CHO HỌP ONLINE
     if (meeting.format === MeetingFormat.ONLINE) {
-      // Tính tổng thời lượng cuộc họp (Miligiây)
       const meetingDuration =
         meeting.endTime.getTime() - meeting.startTime.getTime();
-      const requiredDuration = (2 / 3) * meetingDuration; // Mốc 2/3
+      const requiredDuration = (2 / 3) * meetingDuration;
 
       const attendeesToUpdate = meeting.attendees.map((attendee) => {
-        // Ai đã có phép thì tha, không tính toán
         if (attendee.status === AttendeeStatus.EXCUSED) return attendee;
 
-        if (attendee.checkInTime && attendee.checkOutTime) {
-          // Tính thời gian online thực tế của người này
-          const userDuration =
-            attendee.checkOutTime.getTime() - attendee.checkInTime.getTime();
-
-          // Quyết định số phận: Đủ 2/3 thì CÓ MẶT, không đủ thì VẮNG KHÔNG PHÉP
-          if (userDuration >= requiredDuration) {
-            attendee.status = AttendeeStatus.PRESENT;
-          } else {
-            attendee.status = AttendeeStatus.ABSENT;
-          }
+        if (attendee.onlineDuration >= requiredDuration) {
+          attendee.status = AttendeeStatus.PRESENT;
         } else {
-          // Vào mà không có giờ ra, hoặc chưa từng check-in -> Cho bay màu
           attendee.status = AttendeeStatus.ABSENT;
         }
-
         return attendee;
       });
-
-      // Lưu lại toàn bộ trạng thái mới xuống DB
       await this.attendeeRepo.save(attendeesToUpdate);
     } else {
-      // Nếu là họp OFFLINE, ai còn PENDING (chưa quét PIN) thì quét thành ABSENT hết
+      // ĐỐI VỚI HỌP OFFLINE: Ai chưa Check-in PIN (vẫn PENDING) thì thành Vắng (ABSENT)
       const attendeesToUpdate = meeting.attendees.map((attendee) => {
         if (attendee.status === AttendeeStatus.PENDING) {
           attendee.status = AttendeeStatus.ABSENT;
         }
-        return attendee;
+        return attendee; // Ai đã PRESENT (quét PIN) hoặc EXCUSED thì giữ nguyên
       });
       await this.attendeeRepo.save(attendeesToUpdate);
     }
-
     await this.meetingRepo.save(meeting);
 
-    return {
-      message: 'Đã kết thúc cuộc họp và tự động chốt sổ điểm danh!',
-      meetingId: meeting.id,
-      format: meeting.format,
-    };
+    return { message: 'Đã kết thúc cuộc họp & chốt sổ điểm danh tự động!' };
   }
 }
