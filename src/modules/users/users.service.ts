@@ -310,11 +310,13 @@ export class UsersService extends BaseService<User> {
         'user.email',
         'user.isActive',
         'user.createdAt',
+        'member.id',
         'member.fullName',
         'member.gender',
         'member.dateOfBirth',
         'member.hometown',
         'member.phone',
+        'role.id',
         'role.name',
       ])
       .where('member.partyCellId = :cellId', {

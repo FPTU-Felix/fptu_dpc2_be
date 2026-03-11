@@ -5,15 +5,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-
-// Entities
 import { PartyMember } from './entities/party-member.entity';
 import { PartyMemberPosition } from 'src/modules/party-positions/entities/party-member-position.entity';
 import { PartyPosition as PartyPositionEntity } from '../party-positions/entities/party-position.entity';
 import { User } from '../users/entities/user.entity';
 import { Role } from '../roles/entities/role.entity';
-
-// DTOs & Enums
 import { AssignPositionDto } from './dto/assign-position.dto';
 import { PartyPosition, UserRole } from '../../common/enums';
 
@@ -116,7 +112,6 @@ export class PartyMembersService {
         }
 
         // B. Query bảng Roles để lấy ID của role đó
-        // Lưu ý: Giả định cột tên trong bảng roles là 'name'. Nếu là 'slug' hay 'code' thì ông sửa lại nhé.
         const roleEntity = await manager.findOne(Role, {
           where: { name: targetRoleName } as any,
         });
