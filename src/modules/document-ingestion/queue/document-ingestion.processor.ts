@@ -1,0 +1,42 @@
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Job, UnrecoverableError } from 'bullmq';
+import { DOCUMENT_JOB_NAMES } from '@/modules/upload-documents/constants/document-queue.constant';
+import { DocumentIngestionService } from '../services/document-ingestion.service';
+
+@Injectable()
+export class DocumentIngestionProcessor {
+  private readonly logger = new Logger(DocumentIngestionProcessor.name);
+
+  constructor(
+    private readonly documentIngestionService: DocumentIngestionService,
+  ) {}
+
+  async handle(job: Job): Promise<void> {
+    this.logger.log(`Processing job ${job.name} - ${job.id}`);
+    this.logger.debug(`Job data: ${JSON.stringify(job.data)}`);
+
+    try {
+      switch (job.name) {
+        case DOCUMENT_JOB_NAMES.INGEST_DOCUMENT:
+          await this.documentIngestionService.ingestDocumentVersion(
+            job.data.documentVersionId,
+          );
+          this.logger.log(`Completed job ${job.name} - ${job.id}`);
+          return;
+        default:
+          throw new Error(`Unsupported job name: ${job.name}`);
+      }
+    } catch (error: any) {
+      this.logger.error(`Job failed: ${error?.message}`);
+
+      if (
+        error instanceof ServiceUnavailableException &&
+        String(error.message).includes('quota')
+      ) {
+        throw new UnrecoverableError(error.message);
+      }
+
+      throw error;
+    }
+  }
+}

@@ -27,6 +27,9 @@ import { DocumentsModule } from './modules/documents/documents.module';
 import { DocumentCategoriesModule } from './modules/document-categories/document-categories.module';
 import { FileModule } from './modules/file/file.module';
 import minioConfig from './config/minio.config';
+import { UploadDocumentsModule } from './modules/upload-documents/upload-documents.module';
+import { ChatbotModule } from './modules/chatbot/chatbot.module';
+
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -57,6 +60,7 @@ import minioConfig from './config/minio.config';
         database: configService.get<string>('DB_DATABASE'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: false, // Production nên để false
+        logging: ['query', 'error'],
       }),
     }),
     MailModule,
@@ -80,6 +84,8 @@ import minioConfig from './config/minio.config';
     DocumentsModule,
     DocumentCategoriesModule,
     FileModule,
+    UploadDocumentsModule,
+    ChatbotModule
   ],
   controllers: [AppController],
   providers: [AppService],
