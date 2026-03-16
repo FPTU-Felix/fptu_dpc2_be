@@ -1,12 +1,14 @@
 import {
   Entity,
-  Column,
   PrimaryGeneratedColumn,
+  Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { PartyMember } from '../../party-members/entities/party-member.entity';
+import { PartyMember } from 'src/modules/party-members/entities/party-member.entity';
+import { User } from 'src/modules/users/entities/user.entity';
 
 @Entity('disciplines')
 export class Discipline {
@@ -16,27 +18,41 @@ export class Discipline {
   @Column({ name: 'member_id' })
   memberId: string;
 
-  @ManyToOne(() => PartyMember, (member) => member.disciplines, {
-    onDelete: 'CASCADE',
-  })
+  @ManyToOne(() => PartyMember)
   @JoinColumn({ name: 'member_id' })
   member: PartyMember;
 
-  @Column()
+  @Column({ type: 'text' })
   reason: string; // Lý do kỷ luật
 
-  @Column({ type: 'timestamp' })
-  date: Date; // Ngày ra quyết định
+  @Column({ type: 'date' })
+  date: string; // Ngày ra quyết định
 
-  @Column({ name: 'decision_number', nullable: true })
-  decisionNumber: string; // Số quyết định
+  @Column({ name: 'decision_number', length: 100 })
+  decisionNumber: string;
 
-  @Column({ nullable: true })
-  form: string; // Hình thức (Khiển trách, Cảnh cáo...)
+  // Hình thức kỷ luật (Khiển trách, Cảnh cáo, Cách chức, Khai trừ)
+  @Column({ length: 100 })
+  form: string;
 
   @Column({ type: 'text', nullable: true })
   description: string;
 
+  // File Quyết định kỷ luật (Bắt buộc)
+  @Column({ name: 'decision_file_url' })
+  decisionFileUrl: string;
+
+  // Vết kiểm toán
+  @Column({ name: 'created_by' })
+  createdBy: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'created_by' })
+  creator: User;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }

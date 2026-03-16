@@ -1,26 +1,43 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Discipline } from './entities/discipline.entity';
+import { PartyMember } from '../party-members/entities/party-member.entity';
 import { CreateDisciplineDto } from './dto/create-discipline.dto';
-import { UpdateDisciplineDto } from './dto/update-discipline.dto';
 
 @Injectable()
 export class DisciplinesService {
-  create(createDisciplineDto: CreateDisciplineDto) {
-    return 'This action adds a new discipline';
+  constructor(
+    @InjectRepository(Discipline)
+    private readonly disciplineRepo: Repository<Discipline>,
+    @InjectRepository(PartyMember)
+    private readonly partyMemberRepo: Repository<PartyMember>,
+  ) {}
+
+  async create(creatorId: string, dto: CreateDisciplineDto) {
+    // 1. Kiểm tra Đảng viên có tồn tại không
+    const member = await this.partyMemberRepo.findOne({
+      where: { id: dto.memberId },
+    });
+
+    if (!member) {
+      throw new NotFoundException('Không tìm thấy hồ sơ Đảng viên này!');
+    }
+
+    // 2. Tạo bản ghi Kỷ luật & Lưu vết người tạo (creatorId)
+    const newDiscipline = this.disciplineRepo.create({
+      ...dto,
+      createdBy: creatorId,
+    });
+
+    return await this.disciplineRepo.save(newDiscipline);
   }
 
-  findAll() {
-    return `This action returns all disciplines`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} discipline`;
-  }
-
-  update(id: number, updateDisciplineDto: UpdateDisciplineDto) {
-    return `This action updates a #${id} discipline`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} discipline`;
+  // (Gợi ý thêm) Hàm lấy danh sách kỷ luật của 1 Đảng viên để FE hiển thị Profile
+  async findByMember(memberId: string) {
+    return await this.disciplineRepo.find({
+      where: { memberId },
+      order: { date: 'DESC' }, // Án mới nhất xếp lên đầu
+    });
   }
 }
