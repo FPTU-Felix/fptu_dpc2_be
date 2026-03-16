@@ -1,12 +1,14 @@
 import {
   Entity,
-  Column,
   PrimaryGeneratedColumn,
+  Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { PartyMember } from '../../party-members/entities/party-member.entity';
+import { PartyMember } from 'src/modules/party-members/entities/party-member.entity';
+import { User } from 'src/modules/users/entities/user.entity';
 
 @Entity('commendations')
 export class Commendation {
@@ -16,27 +18,40 @@ export class Commendation {
   @Column({ name: 'member_id' })
   memberId: string;
 
-  @ManyToOne(() => PartyMember, (member) => member.commendations, {
-    onDelete: 'CASCADE',
-  })
+  @ManyToOne(() => PartyMember)
   @JoinColumn({ name: 'member_id' })
   member: PartyMember;
 
-  @Column()
-  title: string; // Danh hiệu thi đua / Hình thức khen thưởng
+  @Column({ length: 255 })
+  title: string; // Danh hiệu (VD: Đảng viên xuất sắc tiêu biểu)
 
-  @Column({ type: 'timestamp' })
-  date: Date;
+  @Column({ type: 'date' })
+  date: string; // Ngày ra quyết định
 
-  @Column({ name: 'decision_number', nullable: true })
-  decisionNumber: string;
+  @Column({ name: 'decision_number', length: 100 })
+  decisionNumber: string; // Số quyết định
 
-  @Column({ name: 'signing_authority', nullable: true })
-  signingAuthority: string; // Cấp ký quyết định (Chi bộ, Đảng ủy...)
+  @Column({ name: 'signing_authority', length: 255 })
+  signingAuthority: string; // Cấp ký (VD: Đảng ủy Khối)
 
   @Column({ type: 'text', nullable: true })
   description: string;
 
+  // File Quyết định khen thưởng (Bắt buộc)
+  @Column({ name: 'decision_file_url' })
+  decisionFileUrl: string;
+
+  // Vết kiểm toán: Ai tạo bản ghi này trên hệ thống?
+  @Column({ name: 'created_by' })
+  createdBy: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'created_by' })
+  creator: User;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }

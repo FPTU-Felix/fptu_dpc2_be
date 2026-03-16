@@ -59,3 +59,16 @@ export enum PartyPosition {
   PARTY_MEMBER = 'PARTY_MEMBER',
   OUTSTANDING_INDIVIDUAL = 'OUTSTANDING_INDIVIDUAL',
 }
+
+export enum AssessmentStatus {
+  PENDING = 'PENDING', // Chờ duyệt
+  APPROVED = 'APPROVED', // Đã duyệt (Chốt sổ)
+  REJECTED = 'REJECTED', // Yêu cầu làm lại (Tùy chọn)
+}
+
+export enum AssessmentRank {
+  EXCELLENT = 'EXCELLENT', // Hoàn thành xuất sắc nhiệm vụ
+  GOOD = 'GOOD', // Hoàn thành tốt nhiệm vụ
+  AVERAGE = 'AVERAGE', // Hoàn thành nhiệm vụ
+  POOR = 'POOR', // Không hoàn thành nhiệm vụ
+}
