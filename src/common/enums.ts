@@ -72,3 +72,12 @@ export enum AssessmentRank {
   AVERAGE = 'AVERAGE', // Hoàn thành nhiệm vụ
   POOR = 'POOR', // Không hoàn thành nhiệm vụ
 }
+
+export enum AdmissionStatusEnum {
+  DRAFT = 'DRAFT',            // Bản nháp
+  SUBMITTED = 'SUBMITTED',    // Đã nộp đơn
+  REVIEWING = 'REVIEWING',    // Đang thẩm tra/xác minh
+  READY_FOR_CEREMONY = 'READY_FOR_CEREMONY', // Đã có nghị quyết, chờ làm lễ
+  COMPLETED = 'COMPLETED',    // Đã kết nạp thành công
+  REJECTED = 'REJECTED',      // Bị từ chối
+}

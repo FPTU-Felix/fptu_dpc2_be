@@ -19,7 +19,7 @@ import { PartyFeesModule } from './modules/party-fees/party-fees.module';
 import { PartyPositionsModule } from './modules/party-positions/party-positions.module';
 import { HandbooksModule } from './modules/handbooks/handbooks.module';
 import { AiKnowledgeModule } from './modules/ai-knowledge/ai-knowledge.module';
-
+import { PartyAdmissionsModule } from './modules/party-admissions/party-admissions.module';
 @Module({
   imports: [
     // 1. Cấu hình biến môi trường
@@ -65,6 +65,7 @@ import { AiKnowledgeModule } from './modules/ai-knowledge/ai-knowledge.module';
     PartyPositionsModule,
     HandbooksModule,
     AiKnowledgeModule,
+    PartyAdmissionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
