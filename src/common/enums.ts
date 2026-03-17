@@ -74,10 +74,8 @@ export enum AssessmentRank {
 }
 
 export enum AdmissionStatusEnum {
-  DRAFT = 'DRAFT',            // Bản nháp
   SUBMITTED = 'SUBMITTED',    // Đã nộp đơn
-  REVIEWING = 'REVIEWING',    // Đang thẩm tra/xác minh
-  READY_FOR_CEREMONY = 'READY_FOR_CEREMONY', // Đã có nghị quyết, chờ làm lễ
-  COMPLETED = 'COMPLETED',    // Đã kết nạp thành công
+  CHECKED = 'CHECKED',      // Đã có kết quả thẩm tra
+  VERIFIED = 'VERIFIED',    // Đã xác minh, chờ họp chi bộ
   REJECTED = 'REJECTED',      // Bị từ chối
 }

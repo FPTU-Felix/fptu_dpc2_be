@@ -5,25 +5,24 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
-  OneToOne,
   JoinColumn,
 } from 'typeorm';
-import { PartyMember } from '../../party-members/entities/party-member.entity';
+import { User } from '../../users/entities/user.entity'; // Giả định đường dẫn tới entity User của bạn
 import { PartyCell } from '../../party-cells/entities/party-cell.entity';
-import { Meeting } from '../../meetings/entities/meeting.entity';
-import { AdmissionStatusEnum } from 'src/common/enums'; 
+import { AdmissionStatusEnum } from 'src/common/enums';
 
 @Entity('party_admissions')
 export class PartyAdmission {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'member_id' })
-  memberId: string;
+  // 1. Thay thế member_id bằng user_id
+  @Column({ name: 'user_id' })
+  userId: string;
 
-  @OneToOne(() => PartyMember)
-  @JoinColumn({ name: 'member_id' })
-  member: PartyMember;
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'user_id' })
+  user: User;
 
   @Column({ name: 'party_cell_id' })
   partyCellId: string;
@@ -35,25 +34,13 @@ export class PartyAdmission {
   @Column({
     type: 'enum',
     enum: AdmissionStatusEnum,
-    default: AdmissionStatusEnum.DRAFT,
+    default: AdmissionStatusEnum.CHECKED,
   })
   status: AdmissionStatusEnum;
 
-  @Column({ name: 'application_file_url', nullable: true })
-  applicationFileUrl: string;
-
-  @Column({ name: 'resolution_file_url', nullable: true })
-  resolutionFileUrl: string;
-
+  // Giữ lại cột này theo schema cũ của bạn (nếu cần xóa nốt thì bảo tôi nhé)
   @Column({ name: 'admission_documents_url', nullable: true })
   admissionDocumentsUrl: string;
-
-  @Column({ name: 'ceremony_meeting_id', nullable: true })
-  ceremonyMeetingId: string;
-
-  @ManyToOne(() => Meeting)
-  @JoinColumn({ name: 'ceremony_meeting_id' })
-  ceremonyMeeting: Meeting;
 
   @Column({ type: 'text', nullable: true })
   remark: string;
@@ -63,4 +50,10 @@ export class PartyAdmission {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  /** * ĐÃ XÓA CÁC CỘT:
+   * - application_file_url
+   * - resolution_file_url
+   * - ceremony_meeting_id và quan hệ ceremonyMeeting
+   */
 }
