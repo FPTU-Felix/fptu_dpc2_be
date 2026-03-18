@@ -21,12 +21,13 @@
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli",
     "migration:generate": "npm run typeorm -- -d typeorm.config.ts migration:generate",
     "migration:run": "npm run typeorm -- -d typeorm.config.ts migration:run",
-    "migration:revert": "npm run typeorm -- -d typeorm.config.ts migration:revert"
+    "migration:revert": "npm run typeorm -- -d typeorm.config.ts migration:revert",
+    "migration:create": "npm run typeorm -- migration:create"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1005.0",
     "@nestjs/common": "^11.0.1",
-    "@nestjs/config": "^4.0.2",
+    "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/mapped-types": "*",
@@ -37,6 +38,7 @@
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.0",
     "@sendgrid/mail": "^8.1.6",
+    "@types/multer": "^2.1.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.70.4",
     "cheerio": "^1.2.0",
