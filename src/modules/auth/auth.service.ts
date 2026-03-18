@@ -13,7 +13,7 @@ export class AuthService {
 
   // --- 1. ĐĂNG NHẬP ---
   async signin(dto: SigninDto) {
-    const user = await this.usersService.findOneByUsername(dto.username);
+    const user = await this.usersService.findOneByEmailOrUsername(dto.username);
     if (!user) throw new ForbiddenException('Sai tài khoản hoặc mật khẩu');
 
     const passwordMatches = await bcrypt.compare(dto.password, user.password);

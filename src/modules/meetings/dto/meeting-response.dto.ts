@@ -20,5 +20,8 @@ export class MeetingResponseDto {
   isCheckinActive: boolean;
 
   @Expose()
+  onlineLink: string;
+
+  @Expose()
   createdAt: Date;
 }

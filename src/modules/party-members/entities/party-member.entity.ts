@@ -81,6 +81,36 @@ export class PartyMember {
   })
   status: MemberStatusEnum;
 
+  @Column({ name: 'ethnicity', type: 'varchar', length: 50, nullable: true })
+  ethnicity: string;
+
+  @Column({ name: 'religion', type: 'varchar', length: 50, nullable: true })
+  religion: string;
+
+  @Column({
+    name: 'target_group',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  targetGroup: string;
+
+  @Column({
+    name: 'academic_level',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  academicLevel: string;
+
+  @Column({
+    name: 'political_theory_level',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  politicalTheoryLevel: string;
+
   @OneToMany(() => AdmissionProgress, (progress) => progress.member)
   admissionProgress: AdmissionProgress[];
 
