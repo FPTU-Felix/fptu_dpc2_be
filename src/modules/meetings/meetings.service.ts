@@ -89,13 +89,10 @@ export class MeetingsService {
       .addSelect('meeting.attendanceSecret')
       .addSelect('meeting.isCheckinActive')
       .getOne();
-
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
-
     if (!meeting.isCheckinActive) {
-      return { status: 'CLOSED', message: 'Phiên điểm danh chưa mở' };
+      throw new BadRequestException('Phiên điểm danh chưa mở hoặc đã kết thúc');
     }
-
     try {
       // Sinh mã PIN từ secret (mặc định 30s thay đổi 1 lần)
       const pin = speakeasy.totp({
@@ -169,7 +166,6 @@ export class MeetingsService {
 
   // BẬT/TẮT ĐIỂM DANH
   async toggleCheckIn(meetingId: string) {
-    // 👈 Bỏ biến isActive ở đây đi
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
     });
