@@ -20,8 +20,10 @@ import { PartyPositionsModule } from './modules/party-positions/party-positions.
 import { HandbooksModule } from './modules/handbooks/handbooks.module';
 import { AiKnowledgeModule } from './modules/ai-knowledge/ai-knowledge.module';
 import { PartyAdmissionsModule } from './modules/party-admissions/party-admissions.module';
+import { ScheduleModule } from '@nestjs/schedule';
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     // 1. Cấu hình biến môi trường
     ConfigModule.forRoot({
       isGlobal: true,

@@ -63,16 +63,12 @@ export class Meeting {
   @Column({ name: 'created_by', nullable: true })
   createdBy: string;
 
-  // Secret dùng để sinh mã PIN 6 số (TOTP).
-  // Để select: false để khi query list meeting nó không lộ ra ngoài
   @Column({ name: 'attendance_secret', select: false, nullable: true })
   attendanceSecret: string;
 
-  // Cờ để Chi ủy bật/tắt chức năng điểm danh
   @Column({ name: 'is_checkin_active', default: false })
   isCheckinActive: boolean;
 
-  // Mở rộng thêm location nếu họp Offline
   @Column({ nullable: true })
   location: string;
 

@@ -9,6 +9,9 @@ import { MeetingOpinion } from './entities/meeting-opinion.entity';
 import { PartyMember } from '../party-members/entities/party-member.entity';
 import { MeetingsManagerController } from './meeting.manager.controller';
 import { PartyCell } from '../party-cells/entities/party-cell.entity';
+import { MailService } from '../mail/mail.service';
+import { MeetingsCronService } from './meetings-cron.service';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [
@@ -19,10 +22,11 @@ import { PartyCell } from '../party-cells/entities/party-cell.entity';
       MeetingOpinion,
       PartyMember,
       PartyCell,
+      User,
     ]),
   ],
   controllers: [MeetingsController, MeetingsManagerController],
-  providers: [MeetingsService],
+  providers: [MeetingsService, MeetingsCronService, MailService],
   exports: [MeetingsService],
 })
 export class MeetingsModule {}

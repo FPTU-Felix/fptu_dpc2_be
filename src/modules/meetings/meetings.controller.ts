@@ -82,7 +82,6 @@ export class MeetingsController {
     UserRole.DEPUTY_SECRETARY,
   )
   findOne(@Param('id', ParseUUIDPipe) id: string) {
-    console.log('Received request to find meeting with ID:', id);
     return this.meetingsService.findOne(id);
   }
 

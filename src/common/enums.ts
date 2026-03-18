@@ -2,7 +2,7 @@ export enum UserRole {
   ADMIN = 'ADMIN', // Quản trị kỹ thuật
   SECRETARY = 'SECRETARY', // Bí thư
   DEPUTY_SECRETARY = 'DEPUTY_SECRETARY', // Phó Bí thư
-  COMMITTEE_MEMBER = 'COMMITTEE_MEMBER', // Ủy viên
+  COMMITTEE_MEMBER = 'COMMITTEE_MEMBER', // Chi Ủy
   PARTY_MEMBER = 'PARTY_MEMBER', // Đảng viên
   OUTSTANDING_INDIVIDUAL = 'OUTSTANDING_INDIVIDUAL', // Quần chúng ưu tú
 }
@@ -74,10 +74,10 @@ export enum AssessmentRank {
 }
 
 export enum AdmissionStatusEnum {
-  DRAFT = 'DRAFT',            // Bản nháp
-  SUBMITTED = 'SUBMITTED',    // Đã nộp đơn
-  REVIEWING = 'REVIEWING',    // Đang thẩm tra/xác minh
+  DRAFT = 'DRAFT', // Bản nháp
+  SUBMITTED = 'SUBMITTED', // Đã nộp đơn
+  REVIEWING = 'REVIEWING', // Đang thẩm tra/xác minh
   READY_FOR_CEREMONY = 'READY_FOR_CEREMONY', // Đã có nghị quyết, chờ làm lễ
-  COMPLETED = 'COMPLETED',    // Đã kết nạp thành công
-  REJECTED = 'REJECTED',      // Bị từ chối
+  COMPLETED = 'COMPLETED', // Đã kết nạp thành công
+  REJECTED = 'REJECTED', // Bị từ chối
 }

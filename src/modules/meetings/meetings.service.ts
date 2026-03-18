@@ -24,6 +24,8 @@ import {
   SubmitLeaveRequestDto,
 } from './dto/leave-request.dto';
 import { PartyCell } from '../party-cells/entities/party-cell.entity';
+import { ManualAttendanceDto } from './dto/manual-attendance.dto';
+import { UpdateMeetingMinutesDto } from './dto/update-meeting-minutes.dto';
 
 @Injectable()
 export class MeetingsService {
@@ -218,11 +220,9 @@ export class MeetingsService {
 
   // GET ONE (Xem chi tiết)
   async findOne(id: string): Promise<MeetingResponseDto> {
-    console.log('Finding meeting with ID:', id);
     const meeting = await this.meetingRepo.findOne({
       where: { id },
     });
-    console.log('Meeting found:', meeting);
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
     return plainToInstance(MeetingResponseDto, meeting, {
       excludeExtraneousValues: true,
@@ -544,5 +544,71 @@ export class MeetingsService {
     await this.meetingRepo.save(meeting);
 
     return { message: 'Đã kết thúc cuộc họp & chốt sổ điểm danh tự động!' };
+  }
+
+  async updateManualAttendance(
+    meetingId: string,
+    dto: ManualAttendanceDto,
+    // userId: string,
+  ) {
+    const meeting = await this.meetingRepo.findOne({
+      where: { id: meetingId },
+    });
+    if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+    const existingAttendees = await this.attendeeRepo.find({
+      where: { meetingId },
+    });
+
+    const attendeesToSave: MeetingAttendee[] = [];
+
+    for (const item of dto.attendances) {
+      let attendee = existingAttendees.find(
+        (a) => a.memberId === item.memberId,
+      );
+
+      if (attendee) {
+        attendee.status = item.status;
+        attendee.reason = item.reason || attendee.reason;
+        attendee.method = CheckInMethod.MANUAL;
+      } else {
+        attendee = this.attendeeRepo.create({
+          meetingId,
+          memberId: item.memberId,
+          status: item.status,
+          reason: item.reason,
+          method: CheckInMethod.MANUAL,
+          checkInTime: new Date(),
+        });
+      }
+      attendeesToSave.push(attendee);
+    }
+    await this.attendeeRepo.save(attendeesToSave);
+
+    return {
+      success: true,
+      message: 'Cập nhật điểm danh thủ công thành công!',
+      updatedCount: attendeesToSave.length,
+    };
+  }
+  async updateMeetingMinutes(meetingId: string, dto: UpdateMeetingMinutesDto) {
+    const meeting = await this.meetingRepo.findOne({
+      where: { id: meetingId },
+    });
+
+    if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+
+    // NẾU CẦN: M có thể bắt validate chỉ cho phép upload biên bản khi cuộc họp đã kết thúc (FINISHED)
+    // if (meeting.status !== MeetingStatus.FINISHED) {
+    //   throw new BadRequestException('Chỉ có thể đính kèm biên bản khi cuộc họp đã kết thúc!');
+    // }
+    meeting.minutesUrl = dto.minutesUrl;
+
+    await this.meetingRepo.save(meeting);
+
+    return {
+      success: true,
+      message: 'Cập nhật link biên bản cuộc họp thành công!',
+      minutesUrl: meeting.minutesUrl,
+    };
   }
 }
