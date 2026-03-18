@@ -56,7 +56,11 @@ export class AuthService {
     return tokens;
   }
 
-  async updateRefreshTokenHash(userId: string, rt: string) {
+  async updateRefreshTokenHash(userId: string, rt: string | null) {
+    if (!rt) {
+      await this.usersService.updateRefreshToken(userId, null);
+      return;
+    }
     const hash = await bcrypt.hash(rt, 10);
     await this.usersService.updateRefreshToken(userId, hash);
   }
