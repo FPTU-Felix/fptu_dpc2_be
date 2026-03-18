@@ -24,7 +24,6 @@ export class RefreshTokenStrategy extends PassportStrategy(
     if (!authorization)
       throw new ForbiddenException('Refresh token không hợp lệ');
 
-    // Có rồi mới replace
     const refreshToken = authorization.replace('Bearer', '').trim();
 
     return { ...payload, refreshToken };
