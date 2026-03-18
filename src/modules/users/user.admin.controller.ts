@@ -35,7 +35,6 @@ export class UsersAdminController {
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,
   ) {
-    // Giới hạn tối đa 100 bản ghi mỗi trang để bảo vệ server Render
     const maxLimit = limit > 100 ? 100 : limit;
     return await this.usersService.paginate(
       {

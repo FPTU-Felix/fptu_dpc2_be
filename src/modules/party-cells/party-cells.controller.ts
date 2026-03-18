@@ -1,34 +1,20 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { PartyCellsService } from './party-cells.service';
-import { CreatePartyCellDto } from './dto/create-party-cell.dto';
-import { UpdatePartyCellDto } from './dto/update-party-cell.dto';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
 
+@ApiBearerAuth()
+@ApiTags('Party Cells - API Cho Chi bộ')
 @Controller('party-cells')
 export class PartyCellsController {
   constructor(private readonly partyCellsService: PartyCellsService) {}
 
-  @Post()
-  create(@Body() createPartyCellDto: CreatePartyCellDto) {
-    return this.partyCellsService.create(createPartyCellDto);
-  }
-
+  @UseGuards(AuthGuard('jwt'))
   @Get()
-  findAll() {
-    return this.partyCellsService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.partyCellsService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updatePartyCellDto: UpdatePartyCellDto) {
-    return this.partyCellsService.update(+id, updatePartyCellDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.partyCellsService.remove(+id);
+  @ApiOperation({
+    summary: 'Lấy danh sách tất cả Chi bộ (Dùng cho form chọn Dropdown)',
+  })
+  async getAllPartyCells() {
+    return await this.partyCellsService.findAllForDropdown();
   }
 }
