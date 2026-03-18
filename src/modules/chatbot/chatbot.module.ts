@@ -10,6 +10,7 @@ import { DocumentChunkEntity } from '../upload-documents/entities/document-chunk
 import { DocumentVersionEntity } from '../upload-documents/entities/document-version.entity';
 import { DocumentEntity } from '../upload-documents/entities/document.entity';
 import { EmbeddingService } from '../embedding/services/embedding.service';
+import { PromptDefenseService } from './services/prompt-defense.service';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { EmbeddingService } from '../embedding/services/embedding.service';
     QueryRouterService,
     ChatbotToolService,
     EmbeddingService,
+    PromptDefenseService
   ],
   exports: [ChatbotQaService],
 })

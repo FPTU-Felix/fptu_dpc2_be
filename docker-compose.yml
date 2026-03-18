@@ -18,11 +18,7 @@ services:
     networks:
       - party-network
 
-<<<<<<< Updated upstream
-  # Service 2: pgAdmin
-=======
   # Service 2: pgAdmin (UI quản lý DB)
->>>>>>> Stashed changes
   pgadmin:
     image: dpage/pgadmin4
     container_name: party_pgadmin
