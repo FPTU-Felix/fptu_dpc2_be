@@ -402,7 +402,7 @@ export class MeetingsService {
   }
 
   // API Check-in
-  async onlineCheckIn(meetingId: string, memberId: string, currentUrl: string) {
+  async onlineCheckIn(meetingId: string, userId: string, currentUrl: string) {
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
     });
@@ -414,7 +414,14 @@ export class MeetingsService {
     }
     if (!meeting.isCheckinActive)
       throw new BadRequestException('Cổng điểm danh đang đóng!');
-
+    const member = await this.partyMemberRepo.findOne({
+      where: { userId: userId },
+    });
+    if (!member)
+      throw new ForbiddenException(
+        'Tài khoản chưa được liên kết hồ sơ Đảng viên',
+      );
+    const memberId = member.id;
     // Check chống đổi link
     this.validateMeetUrl(meeting.onlineLink, currentUrl);
 
