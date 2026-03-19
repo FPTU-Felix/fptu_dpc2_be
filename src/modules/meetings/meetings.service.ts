@@ -255,10 +255,8 @@ export class MeetingsService {
 
   // REMOVE (Cho Admin hủy)
   async remove(id: string) {
-    const meeting = await this.meetingRepo.findOne({ where: { id } }); // Check tồn tại
+    const meeting = await this.meetingRepo.findOne({ where: { id } });
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
-
-    // Xóa tất cả dữ liệu điểm danh liên quan trước (nếu không setup Cascade)
     await this.attendeeRepo.delete({ meetingId: id });
 
     return await this.meetingRepo.remove(meeting);
@@ -270,18 +268,14 @@ export class MeetingsService {
     return await this.attendeeRepo.find({
       where: { meetingId },
       relations: ['member', 'member.user'],
-      order: { checkInTime: 'ASC' }, // Ai đến trước xếp trước
+      order: { checkInTime: 'ASC' },
     });
   }
 
   async getMeetingsSchedule(query: GetMeetingsQueryDto) {
     const { month, year, startDate, endDate } = query;
-
     const queryBuilder = this.meetingRepo.createQueryBuilder('meeting');
-
-    // 1. Ưu tiên lọc theo khoảng ngày cụ thể (startDate -> endDate) nếu có
     if (startDate && endDate) {
-      // Đảm bảo startDate bắt đầu từ 00:00:00 và endDate kết thúc lúc 23:59:59
       const parsedStartDate = new Date(`${startDate}T00:00:00.000Z`);
       const parsedEndDate = new Date(`${endDate}T23:59:59.999Z`);
 
@@ -290,26 +284,17 @@ export class MeetingsService {
           startDate: parsedStartDate,
         })
         .andWhere('meeting.startTime <= :endDate', { endDate: parsedEndDate });
-    }
-    // 2. Nếu không có ngày cụ thể, fallback về lọc theo Tháng / Năm
-    else if (month && year) {
+    } else if (month && year) {
       const numMonth = parseInt(month, 10);
       const numYear = parseInt(year, 10);
-
-      // Ngày đầu tiên của tháng
       const calcStartDate = new Date(numYear, numMonth - 1, 1);
-      // Ngày cuối cùng của tháng
       const calcEndDate = new Date(numYear, numMonth, 0, 23, 59, 59);
-
       queryBuilder
         .where('meeting.startTime >= :startDate', { startDate: calcStartDate })
         .andWhere('meeting.startTime <= :endDate', { endDate: calcEndDate });
     }
-
-    // Sắp xếp cuộc họp gần nhất lên đầu hoặc theo thời gian tăng dần
     queryBuilder.orderBy('meeting.startTime', 'ASC');
 
-    // Select các trường cần thiết để hiển thị trên Calendar cho nhẹ
     queryBuilder.select([
       'meeting.id',
       'meeting.title',
@@ -317,19 +302,17 @@ export class MeetingsService {
       'meeting.endTime',
       'meeting.location',
       'meeting.status',
-      'meeting.format', // Nên thêm format (ONLINE/OFFLINE) để FE biết đường hiển thị icon
+      'meeting.format',
+      'meeting.onlineLink',
+      'meeting.minutesUrl',
     ]);
-
     const meetings = await queryBuilder.getMany();
-
     return {
       message: 'Lấy lịch họp thành công',
       data: meetings,
     };
   }
-  // =========================================================
   // NGHIỆP VỤ: XIN PHÉP VẮNG MẶT
-  // =========================================================
 
   // 1. Đảng viên nộp đơn
   async submitLeaveRequest(
