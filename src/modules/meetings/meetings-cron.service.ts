@@ -150,23 +150,15 @@ export class MeetingsCronService {
       );
       return;
     }
-
-    // 3. Nhân bản từng cuộc họp
     const clonedMeetings: Meeting[] = [];
 
     for (const oldMeeting of periodicMeetings) {
-      // 3.1. Tính toán ngày giờ cho tháng mới (Cộng thêm 1 tháng)
       const newStartTime = new Date(oldMeeting.startTime);
       newStartTime.setMonth(newStartTime.getMonth() + 1);
-
       const newEndTime = new Date(oldMeeting.endTime);
       newEndTime.setMonth(newEndTime.getMonth() + 1);
-
-      // 3.2. Sinh mã PIN mới cho cuộc họp mới
       const secretObj = speakeasy.generateSecret({ length: 20 });
       const newSecret = secretObj.base32;
-
-      // 3.3. Dùng Destructuring để TÁCH BỎ các trường không muốn copy
       const {
         id,
         minutesUrl,

@@ -407,6 +407,11 @@ export class MeetingsService {
       where: { id: meetingId },
     });
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+    if (meeting.status === MeetingStatus.FINISHED) {
+      throw new BadRequestException(
+        'Cuộc họp đã kết thúc, không thể check-in!',
+      );
+    }
     if (meeting.format !== MeetingFormat.ONLINE) {
       throw new BadRequestException(
         'API này chỉ dành cho họp trực tuyến (ONLINE)!',
@@ -449,11 +454,7 @@ export class MeetingsService {
   }
 
   // API Heartbeat (FE gọi LẶP LẠI mỗi 60s)
-  async recordHeartbeat(
-    meetingId: string,
-    memberId: string,
-    currentUrl: string,
-  ) {
+  async recordHeartbeat(meetingId: string, userId: string, currentUrl: string) {
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
     });
@@ -463,6 +464,14 @@ export class MeetingsService {
         'API này chỉ dành cho họp trực tuyến (ONLINE)!',
       );
     }
+    const member = await this.partyMemberRepo.findOne({
+      where: { userId: userId },
+    });
+    if (!member)
+      throw new ForbiddenException(
+        'Tài khoản chưa được liên kết hồ sơ Đảng viên',
+      );
+    const memberId = member.id;
     if (!meeting.isCheckinActive)
       return { success: false, message: 'Bỏ qua (Meeting đóng)' };
     this.validateMeetUrl(meeting.onlineLink, currentUrl);
@@ -473,13 +482,12 @@ export class MeetingsService {
       throw new BadRequestException('Vui lòng gọi API Check-in trước!');
 
     const now = new Date();
-    const timeSinceLastPing = now.getTime() - attendee.checkOutTime.getTime();
-
-    // Chỉ cộng nếu <= 2 phút (cho phép mạng lag tối đa 120s)
-    // Nếu > 2 phút (tức là thoát ra đi chơi r chui lại vào) -> Bỏ qua không cộng.
-    if (timeSinceLastPing <= 120000) {
-      attendee.onlineDuration += timeSinceLastPing;
+    const timeSinceLastPingMs = now.getTime() - attendee.checkOutTime.getTime();
+    if (timeSinceLastPingMs <= 300000) {
+      const addedSeconds = Math.floor(timeSinceLastPingMs / 1000);
+      attendee.onlineDuration += addedSeconds;
     }
+
     attendee.checkOutTime = now;
     await this.attendeeRepo.save(attendee);
 
@@ -499,17 +507,17 @@ export class MeetingsService {
 
     meeting.status = MeetingStatus.FINISHED;
     meeting.endTime = new Date();
-    meeting.isCheckinActive = false; // Đóng cổng điểm danh
+    meeting.isCheckinActive = false;
 
     if (meeting.format === MeetingFormat.ONLINE) {
-      const meetingDuration =
-        meeting.endTime.getTime() - meeting.startTime.getTime();
-      const requiredDuration = (2 / 3) * meetingDuration;
+      const meetingDurationSeconds = Math.floor(
+        (meeting.endTime.getTime() - meeting.startTime.getTime()) / 1000,
+      );
+      const requiredDurationSeconds = (2 / 3) * meetingDurationSeconds;
 
       const attendeesToUpdate = meeting.attendees.map((attendee) => {
         if (attendee.status === AttendeeStatus.EXCUSED) return attendee;
-
-        if (attendee.onlineDuration >= requiredDuration) {
+        if (attendee.onlineDuration >= requiredDurationSeconds) {
           attendee.status = AttendeeStatus.PRESENT;
         } else {
           attendee.status = AttendeeStatus.ABSENT;
@@ -518,12 +526,11 @@ export class MeetingsService {
       });
       await this.attendeeRepo.save(attendeesToUpdate);
     } else {
-      // ĐỐI VỚI HỌP OFFLINE: Ai chưa Check-in PIN (vẫn PENDING) thì thành Vắng (ABSENT)
       const attendeesToUpdate = meeting.attendees.map((attendee) => {
         if (attendee.status === AttendeeStatus.PENDING) {
           attendee.status = AttendeeStatus.ABSENT;
         }
-        return attendee; // Ai đã PRESENT (quét PIN) hoặc EXCUSED thì giữ nguyên
+        return attendee;
       });
       await this.attendeeRepo.save(attendeesToUpdate);
     }
