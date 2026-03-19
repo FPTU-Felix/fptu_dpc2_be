@@ -22,6 +22,7 @@ import { IPaginationOptions, paginate } from 'nestjs-typeorm-paginate';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { PartyCell } from '../party-cells/entities/party-cell.entity';
 
 @Injectable()
 export class UsersService extends BaseService<User> {
@@ -38,9 +39,7 @@ export class UsersService extends BaseService<User> {
     super(usersRepository);
   }
 
-  // 👇 HÀM RIÊNG: Validate mật khẩu (Ít nhất 6 ký tự, có chữ và số)
   private validatePassword(password: string) {
-    // Regex: Tối thiểu 6 ký tự, chứa ít nhất 1 chữ cái và 1 số
     const regex = /^(?=.*[A-Za-z])(?=.*\d).{6,}$/;
     if (!regex.test(password)) {
       throw new BadRequestException(
@@ -59,6 +58,13 @@ export class UsersService extends BaseService<User> {
   async findOneById(id: string): Promise<User | null> {
     return await this.usersRepository.findOne({
       where: { id },
+      relations: ['role'],
+    });
+  }
+
+  async findOneByEmailOrUsername(identifier: string) {
+    return await this.usersRepository.findOne({
+      where: [{ username: identifier }, { email: identifier }],
       relations: ['role'],
     });
   }
@@ -227,8 +233,6 @@ export class UsersService extends BaseService<User> {
           'Không có quyền chỉnh sửa hồ sơ của người khác',
         );
       }
-
-      // ✅ CHECK MỚI: Validate mật khẩu tại đây
       if (dto.newPassword) {
         this.validatePassword(dto.newPassword);
 
@@ -256,14 +260,24 @@ export class UsersService extends BaseService<User> {
           'Hồ sơ Đảng viên đã tồn tại trong hệ thống',
         );
       }
-
+      const partyCellExists = await queryRunner.manager.findOne(PartyCell, {
+        where: { id: dto.partyCellId },
+      });
+      if (!partyCellExists) {
+        throw new BadRequestException('Chi bộ không tồn tại trong hệ thống');
+      }
       const member = queryRunner.manager.create(PartyMember, {
         fullName: dto.fullName,
         gender: dto.gender as GenderEnum,
         dob: dto.dateOfBirth,
         hometown: dto.hometown,
         phone: dto.phone,
-        partyCellId: '4dc9d414-0e5d-47dc-828a-e0a249b2b888',
+        ethnicity: dto.ethnicity,
+        religion: dto.religion,
+        targetGroup: dto.targetGroup,
+        academicLevel: dto.academicLevel,
+        politicalTheoryLevel: dto.politicalTheoryLevel,
+        partyCellId: dto.partyCellId,
         user: user,
       });
       await queryRunner.manager.save(member);
@@ -276,7 +290,7 @@ export class UsersService extends BaseService<User> {
         message: 'Hoàn thiện hồ sơ và cập nhật mật khẩu thành công!',
         status: 'COMPLETED',
       };
-    } catch (err) {
+    } catch (err: any) {
       await queryRunner.rollbackTransaction();
       console.error('Lỗi Hoàn thiện hồ sơ:', err.message);
       throw err;
@@ -410,10 +424,7 @@ export class UsersService extends BaseService<User> {
 
     if (!user)
       throw new BadRequestException('Mã xác nhận không hợp lệ hoặc đã hết hạn');
-
-    // ✅ CHECK MỚI: Validate mật khẩu tại đây nữa
     this.validatePassword(dto.newPassword);
-
     const salt = await bcrypt.genSalt();
     user.password = await bcrypt.hash(dto.newPassword, salt);
     user.resetPasswordToken = null;
@@ -449,7 +460,6 @@ export class UsersService extends BaseService<User> {
       );
     }
 
-    // (Tùy chọn) Bảo vệ: Không cho phép khóa tài khoản ADMIN để tránh tự hủy diệt hệ thống
     if (user.role?.name === 'ADMIN') {
       throw new BadRequestException(
         'Không thể khóa tài khoản Quản trị viên cấp cao',
@@ -492,6 +502,59 @@ export class UsersService extends BaseService<User> {
     return {
       success: true,
       message: `Đã MỞ KHÓA tài khoản của đồng chí ${user.username} thành công!`,
+    };
+  }
+
+  async getProfile(userId: string) {
+    const member = await this.dataSource.getRepository(PartyMember).findOne({
+      where: { userId: userId },
+      relations: ['user', 'partyCell', 'positions'],
+    });
+
+    if (!member) {
+      throw new NotFoundException(
+        'Không tìm thấy thông tin hồ sơ của đồng chí',
+      );
+    }
+
+    const currentPosRecord = member.positions?.find(
+      (p) => p.isCurrent === true,
+    );
+
+    const currentPosition = currentPosRecord
+      ? currentPosRecord.positionId
+      : 'PARTY_MEMBER';
+
+    return {
+      id: member.id,
+      userId: member.userId,
+
+      employeeCode: member.user?.username || null,
+      email: member.user?.email || null,
+      position: currentPosition,
+      fullName: member.fullName,
+      dob: member.dob,
+      gender: member.gender,
+      phone: member.phone,
+      hometown: member.hometown,
+      permanentAddress: member.permanentAddress,
+      joinDate: member.joinDate,
+      officialDate: member.officialDate,
+      partyCardId: member.partyCardId,
+      status: member.status,
+
+      ethnicity: member.ethnicity,
+      religion: member.religion,
+      targetGroup: member.targetGroup,
+      academicLevel: member.academicLevel,
+      politicalTheoryLevel: member.politicalTheoryLevel,
+
+      partyCell: member.partyCell
+        ? {
+            id: member.partyCell.id,
+            name: member.partyCell.name,
+          }
+        : null,
     };
   }
 }

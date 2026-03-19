@@ -35,7 +35,6 @@ export class MeetingsController {
     UserRole.SECRETARY,
     UserRole.DEPUTY_SECRETARY,
   )
-  // User bình thường cũng gọi được
   @ApiOperation({ summary: 'Đảng viên nhập mã PIN để điểm danh' })
   checkIn(
     @GetCurrentUser('sub') userId: string,
@@ -82,7 +81,6 @@ export class MeetingsController {
     UserRole.DEPUTY_SECRETARY,
   )
   findOne(@Param('id', ParseUUIDPipe) id: string) {
-    console.log('Received request to find meeting with ID:', id);
     return this.meetingsService.findOne(id);
   }
 

@@ -1,51 +1,49 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import sgMail from '@sendgrid/mail';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
+  private transporter: nodemailer.Transporter;
 
   constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.get<string>('SENDGRID_API_KEY');
-    if (apiKey) {
-      sgMail.setApiKey(apiKey);
-    }
+    this.transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: this.configService.get<string>('MAIL_USER'),
+        pass: this.configService.get<string>('MAIL_PASS'),
+      },
+    });
   }
 
   async sendMail(to: string, subject: string, htmlContent: string) {
-    // 1. VỆ SINH DỮ LIỆU (QUAN TRỌNG)
-    // Nếu to bị null/undefined -> Gán rỗng. Sau đó trim() để cắt khoảng trắng thừa
     const cleanTo = (to || '').trim();
 
-    // 2. KIỂM TRA HỢP LỆ
     if (!cleanTo || !cleanTo.includes('@')) {
       this.logger.error(
         `❌ LỖI: Email người nhận không hợp lệ! Giá trị nhận được là: "${to}"`,
       );
-      return false; // Dừng luôn, không gửi sang SendGrid nữa
+      return false;
     }
 
-    const from =
-      this.configService.get<string>('MAIL_FROM') || 'no-reply@example.com';
-
-    const msg = {
-      to: cleanTo, // Dùng email đã làm sạch
-      from: from,
+    // Cấu hình nội dung email gửi đi
+    const mailOptions = {
+      from: `"Hệ thống Quản lý Chi bộ" <${this.configService.get<string>('MAIL_USER')}>`,
+      to: cleanTo,
       subject: subject,
       html: htmlContent,
     };
 
     try {
-      await sgMail.send(msg);
-      this.logger.log(`✅ Đã gửi mail thành công đến: [${cleanTo}]`);
+      // Thực thi gửi mail
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(
+        `✅ Đã gửi mail (Nodemailer) thành công đến: [${cleanTo}]`,
+      );
       return true;
-    } catch (error) {
-      this.logger.error('❌ Lỗi gửi mail SendGrid:', error);
-      if (error.response) {
-        // In chi tiết lỗi để debug
-        console.error(JSON.stringify(error.response.body));
-      }
+    } catch (error: any) {
+      this.logger.error('❌ Lỗi gửi mail Nodemailer:', error);
       return false;
     }
   }

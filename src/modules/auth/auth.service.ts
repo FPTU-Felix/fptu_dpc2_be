@@ -13,7 +13,7 @@ export class AuthService {
 
   // --- 1. ĐĂNG NHẬP ---
   async signin(dto: SigninDto) {
-    const user = await this.usersService.findOneByUsername(dto.username);
+    const user = await this.usersService.findOneByEmailOrUsername(dto.username);
     if (!user) throw new ForbiddenException('Sai tài khoản hoặc mật khẩu');
 
     const passwordMatches = await bcrypt.compare(dto.password, user.password);
@@ -56,7 +56,11 @@ export class AuthService {
     return tokens;
   }
 
-  async updateRefreshTokenHash(userId: string, rt: string) {
+  async updateRefreshTokenHash(userId: string, rt: string | null) {
+    if (!rt) {
+      await this.usersService.updateRefreshToken(userId, null);
+      return;
+    }
     const hash = await bcrypt.hash(rt, 10);
     await this.usersService.updateRefreshToken(userId, hash);
   }

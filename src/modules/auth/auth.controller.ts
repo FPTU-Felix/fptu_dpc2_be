@@ -28,8 +28,7 @@ export class AuthController {
     schema: {
       type: 'object',
       properties: {
-        username: { type: 'string', example: 'Nguyen Van A' },
-        // email: { type: 'string', example: 'user@example.com' },
+        username: { type: 'string', example: 'NV001' },
         password: { type: 'string', example: 'P@ssw0rd123' },
       },
     },
@@ -55,13 +54,5 @@ export class AuthController {
     @GetCurrentUser('refreshToken') refreshToken: string,
   ) {
     return this.authService.refreshTokens(userId, refreshToken);
-  }
-
-  @Get()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN')
-  @ApiBearerAuth()
-  async findAll() {
-    return await this.usersService.findAll();
   }
 }

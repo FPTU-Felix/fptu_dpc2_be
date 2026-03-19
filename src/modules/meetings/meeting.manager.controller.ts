@@ -7,6 +7,7 @@ import {
   Patch,
   UseGuards,
   Delete,
+  Put,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { MeetingsService } from './meetings.service';
@@ -18,6 +19,8 @@ import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
 import { UserRole } from 'src/common/enums';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { ReviewLeaveRequestDto } from './dto/leave-request.dto';
+import { ManualAttendanceDto } from './dto/manual-attendance.dto';
+import { UpdateMeetingMinutesDto } from './dto/update-meeting-minutes.dto';
 
 @ApiTags('Meetings - Api Quản lý Cuộc họp của Chi ủy')
 @ApiBearerAuth()
@@ -112,5 +115,42 @@ export class MeetingsManagerController {
   @Roles('ADMIN', 'SECRETARY')
   async endMeeting(@Param('id') meetingId: string) {
     return this.meetingsService.endMeeting(meetingId);
+  }
+
+  @Put(':id/attendance/manual')
+  @ApiOperation({
+    summary: 'Điểm danh thủ công cho cuộc họp',
+  })
+  @Roles(
+    UserRole.SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.DEPUTY_SECRETARY,
+  )
+  async manualAttendance(
+    @Param('id') meetingId: string,
+    @Body() dto: ManualAttendanceDto,
+    // @Req() req: any,
+  ) {
+    return await this.meetingsService.updateManualAttendance(
+      meetingId,
+      dto,
+      // userId,
+    );
+  }
+
+  @Patch(':id/minutes')
+  @ApiOperation({
+    summary: 'Cập nhật link biên bản cuộc họp',
+  })
+  @Roles(
+    UserRole.SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.DEPUTY_SECRETARY,
+  )
+  async updateMeetingMinutes(
+    @Param('id') meetingId: string,
+    @Body() dto: UpdateMeetingMinutesDto,
+  ) {
+    return await this.meetingsService.updateMeetingMinutes(meetingId, dto);
   }
 }
