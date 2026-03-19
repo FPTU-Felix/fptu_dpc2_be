@@ -1,7 +1,6 @@
 import { 
   Controller, 
   Get, 
-  Post, 
   Body, 
   Patch, 
   Param, 
@@ -10,10 +9,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { PartyAdmissionsService } from './party-admissions.service';
-import { CreatePartyAdmissionDto } from './dto/create-party-admission.dto';
-import { UpdatePartyAdmissionDto } from './dto/update-party-admission.dto';
 
-// Lớp bảo mật & Phân quyền
+// Security & Authorization
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -70,7 +67,7 @@ export class PartyAdmissionsController {
     @Param('id') id: string,
     @Body('status') nextStatus: AdmissionStatusEnum,
     @Body('remark') remark: string,
-    @GetCurrentUser('roleName') roleName: string, // Lấy role để Service check logic phân quyền
+    @GetCurrentUser('roleName') roleName: string,
   ) {
     return this.partyAdmissionsService.manageProgress(id, nextStatus, roleName, remark);
   }
@@ -89,24 +86,5 @@ export class PartyAdmissionsController {
     return this.partyAdmissionsService.findOne(id);
   }
 
-  @Post()
-  @ApiOperation({ summary: 'Tạo mới 1 hồ sơ kết nạp (Dành cho Admin)' })
-  @Roles(UserRole.ADMIN)
-  create(@Body() createPartyAdmissionDto: CreatePartyAdmissionDto) {
-    return this.partyAdmissionsService.create(createPartyAdmissionDto);
-  }
 
-  @Patch(':id')
-  @ApiOperation({ summary: 'Cập nhật thông tin hồ sơ (Dành cho Admin)' })
-  @Roles(UserRole.ADMIN)
-  update(@Param('id') id: string, @Body() updatePartyAdmissionDto: UpdatePartyAdmissionDto) {
-    return this.partyAdmissionsService.update(id, updatePartyAdmissionDto);
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: 'Xóa hồ sơ' })
-  @Roles(UserRole.ADMIN)
-  remove(@Param('id') id: string) {
-    return this.partyAdmissionsService.remove(id);
-  }
 }
