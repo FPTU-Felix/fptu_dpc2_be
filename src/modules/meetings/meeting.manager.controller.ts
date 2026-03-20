@@ -112,7 +112,7 @@ export class MeetingsManagerController {
   @ApiOperation({
     summary: 'Kết thúc cuộc họp và tự động chốt danh sách vắng/có mặt',
   })
-  @Roles('ADMIN', 'SECRETARY')
+  @Roles('ADMIN', 'SECRETARY', 'COMMITTEE_MEMBER')
   async endMeeting(@Param('id') meetingId: string) {
     return this.meetingsService.endMeeting(meetingId);
   }
