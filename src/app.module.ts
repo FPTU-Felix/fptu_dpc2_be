@@ -21,12 +21,15 @@ import { HandbooksModule } from './modules/handbooks/handbooks.module';
 import { AiKnowledgeModule } from './modules/ai-knowledge/ai-knowledge.module';
 import { PartyAdmissionsModule } from './modules/party-admissions/party-admissions.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { MinioModule } from './modules/minio/minio.module';
+import minioConfig from './config/minio.config';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
     // 1. Cấu hình biến môi trường
     ConfigModule.forRoot({
       isGlobal: true,
+      load: [minioConfig],
     }),
 
     // 2. Chống Spam request (Throttler)
@@ -68,6 +71,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     HandbooksModule,
     AiKnowledgeModule,
     PartyAdmissionsModule,
+    MinioModule,
   ],
   controllers: [AppController],
   providers: [AppService],
