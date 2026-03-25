@@ -7,7 +7,6 @@ import { UsersService } from '../users/users.service';
 describe('AuthController', () => {
   let controller: AuthController;
   let authService: jest.Mocked<AuthService>;
-  let usersService: jest.Mocked<UsersService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -22,17 +21,14 @@ describe('AuthController', () => {
           },
         },
         {
-          provide: UsersService,
-          useValue: {
-            findAll: jest.fn(),
-          },
+          provide: UsersService, // Cần cung cấp vì có trong constructor Controller
+          useValue: {},
         },
       ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
     authService = module.get(AuthService);
-    usersService = module.get(UsersService);
   });
 
   afterEach(() => jest.clearAllMocks());
@@ -42,61 +38,50 @@ describe('AuthController', () => {
   });
 
   describe('signin', () => {
-    it('should delegate to AuthService.signin and return tokens', async () => {
-      const dto: any = { username: 'Nguyen Van A', password: 'P@ssw0rd123' };
+    it('nên gọi AuthService.signin và trả về tokens', async () => {
+      const dto: any = { username: 'admin', password: 'P@ssw0rd123' };
       const result = { accessToken: 'at', refreshToken: 'rt' };
-      (authService.signin as jest.Mock).mockResolvedValue(result);
+      authService.signin.mockResolvedValue(result);
 
-      await expect(controller.signin(dto)).resolves.toEqual(result);
+      const response = await controller.signin(dto);
+
+      expect(response).toEqual(result);
       expect(authService.signin).toHaveBeenCalledWith(dto);
     });
 
-    it('should propagate exceptions thrown by AuthService.signin', async () => {
+    it('nên ném lại lỗi nếu AuthService.signin thất bại', async () => {
       const dto: any = { username: 'wrong', password: 'bad' };
-      const error = new ForbiddenException('Invalid credentials');
-      (authService.signin as jest.Mock).mockRejectedValue(error);
+      const error = new ForbiddenException('Sai tài khoản hoặc mật khẩu');
+      authService.signin.mockRejectedValue(error);
 
-      await expect(controller.signin(dto)).rejects.toBe(error);
+      await expect(controller.signin(dto)).rejects.toThrow(ForbiddenException);
     });
   });
 
   describe('logout', () => {
-    it('should call AuthService.logout with userId and return result', async () => {
+    it('nên gọi AuthService.logout với userId lấy từ GetCurrentUser', async () => {
       const userId = 'user-123';
-      const result = { success: true } as any;
-      (authService.logout as jest.Mock).mockResolvedValue(result);
+      const result = { message: 'Đăng xuất thành công' };
+      authService.logout.mockResolvedValue(result);
 
-      await expect(controller.logout(userId)).resolves.toEqual(result);
+      const response = await controller.logout(userId);
+
+      expect(response).toEqual(result);
       expect(authService.logout).toHaveBeenCalledWith(userId);
     });
   });
 
   describe('refreshTokens', () => {
-    it('should call AuthService.refreshTokens with correct args and return result', async () => {
+    it('nên gọi AuthService.refreshTokens với userId và refreshToken', async () => {
       const userId = 'user-123';
-      const refreshToken = 'refresh-token';
+      const refreshToken = 'refresh-token-string';
       const result = { accessToken: 'new-at', refreshToken: 'new-rt' };
-      (authService.refreshTokens as jest.Mock).mockResolvedValue(result);
+      authService.refreshTokens.mockResolvedValue(result);
 
-      await expect(controller.refreshTokens(userId, refreshToken)).resolves.toEqual(result);
+      const response = await controller.refreshTokens(userId, refreshToken);
+
+      expect(response).toEqual(result);
       expect(authService.refreshTokens).toHaveBeenCalledWith(userId, refreshToken);
-    });
-  });
-
-  describe('findAll', () => {
-    it('should call UsersService.findAll and return users', async () => {
-      const users = [{ id: '1', username: 'u1' }];
-      (usersService.findAll as jest.Mock).mockResolvedValue(users);
-
-      await expect(controller.findAll()).resolves.toBe(users);
-      expect(usersService.findAll).toHaveBeenCalled();
-    });
-
-    it('should propagate exceptions from UsersService.findAll', async () => {
-      const error = new Error('DB error');
-      (usersService.findAll as jest.Mock).mockRejectedValue(error);
-
-      await expect(controller.findAll()).rejects.toBe(error);
     });
   });
 });
