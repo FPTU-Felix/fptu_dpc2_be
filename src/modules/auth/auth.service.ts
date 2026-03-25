@@ -28,7 +28,10 @@ export class AuthService {
     );
 
     await this.updateRefreshTokenHash(user.id, tokens.refreshToken);
-    return tokens;
+    return {
+      ...tokens,
+      isFirstLogin: user.isFirstLogin,
+    };
   }
 
   // --- 2. ĐĂNG XUẤT ---
