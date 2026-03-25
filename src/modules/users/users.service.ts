@@ -520,10 +520,15 @@ export class UsersService extends BaseService<User> {
     const currentPosRecord = member.positions?.find(
       (p) => p.isCurrent === true,
     );
+    if (!currentPosRecord) {
+      console.warn(
+        `Đồng chí ${member.fullName} (${member.user?.username}) không có vị trí công tác nào được đánh dấu là "hiện tại".`,
+      );
+    }
 
     const currentPosition = currentPosRecord
       ? currentPosRecord.positionId
-      : 'PARTY_MEMBER';
+      : null;
 
     return {
       id: member.id,
