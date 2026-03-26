@@ -8,8 +8,16 @@ import {
   UseGuards,
   Query,
   ParseUUIDPipe,
+  UploadedFile,
+  UseInterceptors,
+  ParseFilePipe,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import { MeetingsService } from './meetings.service';
 import { CheckInDto } from './dto/check-in.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -20,6 +28,7 @@ import { UserRole } from 'src/common/enums';
 import { GetMeetingsQueryDto } from './dto/get-meetings-query.dto';
 import { SubmitLeaveRequestDto } from './dto/leave-request.dto';
 import { OnlineAttendanceDto } from './dto/online-attendance.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Meetings - API Cuộc họp của Đảng viên')
 @ApiBearerAuth()
@@ -94,6 +103,8 @@ export class MeetingsController {
 
   @Post(':id/leave-requests')
   @ApiOperation({ summary: 'Đảng viên nộp đơn xin vắng mặt' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
   @Roles(
     UserRole.PARTY_MEMBER,
     UserRole.COMMITTEE_MEMBER,
@@ -104,9 +115,21 @@ export class MeetingsController {
     @Param('id') meetingId: string,
     @Body() dto: SubmitLeaveRequestDto,
     @GetCurrentUser('sub') userId: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: true,
+      }),
+    )
+    file: Express.Multer.File,
   ) {
-    return this.meetingsService.submitLeaveRequest(meetingId, userId, dto);
+    return this.meetingsService.submitLeaveRequest(
+      meetingId,
+      userId,
+      dto,
+      file,
+    );
   }
+
   @Roles(
     UserRole.PARTY_MEMBER,
     UserRole.COMMITTEE_MEMBER,

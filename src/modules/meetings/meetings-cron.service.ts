@@ -161,7 +161,6 @@ export class MeetingsCronService {
       const newSecret = secretObj.base32;
       const {
         id,
-        minutesUrl,
         createdAt,
         attendanceSecret,
         status,

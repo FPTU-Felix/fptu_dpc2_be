@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsEnum, IsUrl } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum } from 'class-validator';
 import { AttendeeStatus } from 'src/common/enums'; // Sửa đường dẫn nếu cần
 
 export class SubmitLeaveRequestDto {
@@ -12,14 +12,11 @@ export class SubmitLeaveRequestDto {
   reason: string;
 
   @ApiProperty({
-    example: 'https:googledrier/giay-cong-tac.pdf',
-    description: 'BẮT BUỘC: Link ảnh/tài liệu minh chứng',
+    type: 'string',
+    format: 'binary',
+    description: 'BẮT BUỘC: File hoặc Ảnh minh chứng (PDF, JPG, PNG...)',
   })
-  @IsUrl({}, { message: 'Link minh chứng phải là một URL (đường dẫn) hợp lệ' })
-  @IsNotEmpty({
-    message: 'Bắt buộc phải đính kèm hình ảnh hoặc file minh chứng',
-  })
-  proofUrl: string;
+  file: any;
 }
 
 export class ReviewLeaveRequestDto {

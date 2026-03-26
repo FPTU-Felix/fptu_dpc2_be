@@ -6,8 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import * as speakeasy from 'speakeasy'; // Import cái này là chạy luôn, không lỗi lầm
-
+import * as speakeasy from 'speakeasy';
 import { Meeting } from './entities/meeting.entity';
 import { MeetingAttendee } from './entities/meeting-attendee.entity';
 import { AttendeeStatus, MeetingFormat, MeetingStatus } from 'src/common/enums';
@@ -25,7 +24,8 @@ import {
 } from './dto/leave-request.dto';
 import { PartyCell } from '../party-cells/entities/party-cell.entity';
 import { ManualAttendanceDto } from './dto/manual-attendance.dto';
-import { UpdateMeetingMinutesDto } from './dto/update-meeting-minutes.dto';
+import { MinioService } from '../minio/minio.service';
+import { MeetingDocument } from './entities/meeting-document.entity';
 
 @Injectable()
 export class MeetingsService {
@@ -39,13 +39,14 @@ export class MeetingsService {
     @InjectRepository(PartyCell)
     private readonly partyCellRepo: Repository<PartyCell>,
     private readonly dataSource: DataSource,
+    private minioService: MinioService,
+    @InjectRepository(MeetingDocument)
+    private readonly meetingDocRepo: Repository<MeetingDocument>,
   ) {}
 
-  // 1. TẠO CUỘC HỌP & SINH SECRET
   async create(userId: string, createMeetingDto: CreateMeetingDto) {
     const { format, onlineLink, location, startTime, endTime } =
       createMeetingDto;
-    // Check Hình thức họp
     if (format === MeetingFormat.ONLINE && !onlineLink) {
       throw new BadRequestException(
         'Họp trực tuyến (ONLINE) bắt buộc phải nhập đường link Google Meet/Zoom!',
@@ -56,7 +57,6 @@ export class MeetingsService {
         'Họp trực tiếp (OFFLINE) bắt buộc phải nhập địa điểm phòng họp!',
       );
     }
-    // Check Logic Thời gian
     if (endTime && new Date(endTime) <= new Date(startTime)) {
       throw new BadRequestException(
         'Thời gian kết thúc phải diễn ra SAU thời gian bắt đầu cuộc họp!',
@@ -70,7 +70,7 @@ export class MeetingsService {
       throw new NotFoundException('Không tìm thấy chi bộ');
     }
     const secretObj = speakeasy.generateSecret({ length: 20 });
-    const secret = secretObj.base32; // Lưu cái này vào DB
+    const secret = secretObj.base32;
     const meeting = this.meetingRepo.create({
       ...createMeetingDto,
       attendanceSecret: secret,
@@ -81,7 +81,6 @@ export class MeetingsService {
     return await this.meetingRepo.save(meeting);
   }
 
-  // LẤY MÃ PIN HIỆN TẠI (CHO ADMIN)
   async getCurrentPin(meetingId: string) {
     const meeting = await this.meetingRepo
       .createQueryBuilder('meeting')
@@ -94,11 +93,10 @@ export class MeetingsService {
       throw new BadRequestException('Phiên điểm danh chưa mở hoặc đã kết thúc');
     }
     try {
-      // Sinh mã PIN từ secret (mặc định 30s thay đổi 1 lần)
       const pin = speakeasy.totp({
         secret: meeting.attendanceSecret,
         encoding: 'base32',
-        digits: 6, // Mã 6 số
+        digits: 6,
       });
       const timeRemaining = 30 - (Math.floor(Date.now() / 1000) % 30);
 
@@ -113,7 +111,6 @@ export class MeetingsService {
     }
   }
 
-  // XỬ LÝ CHECK-IN (CHO USER)
   async submitCheckIn(userId: string, meetingId: string, dto: CheckInDto) {
     const member = await this.partyMemberRepo.findOne({ where: { userId } });
     if (!member)
@@ -130,19 +127,17 @@ export class MeetingsService {
     if (!meeting.isCheckinActive)
       throw new ForbiddenException('Phiên điểm danh hiện đang đóng');
 
-    // VALIDATE MÃ PIN
     const isValid = speakeasy.totp.verify({
       secret: meeting.attendanceSecret,
       encoding: 'base32',
       token: dto.pin,
-      window: 1, // Cho phép trễ 1 chu kỳ (30s) để tránh user nhập chậm bị lỗi
+      window: 1,
     });
 
     if (!isValid) {
       throw new BadRequestException('Mã xác thực sai hoặc đã hết hạn');
     }
 
-    // LƯU KẾT QUẢ
     let attendee = await this.attendeeRepo.findOne({
       where: { meetingId, memberId: member.id },
     });
@@ -164,7 +159,6 @@ export class MeetingsService {
     return await this.attendeeRepo.save(attendee);
   }
 
-  // BẬT/TẮT ĐIỂM DANH
   async toggleCheckIn(meetingId: string) {
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
@@ -183,38 +177,6 @@ export class MeetingsService {
     };
   }
 
-  // 1. GET ALL (Cho Member xem lịch sử/sắp tới)
-  // ========================================================
-  // async findAll(filter: FilterMeetingDto) {
-  //   const query = this.meetingRepo
-  //     .createQueryBuilder('meeting')
-  //     .leftJoinAndSelect('meeting.createdBy', 'creator') // Để hiện tên người tạo
-  //     .select(['meeting', 'creator.fullName', 'creator.id']);
-  //   // Giấu attendanceSecret đi, không select
-
-  //   // Lọc theo thời gian
-  //   const now = new Date();
-  //   if (filter.type === MeetingTimeFilter.UPCOMING) {
-  //     query.where('meeting.time >= :now', { now });
-  //     query.orderBy('meeting.time', 'ASC'); // Sắp diễn ra xếp trước
-  //   } else if (filter.type === MeetingTimeFilter.PAST) {
-  //     query.where('meeting.time < :now', { now });
-  //     query.orderBy('meeting.time', 'DESC'); // Mới họp xong xếp trước
-  //   } else {
-  //     query.orderBy('meeting.time', 'DESC');
-  //   }
-
-  //   // Tìm kiếm
-  //   if (filter.search) {
-  //     query.andWhere('meeting.title ILIKE :search', {
-  //       search: `%${filter.search}%`,
-  //     });
-  //   }
-
-  //   return await query.getMany();
-  // }
-
-  // GET ONE (Xem chi tiết)
   async findOne(id: string): Promise<MeetingResponseDto> {
     const meeting = await this.meetingRepo.findOne({
       where: { id },
@@ -225,12 +187,10 @@ export class MeetingsService {
     });
   }
 
-  // UPDATE (Cho Admin sửa)
   async update(
     id: string,
     updateMeetingDto: UpdateMeetingDto,
   ): Promise<MeetingResponseDto> {
-    // B1: Lấy Entity từ DB lên
     const meetingEntity = await this.meetingRepo.findOne({ where: { id } });
     if (!meetingEntity) throw new NotFoundException('Không tìm thấy cuộc họp');
 
@@ -241,19 +201,13 @@ export class MeetingsService {
       throw new NotFoundException('Không tìm thấy chi bộ');
     }
 
-    // B2: Merge dữ liệu mới vào Entity
     this.meetingRepo.merge(meetingEntity, updateMeetingDto);
-
-    // B3: Lưu Entity xuống DB
     const savedMeeting = await this.meetingRepo.save(meetingEntity);
-
-    // B4: Lúc này mới chuyển sang DTO để return
     return plainToInstance(MeetingResponseDto, savedMeeting, {
       excludeExtraneousValues: true,
     });
   }
 
-  // REMOVE (Cho Admin hủy)
   async remove(id: string) {
     const meeting = await this.meetingRepo.findOne({ where: { id } });
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
@@ -262,7 +216,6 @@ export class MeetingsService {
     return await this.meetingRepo.remove(meeting);
   }
 
-  // GET ATTENDEES (Báo cáo điểm danh)
   async getAttendees(meetingId: string) {
     await this.findOne(meetingId);
     return await this.attendeeRepo.find({
@@ -312,18 +265,21 @@ export class MeetingsService {
       data: meetings,
     };
   }
-  // NGHIỆP VỤ: XIN PHÉP VẮNG MẶT
 
-  // 1. Đảng viên nộp đơn
   async submitLeaveRequest(
     meetingId: string,
-    memberId: string,
+    userId: string,
     dto: SubmitLeaveRequestDto,
+    file: Express.Multer.File,
   ) {
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
     });
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+    const member = await this.partyMemberRepo.findOne({
+      where: { userId: userId },
+    });
+    if (!member) throw new NotFoundException('Không tìm thấy đảng viên');
 
     if (
       meeting.status === MeetingStatus.FINISHED ||
@@ -334,32 +290,47 @@ export class MeetingsService {
       );
     }
 
-    // Tìm bản ghi điểm danh (Nếu chưa có thì tạo mới)
     let attendee = await this.attendeeRepo.findOne({
-      where: { meetingId, memberId },
+      where: { meetingId, memberId: member.id },
     });
 
     if (!attendee) {
       attendee = this.attendeeRepo.create({
         meetingId,
-        memberId,
+        memberId: member.id,
       });
     }
 
-    // Cập nhật trạng thái thành "Chờ duyệt"
+    if (attendee.proofUrl) {
+      try {
+        const parts = attendee.proofUrl.split(`leave-requests/${meetingId}/`);
+        if (parts.length === 2) {
+          const oldObjectName = `leave-requests/${meetingId}/${parts[1]}`;
+          await this.minioService.deleteFile(oldObjectName);
+          console.log(
+            `[MinIO] Đã dọn dẹp file minh chứng cũ: ${oldObjectName}`,
+          );
+        }
+      } catch (error) {
+        console.error('Lỗi khi dọn dẹp file MinIO cũ:', error.message);
+      }
+    }
+    const uploadResult = await this.minioService.uploadFile({
+      file: file,
+      folder: `leave-requests/${meetingId}`,
+    });
+
     attendee.status = AttendeeStatus.PENDING_EXCUSE;
     attendee.reason = dto.reason;
-    attendee.proofUrl = dto.proofUrl;
-
+    attendee.proofUrl = uploadResult.url;
     await this.attendeeRepo.save(attendee);
-
     return {
       success: true,
       message: 'Đã gửi đơn xin vắng mặt, vui lòng chờ Chi ủy phê duyệt.',
+      proofUrl: uploadResult.url,
     };
   }
 
-  // 2. Chi ủy duyệt đơn
   async reviewLeaveRequest(attendeeId: string, dto: ReviewLeaveRequestDto) {
     const attendee = await this.attendeeRepo.findOne({
       where: { id: attendeeId },
@@ -386,11 +357,6 @@ export class MeetingsService {
     };
   }
 
-  // =========================================================
-  // LOGIC ONLINE: CHECK-IN, HEARTBEAT & KẾT THÚC
-  // =========================================================
-
-  //Kiểm tra gian lận URL
   private validateMeetUrl(dbLink: string, currentUrl: string) {
     const meetCodeRegex = /[a-z0-9]{3}-[a-z0-9]{4}-[a-z0-9]{3}/;
     const dbMeetCode = dbLink?.match(meetCodeRegex)?.[0];
@@ -401,7 +367,6 @@ export class MeetingsService {
     }
   }
 
-  // API Check-in
   async onlineCheckIn(meetingId: string, userId: string, currentUrl: string) {
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
@@ -427,7 +392,6 @@ export class MeetingsService {
         'Tài khoản chưa được liên kết hồ sơ Đảng viên',
       );
     const memberId = member.id;
-    // Check chống đổi link
     this.validateMeetUrl(meeting.onlineLink, currentUrl);
 
     let attendee = await this.attendeeRepo.findOne({
@@ -494,7 +458,6 @@ export class MeetingsService {
     return { success: true, message: 'Đã đập nhịp tim & cộng dồn giờ!' };
   }
 
-  // API Kết thúc họp & Chốt sổ 2/3
   async endMeeting(meetingId: string) {
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
@@ -583,25 +546,39 @@ export class MeetingsService {
       updatedCount: attendeesToSave.length,
     };
   }
-  async updateMeetingMinutes(meetingId: string, dto: UpdateMeetingMinutesDto) {
+  async uploadMeetingDocuments(
+    meetingId: string,
+    files: Express.Multer.File[],
+  ) {
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
     });
-
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+    if (!files || files.length === 0) {
+      throw new BadRequestException('Vui lòng chọn ít nhất 1 file để tải lên!');
+    }
+    const savedDocuments: MeetingDocument[] = [];
+    for (const file of files) {
+      const uploadedInfo = await this.minioService.uploadFile({
+        file: file,
+        folder: `meetings/${meetingId}`,
+      });
 
-    // NẾU CẦN: M có thể bắt validate chỉ cho phép upload biên bản khi cuộc họp đã kết thúc (FINISHED)
-    // if (meeting.status !== MeetingStatus.FINISHED) {
-    //   throw new BadRequestException('Chỉ có thể đính kèm biên bản khi cuộc họp đã kết thúc!');
-    // }
-    meeting.minutesUrl = dto.minutesUrl;
+      const newDoc = this.meetingDocRepo.create({
+        meetingId,
+        originalName: uploadedInfo.fileName,
+        fileUrl: uploadedInfo.url,
+        fileSize: uploadedInfo.size,
+      });
 
-    await this.meetingRepo.save(meeting);
+      const savedDoc = await this.meetingDocRepo.save(newDoc);
+      savedDocuments.push(savedDoc);
+    }
 
     return {
       success: true,
-      message: 'Cập nhật link biên bản cuộc họp thành công!',
-      minutesUrl: meeting.minutesUrl,
+      message: `Đã tải lên thành công ${savedDocuments.length} tài liệu!`,
+      documents: savedDocuments,
     };
   }
 }
