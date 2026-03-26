@@ -12,6 +12,7 @@ import { PartyCell } from '../party-cells/entities/party-cell.entity';
 import { MailService } from '../mail/mail.service';
 import { MeetingsCronService } from './meetings-cron.service';
 import { User } from '../users/entities/user.entity';
+import { MeetingDocument } from './entities/meeting-document.entity';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { User } from '../users/entities/user.entity';
       PartyMember,
       PartyCell,
       User,
+      MeetingDocument,
     ]),
   ],
   controllers: [MeetingsController, MeetingsManagerController],

@@ -8,8 +8,15 @@ import {
   UseGuards,
   Delete,
   Put,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import { MeetingsService } from './meetings.service';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -20,7 +27,8 @@ import { UserRole } from 'src/common/enums';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { ReviewLeaveRequestDto } from './dto/leave-request.dto';
 import { ManualAttendanceDto } from './dto/manual-attendance.dto';
-import { UpdateMeetingMinutesDto } from './dto/update-meeting-minutes.dto';
+import { UploadMeetingDocumentsDto } from './dto/upload-meeting-documents.dto';
+import { FilesInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Meetings - Api Quản lý Cuộc họp của Chi ủy')
 @ApiBearerAuth()
@@ -138,19 +146,20 @@ export class MeetingsManagerController {
     );
   }
 
-  @Patch(':id/minutes')
-  @ApiOperation({
-    summary: 'Cập nhật link biên bản cuộc họp',
-  })
+  @Post(':id/documents')
+  @ApiOperation({ summary: 'Tải lên nhiều biên bản/tài liệu cho cuộc họp' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FilesInterceptor('files', 10))
   @Roles(
     UserRole.SECRETARY,
     UserRole.COMMITTEE_MEMBER,
     UserRole.DEPUTY_SECRETARY,
   )
-  async updateMeetingMinutes(
+  async uploadDocuments(
     @Param('id') meetingId: string,
-    @Body() dto: UpdateMeetingMinutesDto,
+    @Body() dto: UploadMeetingDocumentsDto,
+    @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return await this.meetingsService.updateMeetingMinutes(meetingId, dto);
+    return this.meetingsService.uploadMeetingDocuments(meetingId, files);
   }
 }
