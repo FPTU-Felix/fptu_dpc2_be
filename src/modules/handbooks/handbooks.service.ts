@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { HandbookLink } from './entities/handbook-link.entity';
 import { Repository } from 'typeorm';
 import { Handbook } from './entities/handbook.entity';
@@ -10,32 +10,28 @@ import {
   UpdateHandbookLinkDto,
 } from './dto/handbook.dto';
 import { IPaginationOptions, paginate } from 'nestjs-typeorm-paginate';
+import { MinioService } from '../minio/minio.service';
+
 @Injectable()
 export class HandbooksService {
+  private readonly logger = new Logger(HandbooksService.name);
   constructor(
     @InjectRepository(Handbook)
     private readonly handbookRepo: Repository<Handbook>,
-
     @InjectRepository(HandbookLink)
     private readonly linkRepo: Repository<HandbookLink>,
+    private minioService: MinioService,
   ) {}
-
-  // ==========================================
-  // QUẢN LÝ HANDBOOK (CẨM NANG)
-  // ==========================================
 
   async findAll(options: IPaginationOptions, isActiveOnly: boolean = false) {
     const queryBuilder = this.handbookRepo
       .createQueryBuilder('handbook')
-      // Lấy kèm mảng link (Tương đương relations: ['links'])
       .leftJoinAndSelect('handbook.links', 'link')
       .orderBy('handbook.createdAt', 'DESC');
 
     if (isActiveOnly) {
       queryBuilder.where('handbook.isActive = :isActive', { isActive: true });
     }
-
-    // Thư viện sẽ tự động đếm tổng số bản ghi và cắt data theo page/limit
     return await paginate<Handbook>(queryBuilder, options);
   }
 
@@ -62,39 +58,127 @@ export class HandbooksService {
 
   async remove(id: string) {
     const handbook = await this.findOne(id);
-    // Nhờ có onDelete: 'CASCADE' ở Entity, khi xóa Handbook thì các Link con tự bốc hơi
+    let hasMinioError = false;
+
+    if (handbook.links && handbook.links.length > 0) {
+      for (const link of handbook.links) {
+        if (link.url) {
+          try {
+            const parts = link.url.split(`handbooks/${id}/`);
+            if (parts.length === 2) {
+              await this.minioService.deleteFile(`handbooks/${id}/${parts[1]}`);
+            }
+          } catch (e) {
+            this.logger.error(
+              `Lỗi dọn rác MinIO cho URL ${link.url}: ${e.message}`,
+            );
+            hasMinioError = true;
+          }
+        }
+      }
+    }
+
     await this.handbookRepo.remove(handbook);
-    return { message: 'Xóa cẩm nang thành công' };
+
+    if (hasMinioError) {
+      return {
+        message:
+          'Đã xóa cẩm nang thành công, nhưng một số file rác trên MinIO chưa dọn sạch được.',
+      };
+    }
+    return { message: 'Xóa cẩm nang và toàn bộ tài liệu thành công' };
   }
 
-  // ==========================================
-  // QUẢN LÝ HANDBOOK LINKS (TÀI LIỆU CON)
-  // ==========================================
+  async addLink(
+    handbookId: string,
+    dto: CreateHandbookLinkDto,
+    file: Express.Multer.File,
+  ) {
+    const handbook = await this.findOne(handbookId);
 
-  async addLink(handbookId: string, dto: CreateHandbookLinkDto) {
-    const handbook = await this.findOne(handbookId); // Đảm bảo handbook tồn tại
+    const uploadResult = await this.minioService.uploadFile({
+      file: file,
+      folder: `handbooks/${handbookId}`,
+    });
 
     const newLink = this.linkRepo.create({
       ...dto,
-      handbook: handbook, // Tạo liên kết khóa ngoại
+      url: uploadResult.url,
+      handbook: handbook,
     });
 
     return await this.linkRepo.save(newLink);
   }
 
-  async updateLink(linkId: string, dto: UpdateHandbookLinkDto) {
-    const link = await this.linkRepo.findOne({ where: { id: linkId } });
+  async updateLink(
+    linkId: string,
+    dto: UpdateHandbookLinkDto,
+    file?: Express.Multer.File,
+  ) {
+    const link = await this.linkRepo.findOne({
+      where: { id: linkId },
+      relations: ['handbook'],
+    });
     if (!link) throw new NotFoundException('Không tìm thấy đường dẫn tài liệu');
+
+    if (file) {
+      if (link.url) {
+        try {
+          const parts = link.url.split(`handbooks/${link.handbook.id}/`);
+          if (parts.length === 2) {
+            await this.minioService.deleteFile(
+              `handbooks/${link.handbook.id}/${parts[1]}`,
+            );
+          }
+        } catch (error) {
+          this.logger.warn(
+            `Không thể xóa file cũ trên MinIO (có thể file không tồn tại): ${error.message}`,
+          );
+        }
+      }
+      const uploadResult = await this.minioService.uploadFile({
+        file: file,
+        folder: `handbooks/${link.handbook.id}`,
+      });
+      link.url = uploadResult.url;
+    }
 
     Object.assign(link, dto);
     return await this.linkRepo.save(link);
   }
 
   async removeLink(linkId: string) {
-    const link = await this.linkRepo.findOne({ where: { id: linkId } });
+    const link = await this.linkRepo.findOne({
+      where: { id: linkId },
+      relations: ['handbook'],
+    });
     if (!link) throw new NotFoundException('Không tìm thấy đường dẫn tài liệu');
 
+    let hasMinioError = false;
+    if (link.url) {
+      try {
+        const parts = link.url.split(`handbooks/${link.handbook.id}/`);
+        if (parts.length === 2) {
+          await this.minioService.deleteFile(
+            `handbooks/${link.handbook.id}/${parts[1]}`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Lỗi dọn rác MinIO cho URL ${link.url}: ${error.message}`,
+        );
+        hasMinioError = true;
+      }
+    }
+
     await this.linkRepo.remove(link);
+
+    if (hasMinioError) {
+      return {
+        message:
+          'Đã xóa tài liệu khỏi hệ thống, nhưng file vật lý trên MinIO chưa dọn được.',
+      };
+    }
     return { message: 'Xóa tài liệu thành công' };
   }
 }
