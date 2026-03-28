@@ -10,10 +10,15 @@ import {
   UseGuards,
   DefaultValuePipe,
   ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { HandbooksService } from './handbooks.service';
 import {
   ApiBearerAuth,
+  ApiConsumes,
   ApiOperation,
   ApiQuery,
   ApiTags,
@@ -61,7 +66,6 @@ export class HandbooksController {
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,
   ) {
     const isActive = activeOnly === 'true';
-
     return this.handbooksService.findAll({ page, limit }, isActive);
   }
 
@@ -95,28 +99,42 @@ export class HandbooksController {
     return this.handbooksService.remove(id);
   }
 
-  // ----------------------------------------------------
-  // API HANDBOOK LINKS (ĐƯỜNG DẪN CON)
-  // ----------------------------------------------------
-
   @Post(':id/links')
   @Roles('ADMIN', 'SECRETARY', 'DEPUTY_SECRETARY', 'COMMITTEE_MEMBER')
   @ApiOperation({ summary: 'Thêm đường dẫn tài liệu vào Cẩm nang' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
   addLink(
     @Param('id') handbookId: string,
     @Body() createLinkDto: CreateHandbookLinkDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: true,
+      }),
+    )
+    file: Express.Multer.File,
   ) {
-    return this.handbooksService.addLink(handbookId, createLinkDto);
+    return this.handbooksService.addLink(handbookId, createLinkDto, file);
   }
 
   @Patch('links/:linkId')
   @Roles('ADMIN', 'SECRETARY', 'DEPUTY_SECRETARY', 'COMMITTEE_MEMBER')
-  @ApiOperation({ summary: 'Cập nhật thông tin đường dẫn' })
+  @ApiOperation({
+    summary: 'Cập nhật thông tin đường dẫn (Hỗ trợ đổi file mới)',
+  })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
   updateLink(
     @Param('linkId') linkId: string,
     @Body() updateLinkDto: UpdateHandbookLinkDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
-    return this.handbooksService.updateLink(linkId, updateLinkDto);
+    return this.handbooksService.updateLink(linkId, updateLinkDto, file);
   }
 
   @Delete('links/:linkId')
