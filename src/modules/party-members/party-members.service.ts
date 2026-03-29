@@ -38,17 +38,17 @@ export class PartyMembersService {
           `Mã chức vụ "${dto.positionCode}" chưa được định nghĩa.`,
         );
       }
-
       const member = await manager.findOne(PartyMember, {
         where: { id: memberId },
         relations: ['user'],
       });
       if (!member)
         throw new NotFoundException('Không tìm thấy hồ sơ Đảng viên');
-
-      // 3. Xử lý chức vụ CŨ
       const currentPosition = await manager.findOne(PartyMemberPosition, {
-        where: { memberId: member.id, isCurrent: true },
+        where: {
+          member: { id: member.id },
+          isCurrent: true,
+        },
       });
 
       const actionDate = dto.appointedDate
@@ -64,7 +64,6 @@ export class PartyMembersService {
         await manager.save(currentPosition);
       }
 
-      // 4. Tạo chức vụ MỚI
       const newAssignment = manager.create(PartyMemberPosition, {
         memberId: member.id,
         partyCellId: member.partyCellId,
@@ -75,13 +74,8 @@ export class PartyMembersService {
       });
 
       await manager.save(newAssignment);
-
-      // 5. Đồng bộ quyền User (System Role)
-      // FIX LỖI NULL ROLE: Tìm Role Entity từ DB rồi mới update
       let targetRoleName: any = UserRole.PARTY_MEMBER;
-
       if (member.userId) {
-        // A. Xác định tên quyền cần gán (Mapping)
         switch (dto.positionCode as any) {
           case PartyPosition.ADMIN:
             targetRoleName = UserRole.ADMIN;
@@ -105,16 +99,12 @@ export class PartyMembersService {
             targetRoleName = UserRole.PARTY_MEMBER;
             break;
         }
-
-        // B. Query bảng Roles để lấy ID của role đó
         const roleEntity = await manager.findOne(Role, {
           where: { name: targetRoleName } as any,
         });
-
-        // C. Update User
         if (roleEntity) {
           await manager.update(User, member.userId, {
-            role: roleEntity, // TypeORM sẽ tự lấy ID từ entity này để nhét vào cột role_id
+            roleId: roleEntity.id,
           });
         } else {
           console.warn(
