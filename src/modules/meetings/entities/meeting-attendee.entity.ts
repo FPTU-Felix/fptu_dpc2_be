@@ -42,12 +42,12 @@ export class MeetingAttendee {
   @Column({
     type: 'enum',
     enum: CheckInMethod,
-    nullable: true, // Null nếu chưa điểm danh
+    nullable: true,
   })
   method: CheckInMethod;
 
   @Column({ name: 'check_in_time', type: 'timestamp', nullable: true })
-  checkInTime: Date; // Thời điểm nhập mã PIN thành công hoặc bật Extension
+  checkInTime: Date;
 
   @Column({ nullable: true })
   reason: string;
@@ -55,11 +55,9 @@ export class MeetingAttendee {
   @Column({ name: 'proof_url', type: 'varchar', nullable: true })
   proofUrl: string;
 
-  // Lưu thời gian Heartbeat cuối cùng (Dùng để chốt 2/3 thời gian họp Online)
   @Column({ name: 'check_out_time', type: 'timestamp', nullable: true })
   checkOutTime: Date;
 
-  // Lưu tổng thời gian online hợp lệ (tính bằng mili-giây)
   @Column({ name: 'online_duration', type: 'int', default: 0 })
   onlineDuration: number;
 

@@ -74,8 +74,14 @@ export enum AssessmentRank {
 }
 
 export enum AdmissionStatusEnum {
-  SUBMITTED = 'SUBMITTED',    // Đã nộp đơn
-  CHECKED = 'CHECKED',      // Đã có kết quả thẩm tra
-  VERIFIED = 'VERIFIED',    // Đã xác minh, chờ họp chi bộ
-  REJECTED = 'REJECTED',      // Bị từ chối
+  SUBMITTED = 'SUBMITTED', // Đã nộp đơn
+  CHECKED = 'CHECKED', // Đã có kết quả thẩm tra
+  VERIFIED = 'VERIFIED', // Đã xác minh, chờ họp chi bộ
+  REJECTED = 'REJECTED', // Bị từ chối
+}
+
+export enum ParticipantType {
+  ALL = 'ALL', // Tất cả Đảng viên
+  COMMITTEE = 'COMMITTEE', // Ban lãnh đạo (Chi ủy)
+  MANUAL = 'MANUAL', // Chọn thủ công
 }

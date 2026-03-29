@@ -5,11 +5,17 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import * as speakeasy from 'speakeasy';
 import { Meeting } from './entities/meeting.entity';
 import { MeetingAttendee } from './entities/meeting-attendee.entity';
-import { AttendeeStatus, MeetingFormat, MeetingStatus } from 'src/common/enums';
+import {
+  AttendeeStatus,
+  MeetingFormat,
+  MeetingStatus,
+  ParticipantType,
+  UserRole,
+} from 'src/common/enums';
 import { CheckInMethod } from 'src/common/enums';
 import { PartyMember } from '../party-members/entities/party-member.entity';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
@@ -45,8 +51,16 @@ export class MeetingsService {
   ) {}
 
   async create(userId: string, createMeetingDto: CreateMeetingDto) {
-    const { format, onlineLink, location, startTime, endTime } =
-      createMeetingDto;
+    const {
+      format,
+      onlineLink,
+      location,
+      startTime,
+      endTime,
+      participantIds,
+      ...restMeetingData
+    } = createMeetingDto;
+
     if (format === MeetingFormat.ONLINE && !onlineLink) {
       throw new BadRequestException(
         'Họp trực tuyến (ONLINE) bắt buộc phải nhập đường link Google Meet/Zoom!',
@@ -62,6 +76,7 @@ export class MeetingsService {
         'Thời gian kết thúc phải diễn ra SAU thời gian bắt đầu cuộc họp!',
       );
     }
+
     const partyCell = await this.partyCellRepo.findOne({
       where: { id: createMeetingDto.partyCellId },
     });
@@ -72,13 +87,79 @@ export class MeetingsService {
     const secretObj = speakeasy.generateSecret({ length: 20 });
     const secret = secretObj.base32;
     const meeting = this.meetingRepo.create({
-      ...createMeetingDto,
+      format,
+      onlineLink,
+      location,
+      startTime,
+      endTime,
+      ...restMeetingData,
       attendanceSecret: secret,
       isCheckinActive: false,
       createdBy: userId,
     });
+    const savedMeeting = await this.meetingRepo.save(meeting);
+    let targetMemberIds: string[] = [];
 
-    return await this.meetingRepo.save(meeting);
+    switch (savedMeeting.participantType) {
+      case ParticipantType.ALL: {
+        const allMembers = await this.partyMemberRepo.find({
+          where: { partyCellId: partyCell.id },
+          select: ['id'],
+        });
+        if (allMembers.length === 0) {
+          throw new BadRequestException(
+            'Chi bộ chưa có đảng viên nào để mời họp!',
+          );
+        }
+        targetMemberIds = allMembers.map((m) => m.id);
+        break;
+      }
+      case ParticipantType.COMMITTEE: {
+        const committeeMembers = await this.partyMemberRepo.find({
+          where: {
+            partyCellId: partyCell.id,
+            user: {
+              role: {
+                name: In([
+                  UserRole.SECRETARY,
+                  UserRole.DEPUTY_SECRETARY,
+                  UserRole.COMMITTEE_MEMBER,
+                ]),
+              },
+            },
+          },
+          relations: ['user', 'user.role'],
+          select: ['id'],
+        });
+        if (committeeMembers.length === 0) {
+          throw new BadRequestException(
+            'Chi bộ chưa có Ban lãnh đạo nào để mời họp!',
+          );
+        }
+        targetMemberIds = committeeMembers.map((m) => m.id);
+        break;
+      }
+      case ParticipantType.MANUAL:
+        targetMemberIds = participantIds || [];
+        break;
+      default:
+        targetMemberIds = [];
+        break;
+    }
+    if (targetMemberIds.length > 0) {
+      const attendeesToInsert = targetMemberIds.map((memberId) => {
+        return this.attendeeRepo.create({
+          meetingId: savedMeeting.id,
+          memberId: memberId,
+          status: AttendeeStatus.PENDING,
+        });
+      });
+      await this.attendeeRepo.save(attendeesToInsert);
+    }
+    return {
+      ...savedMeeting,
+      totalAttendees: targetMemberIds.length,
+    };
   }
 
   async getCurrentPin(meetingId: string) {
@@ -180,31 +261,93 @@ export class MeetingsService {
   async findOne(id: string): Promise<MeetingResponseDto> {
     const meeting = await this.meetingRepo.findOne({
       where: { id },
+      relations: ['attendees', 'attendees.member', 'attendees.member.user'],
     });
+
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+
     return plainToInstance(MeetingResponseDto, meeting, {
       excludeExtraneousValues: true,
     });
   }
 
-  async update(
-    id: string,
-    updateMeetingDto: UpdateMeetingDto,
-  ): Promise<MeetingResponseDto> {
-    const meetingEntity = await this.meetingRepo.findOne({ where: { id } });
-    if (!meetingEntity) throw new NotFoundException('Không tìm thấy cuộc họp');
-
-    const partyCell = await this.partyCellRepo.findOne({
-      where: { id: updateMeetingDto.partyCellId },
+  async update(id: string, updateMeetingDto: UpdateMeetingDto) {
+    const meeting = await this.meetingRepo.findOne({
+      where: { id },
     });
-    if (!partyCell) {
-      throw new NotFoundException('Không tìm thấy chi bộ');
+    if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+    const { participantIds, participantType, ...updateData } = updateMeetingDto;
+    Object.assign(meeting, updateData);
+    if (participantType) {
+      meeting.participantType = participantType;
     }
-
-    this.meetingRepo.merge(meetingEntity, updateMeetingDto);
-    const savedMeeting = await this.meetingRepo.save(meetingEntity);
-    return plainToInstance(MeetingResponseDto, savedMeeting, {
-      excludeExtraneousValues: true,
+    await this.meetingRepo.save(meeting);
+    if (participantType || participantIds) {
+      const actualType = participantType || meeting.participantType;
+      let targetMemberIds: string[] = [];
+      switch (actualType) {
+        case ParticipantType.ALL: {
+          const allMembers = await this.partyMemberRepo.find({
+            where: { partyCellId: meeting.partyCellId },
+            select: ['id'],
+          });
+          targetMemberIds = allMembers.map((m) => m.id);
+          break;
+        }
+        case ParticipantType.COMMITTEE: {
+          const committeeMembers = await this.partyMemberRepo.find({
+            where: {
+              partyCellId: meeting.partyCellId,
+              user: {
+                role: {
+                  name: In([
+                    UserRole.SECRETARY,
+                    UserRole.DEPUTY_SECRETARY,
+                    UserRole.COMMITTEE_MEMBER,
+                  ]),
+                },
+              },
+            },
+            relations: ['user', 'user.role'],
+            select: ['id'],
+          });
+          targetMemberIds = committeeMembers.map((m) => m.id);
+          break;
+        }
+        case ParticipantType.MANUAL:
+          targetMemberIds = participantIds || [];
+          break;
+      }
+      const currentAttendees = await this.attendeeRepo.find({
+        where: { meetingId: id },
+      });
+      const currentMemberIds = currentAttendees.map((a) => a.memberId);
+      const membersToAdd = targetMemberIds.filter(
+        (targetId) => !currentMemberIds.includes(targetId),
+      );
+      const membersToRemove = currentMemberIds.filter(
+        (currentId) => !targetMemberIds.includes(currentId),
+      );
+      if (membersToAdd.length > 0) {
+        const attendeesToInsert = membersToAdd.map((memberId) =>
+          this.attendeeRepo.create({
+            meetingId: id,
+            memberId: memberId,
+            status: AttendeeStatus.PENDING,
+          }),
+        );
+        await this.attendeeRepo.save(attendeesToInsert);
+      }
+      if (membersToRemove.length > 0) {
+        await this.attendeeRepo.delete({
+          meetingId: id,
+          memberId: In(membersToRemove),
+          status: AttendeeStatus.PENDING,
+        });
+      }
+    }
+    return await this.meetingRepo.findOne({
+      where: { id },
     });
   }
 
@@ -257,7 +400,6 @@ export class MeetingsService {
       'meeting.status',
       'meeting.format',
       'meeting.onlineLink',
-      'meeting.minutesUrl',
     ]);
     const meetings = await queryBuilder.getMany();
     return {

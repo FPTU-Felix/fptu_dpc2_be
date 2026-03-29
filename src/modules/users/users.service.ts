@@ -528,7 +528,7 @@ export class UsersService extends BaseService<User> {
 
     const currentPosition = currentPosRecord
       ? currentPosRecord.positionId
-      : null;
+      : "f2917fad-de89-4051-bcf5-a9343fe0aacb"; // ID của "Không có vị trí công tác hiện tại"
 
     return {
       id: member.id,
