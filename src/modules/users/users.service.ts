@@ -327,7 +327,7 @@ export class UsersService extends BaseService<User> {
         'member.id',
         'member.fullName',
         'member.gender',
-        'member.dateOfBirth',
+        'member.dob',
         'member.hometown',
         'member.phone',
         'role.id',
