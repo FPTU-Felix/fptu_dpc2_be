@@ -28,5 +28,4 @@ export class PartyMembersController {
     return this.partyMembersService.assignPosition(adminId, memberId, dto);
   }
 
-  // Các API khác (Create, Get...) ông thêm sau
 }
