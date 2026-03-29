@@ -23,16 +23,12 @@ export class PartyMembersService {
     private readonly dataSource: DataSource,
   ) {}
 
-  // ==========================================
-  // HÀM BỔ NHIỆM CHỨC VỤ (CORE LOGIC)
-  // ==========================================
   async assignPosition(
     adminId: string,
     memberId: string,
     dto: AssignPositionDto,
   ) {
     return this.dataSource.transaction(async (manager) => {
-      // 1. Validate: Tìm chức vụ (Metadata)
       const positionMeta = await manager.findOne(PartyPositionEntity, {
         where: { code: dto.positionCode },
       });
@@ -43,7 +39,6 @@ export class PartyMembersService {
         );
       }
 
-      // 2. Validate: Tìm Đảng viên
       const member = await manager.findOne(PartyMember, {
         where: { id: memberId },
         relations: ['user'],

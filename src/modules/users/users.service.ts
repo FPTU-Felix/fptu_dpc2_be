@@ -533,7 +533,6 @@ export class UsersService extends BaseService<User> {
     return {
       id: member.id,
       userId: member.userId,
-
       employeeCode: member.user?.username || null,
       email: member.user?.email || null,
       position: currentPosition,
