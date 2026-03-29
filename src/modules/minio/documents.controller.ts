@@ -13,15 +13,27 @@ import {
   export class DocumentsController {
     constructor(private readonly minioService: MinioService) {}
   
+    private normalizeObjectKey(rawKey: string): string {
+      let objectKey = decodeURIComponent(rawKey).replace(/^\/+/, '');
+  
+      // bỏ prefix route view nếu còn dính
+      objectKey = objectKey.replace(/^view\//, '');
+  
+      // bỏ bucket name nếu dữ liệu cũ lưu sai kèm bucket
+      objectKey = objectKey.replace(/^party-documents\//, '');
+  
+      return objectKey;
+    }
+  
     @Get('view/*')
     @Header('Cache-Control', 'public, max-age=31536000')
     async viewFile(@Req() req: Request, @Res() res: Response) {
       try {
-        const objectKey = decodeURIComponent(
-          req.path.replace(/^\/documents\/view\//, ''),
-        );
+        const rawKey = req.path.replace(/^\/documents\/view\//, '');
+        const objectKey = this.normalizeObjectKey(rawKey);
   
-        console.log('objectKey =', objectKey);
+        console.log('rawKey =', rawKey);
+        console.log('normalized objectKey =', objectKey);
   
         const [stat, stream] = await Promise.all([
           this.minioService.statFile(objectKey),
@@ -42,6 +54,11 @@ import {
           else if (ext === 'jpg' || ext === 'jpeg') contentType = 'image/jpeg';
           else if (ext === 'webp') contentType = 'image/webp';
           else if (ext === 'txt') contentType = 'text/plain; charset=utf-8';
+          else if (ext === 'doc') contentType = 'application/msword';
+          else if (ext === 'docx') {
+            contentType =
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          }
         }
   
         res.setHeader('Content-Type', contentType);
