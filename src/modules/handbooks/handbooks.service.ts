@@ -58,34 +58,16 @@ export class HandbooksService {
 
   async remove(id: string) {
     const handbook = await this.findOne(id);
-    let hasMinioError = false;
 
     if (handbook.links && handbook.links.length > 0) {
       for (const link of handbook.links) {
         if (link.url) {
-          try {
-            const parts = link.url.split(`handbooks/${id}/`);
-            if (parts.length === 2) {
-              await this.minioService.deleteFile(`handbooks/${id}/${parts[1]}`);
-            }
-          } catch (e) {
-            this.logger.error(
-              `Lỗi dọn rác MinIO cho URL ${link.url}: ${e.message}`,
-            );
-            hasMinioError = true;
-          }
+          await this.minioService.deleteFile(link.url);
         }
       }
     }
 
     await this.handbookRepo.remove(handbook);
-
-    if (hasMinioError) {
-      return {
-        message:
-          'Đã xóa cẩm nang thành công, nhưng một số file rác trên MinIO chưa dọn sạch được.',
-      };
-    }
     return { message: 'Xóa cẩm nang và toàn bộ tài liệu thành công' };
   }
 
@@ -103,7 +85,7 @@ export class HandbooksService {
 
     const newLink = this.linkRepo.create({
       ...dto,
-      url: uploadResult.url,
+      url: uploadResult.objectName,
       handbook: handbook,
     });
 
@@ -123,24 +105,13 @@ export class HandbooksService {
 
     if (file) {
       if (link.url) {
-        try {
-          const parts = link.url.split(`handbooks/${link.handbook.id}/`);
-          if (parts.length === 2) {
-            await this.minioService.deleteFile(
-              `handbooks/${link.handbook.id}/${parts[1]}`,
-            );
-          }
-        } catch (error) {
-          this.logger.warn(
-            `Không thể xóa file cũ trên MinIO (có thể file không tồn tại): ${error.message}`,
-          );
-        }
+        await this.minioService.deleteFile(link.url);
       }
       const uploadResult = await this.minioService.uploadFile({
         file: file,
         folder: `handbooks/${link.handbook.id}`,
       });
-      link.url = uploadResult.url;
+      link.url = uploadResult.objectName;
     }
 
     Object.assign(link, dto);
@@ -153,32 +124,10 @@ export class HandbooksService {
       relations: ['handbook'],
     });
     if (!link) throw new NotFoundException('Không tìm thấy đường dẫn tài liệu');
-
-    let hasMinioError = false;
     if (link.url) {
-      try {
-        const parts = link.url.split(`handbooks/${link.handbook.id}/`);
-        if (parts.length === 2) {
-          await this.minioService.deleteFile(
-            `handbooks/${link.handbook.id}/${parts[1]}`,
-          );
-        }
-      } catch (error) {
-        this.logger.error(
-          `Lỗi dọn rác MinIO cho URL ${link.url}: ${error.message}`,
-        );
-        hasMinioError = true;
-      }
+      await this.minioService.deleteFile(link.url);
     }
-
     await this.linkRepo.remove(link);
-
-    if (hasMinioError) {
-      return {
-        message:
-          'Đã xóa tài liệu khỏi hệ thống, nhưng file vật lý trên MinIO chưa dọn được.',
-      };
-    }
     return { message: 'Xóa tài liệu thành công' };
   }
 }

@@ -40,7 +40,7 @@ export class DisciplinesService {
         file,
         folder: `disciplines/${new Date().getFullYear()}`,
       });
-      uploadedUrl = uploadResult.url;
+      uploadedUrl = uploadResult.objectName;
     }
     const newDiscipline = this.disciplineRepo.create({
       ...dto,
@@ -67,7 +67,7 @@ export class DisciplinesService {
         file,
         folder: `disciplines/${new Date().getFullYear()}`,
       });
-      uploadedUrl = uploadResult.url;
+      uploadedUrl = uploadResult.objectName;
     }
 
     Object.assign(discipline, {
