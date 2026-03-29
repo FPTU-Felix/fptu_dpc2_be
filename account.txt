@@ -1,0 +1,6 @@
+nguyenvana_backend
+itd8l1ik
+npm run migration:generate -- src/migrations/InitAdmission
+
+nguyenvana
+afl4ycxy

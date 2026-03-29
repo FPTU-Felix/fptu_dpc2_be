@@ -71,7 +71,7 @@ export class V10InitFullDB1769935149149 implements MigrationInterface {
       `CREATE TABLE "party_members" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "user_id" uuid, "party_cell_id" uuid NOT NULL, "full_name" character varying NOT NULL, "dob" TIMESTAMP, "gender" "public"."party_members_gender_enum", "phone" character varying, "email" character varying, "hometown" character varying, "permanent_address" character varying, "join_date" TIMESTAMP, "official_date" TIMESTAMP, "party_card_id" character varying, "status" "public"."party_members_status_enum" NOT NULL DEFAULT 'MASSES', "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "REL_3dcc38b247864e98e3e86e18f6" UNIQUE ("user_id"), CONSTRAINT "PK_7e3b16f4f4fae338bbc6214f4de" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-        `CREATE TABLE "users" (
+      `CREATE TABLE "users" (
           "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
           "username" character varying NOT NULL,
           "password" character varying NOT NULL,
@@ -91,7 +91,7 @@ export class V10InitFullDB1769935149149 implements MigrationInterface {
           CONSTRAINT "UQ_97672ac88f789774dd47f7c8be3" UNIQUE ("email"),
           CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY ("id")
         )`,
-      );
+    );
     await queryRunner.query(
       `CREATE TABLE "system_audit_logs" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "user_id" uuid, "action" character varying NOT NULL, "target_table" character varying NOT NULL, "target_id" character varying, "old_value" jsonb, "new_value" jsonb, "ip_address" character varying, "created_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "PK_7a7f1ef8b4d430e3c097272438e" PRIMARY KEY ("id"))`,
     );
@@ -158,6 +158,37 @@ export class V10InitFullDB1769935149149 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "handbook_links" ADD CONSTRAINT "FK_08ca89b7c2d7ed362f8cbc46cbc" FOREIGN KEY ("handbook_id") REFERENCES "handbooks"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
+
+    await queryRunner.query(`
+  INSERT INTO "roles" ("id", "name", "description")
+  VALUES (uuid_generate_v4(), 'ADMIN', 'Administrator')
+  ON CONFLICT ("name") DO NOTHING;
+`);
+
+    // 2. Insert admin user, mat khau mac dinh cua admin la admin - admin123
+    await queryRunner.query(`
+  INSERT INTO "users" (
+    "id",
+    "username",
+    "password",
+    "email",
+    "role_id",
+    "is_active",
+    "isFirstLogin"
+  )
+  VALUES (
+    uuid_generate_v4(),
+    'admin',
+    '$2b$10$mnM.PpW0d9rfbjGhfsDp.OJak6l8gvOt3rKDsaV9dMXne6ani/Yli', 
+    'admin@gmail.com',
+    (SELECT id FROM roles WHERE name = 'ADMIN' LIMIT 1),
+    true,
+    false
+  )
+  ON CONFLICT ("username") DO NOTHING;
+`);
+
+
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

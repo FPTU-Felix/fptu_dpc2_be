@@ -116,6 +116,7 @@ export class UsersService extends BaseService<User> {
       );
 
     const tempPassword = Math.random().toString(36).slice(-8);
+    console.log('tempPassword', tempPassword);
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
     const user = this.usersRepository.create({

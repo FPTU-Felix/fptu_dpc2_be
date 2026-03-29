@@ -6,10 +6,9 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { AdmissionStatus } from '../enum/admission-status.enum';
-import { AdmissionStepCode } from '../enum/admission-step-code.enum';
-import { AdmissionStepStatus } from '../enum/admission-step-status.enum';
-
+import { AdmissionOverallStatus } from '../enum/admission-overall-status';
+import { AdmissionWorkflowStep } from '../enum/admission-workflow-step.enum';
+import { AdmissionWorkflowStepStatus } from '../enum/admission-workflow-step-status.enum';
 @Entity('party_admission_applications')
 @Index('idx_party_admission_applications_outstanding_individual_id', [
   'outstandingIndividualId',
@@ -27,24 +26,24 @@ export class PartyAdmissionApplicationEntity {
 
   @Column({
     type: 'enum',
-    enum: AdmissionStatus,
-    default: AdmissionStatus.DRAFT,
+    enum: AdmissionOverallStatus,
+    default: AdmissionOverallStatus.DRAFT,
   })
-  overallStatus: AdmissionStatus;
+  overallStatus: AdmissionOverallStatus;
 
   @Column({
     type: 'enum',
-    enum: AdmissionStepCode,
-    default: AdmissionStepCode.APPLICATION,
+    enum: AdmissionWorkflowStep,
+    default: AdmissionWorkflowStep.DRAFT,
   })
-  currentStepCode: AdmissionStepCode;
+  currentStepCode: AdmissionWorkflowStep;
 
   @Column({
     type: 'enum',
-    enum: AdmissionStepStatus,
-    default: AdmissionStepStatus.DRAFT,
+    enum: AdmissionWorkflowStepStatus,
+    default: AdmissionWorkflowStepStatus.NOT_STARTED,
   })
-  currentStepStatus: AdmissionStepStatus;
+  currentStepStatus: AdmissionWorkflowStepStatus;
 
   @Column({ type: 'boolean', default: false })
   isLocked: boolean;
