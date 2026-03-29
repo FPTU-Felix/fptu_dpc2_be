@@ -1,0 +1,10 @@
+export enum AdmissionStepStatus {
+    LOCKED = "LOCKED",
+    DRAFT = "DRAFT",
+    OPEN = "OPEN",
+    IN_PROGRESS = "IN_PROGRESS",
+    PENDING_APPROVAL = "PENDING_APPROVAL",
+    COMPLETED = "COMPLETED",
+    RETURNED = "RETURNED",
+    REJECTED = "REJECTED",
+}
