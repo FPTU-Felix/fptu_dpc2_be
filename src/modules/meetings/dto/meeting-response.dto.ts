@@ -8,6 +8,21 @@ export class RoleResponseDto {
 }
 
 @Exclude()
+export class MeetingDocumentResponseDto {
+  @Expose()
+  id: string;
+
+  @Expose()
+  fileName: string;
+
+  @Expose()
+  fileUrl: string;
+
+  @Expose()
+  createdAt: Date;
+}
+
+@Exclude()
 export class UserResponseDto {
   @Expose()
   email: string;
@@ -84,4 +99,8 @@ export class MeetingResponseDto {
   @Expose()
   @Type(() => AttendeeResponseDto)
   attendees: AttendeeResponseDto[];
+
+  @Expose()
+  @Type(() => MeetingDocumentResponseDto) // 👈 Mapping sang DTO tài liệu
+  documents: MeetingDocumentResponseDto[];
 }

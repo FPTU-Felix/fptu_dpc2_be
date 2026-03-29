@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { IsOptional } from 'class-validator';
 
 export class UploadMeetingDocumentsDto {
   @ApiProperty({
@@ -10,5 +11,6 @@ export class UploadMeetingDocumentsDto {
       format: 'binary',
     },
   })
+  @IsOptional()
   files: any[];
 }

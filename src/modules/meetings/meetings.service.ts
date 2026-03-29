@@ -266,7 +266,12 @@ export class MeetingsService {
   async findOne(id: string): Promise<MeetingResponseDto> {
     const meeting = await this.meetingRepo.findOne({
       where: { id },
-      relations: ['attendees', 'attendees.member', 'attendees.member.user'],
+      relations: [
+        'attendees',
+        'attendees.member',
+        'attendees.member.user',
+        'documents',
+      ],
     });
 
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
