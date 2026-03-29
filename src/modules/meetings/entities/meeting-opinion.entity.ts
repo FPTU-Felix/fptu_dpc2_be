@@ -17,7 +17,9 @@ export class MeetingOpinion {
   @Column({ name: 'meeting_id' })
   meetingId: string;
 
-  @ManyToOne(() => Meeting, (meeting) => meeting.opinions)
+  @ManyToOne(() => Meeting, (meeting) => meeting.opinions, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'meeting_id' })
   meeting: Meeting;
 

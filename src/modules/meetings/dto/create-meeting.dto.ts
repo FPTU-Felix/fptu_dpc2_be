@@ -7,9 +7,10 @@ import {
   IsOptional,
   IsUUID,
   IsUrl,
+  IsArray,
+  ValidateIf,
 } from 'class-validator';
-// 👇 Nhớ import thêm MeetingFormat từ file enums của ông nhé
-import { MeetingType, MeetingFormat } from 'src/common/enums';
+import { MeetingType, MeetingFormat, ParticipantType } from 'src/common/enums';
 
 export class CreateMeetingDto {
   @ApiProperty({
@@ -75,7 +76,7 @@ export class CreateMeetingDto {
     example: 'https://meet.google.com/abc-xyz-123',
   })
   @IsOptional()
-  @IsUrl({}, { message: 'Link họp trực tuyến không đúng định dạng URL' }) // Bật luôn validate URL cho chắc cốp
+  @IsUrl({}, { message: 'Link họp trực tuyến không đúng định dạng URL' })
   onlineLink?: string;
 
   @ApiPropertyOptional({
@@ -85,4 +86,30 @@ export class CreateMeetingDto {
   @IsOptional()
   @IsString()
   content?: string;
+
+  @ApiProperty({
+    enum: ParticipantType,
+    description:
+      'Kiểu chọn người tham gia: ALL (Tất cả), COMMITTEE (Ban lãnh đạo), MANUAL (Chọn thủ công)',
+    example: ParticipantType.ALL,
+  })
+  @IsNotEmpty({ message: 'Vui lòng chọn đối tượng tham gia cuộc họp' })
+  @IsEnum(ParticipantType)
+  participantType: ParticipantType;
+
+  @ApiPropertyOptional({
+    description:
+      'Danh sách ID Đảng viên (CHỈ BẮT BUỘC KHI chọn participantType là MANUAL)',
+    example: ['uuid-dang-vien-1', 'uuid-dang-vien-2'],
+    type: [String],
+  })
+  @ValidateIf(
+    (o: CreateMeetingDto) => o.participantType === ParticipantType.MANUAL,
+  )
+  @IsArray()
+  @IsNotEmpty({
+    message:
+      'Vui lòng chọn ít nhất 1 đảng viên tham gia khi dùng chế độ Chọn thủ công',
+  })
+  participantIds?: string[];
 }

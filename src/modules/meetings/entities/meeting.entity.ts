@@ -10,7 +10,12 @@ import {
 import { PartyCell } from '../../party-cells/entities/party-cell.entity';
 import { MeetingAttendee } from './meeting-attendee.entity';
 import { MeetingOpinion } from './meeting-opinion.entity';
-import { MeetingType, MeetingStatus, MeetingFormat } from 'src/common/enums';
+import {
+  MeetingType,
+  MeetingStatus,
+  MeetingFormat,
+  ParticipantType,
+} from 'src/common/enums';
 import { MeetingDocument } from './meeting-document.entity';
 
 @Entity('meetings')
@@ -72,6 +77,15 @@ export class Meeting {
 
   @Column({ nullable: true })
   location: string;
+
+  @Column({
+    name: 'participant_type',
+    type: 'enum',
+    enum: ParticipantType,
+    default: ParticipantType.ALL,
+    nullable: true,
+  })
+  participantType: ParticipantType;
 
   @OneToMany(() => MeetingDocument, (doc) => doc.meeting)
   documents: MeetingDocument[];

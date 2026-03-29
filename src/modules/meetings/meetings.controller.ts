@@ -93,7 +93,7 @@ export class MeetingsController {
     return this.meetingsService.findOne(id);
   }
 
-  @Get() // Route sẽ là GET /meetings
+  @Get()
   @ApiOperation({
     summary: 'Lấy danh sách lịch họp (hỗ trợ lọc theo tháng/năm)',
   })
