@@ -71,7 +71,7 @@ export class AnnualAssessmentsService {
         file: file,
         folder: `annual-assessments/${year}`,
       });
-      uploadedUrl = uploadResult.url;
+      uploadedUrl = uploadResult.objectName;
     }
 
     const newAssessment = this.assessmentRepo.create({
@@ -220,7 +220,7 @@ export class AnnualAssessmentsService {
         file: file,
         folder: `annual-assessments/${targetYear}`,
       });
-      uploadedUrl = uploadResult.url;
+      uploadedUrl = uploadResult.objectName;
     }
     Object.assign(assessment, {
       year: dto.year,

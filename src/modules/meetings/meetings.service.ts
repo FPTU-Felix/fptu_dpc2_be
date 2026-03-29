@@ -65,7 +65,7 @@ export class MeetingsService {
       participantIds,
       ...restMeetingData
     } = createMeetingDto;
-
+    console.log('Received CreateMeetingDto:', createMeetingDto);
     if (format === MeetingFormat.ONLINE && !onlineLink) {
       throw new BadRequestException(
         'Họp trực tuyến (ONLINE) bắt buộc phải nhập đường link Google Meet/Zoom!',
@@ -152,19 +152,29 @@ export class MeetingsService {
         break;
     }
     if (targetMemberIds.length > 0) {
-      const attendeesToInsert = targetMemberIds.map((memberId) => {
-        return this.attendeeRepo.create({
-          meetingId: savedMeeting.id,
-          memberId: memberId,
-          status: AttendeeStatus.PENDING,
+      for (const memberId of targetMemberIds) {
+        const member = await this.partyMemberRepo.findOne({
+          where: { id: memberId },
         });
-      });
-      await this.attendeeRepo.save(attendeesToInsert);
+        if (!member) {
+          throw new NotFoundException(
+            `Không tìm thấy đảng viên với ID: ${memberId} để mời họp!`,
+          );
+        }
+        const attendeesToInsert = targetMemberIds.map((memberId) => {
+          return this.attendeeRepo.create({
+            meetingId: savedMeeting.id,
+            memberId: memberId,
+            status: AttendeeStatus.PENDING,
+          });
+        });
+        await this.attendeeRepo.save(attendeesToInsert);
+      }
+      return {
+        ...savedMeeting,
+        totalAttendees: targetMemberIds.length,
+      };
     }
-    return {
-      ...savedMeeting,
-      totalAttendees: targetMemberIds.length,
-    };
   }
 
   async getCurrentPin(meetingId: string) {
@@ -474,12 +484,12 @@ export class MeetingsService {
 
     attendee.status = AttendeeStatus.PENDING_EXCUSE;
     attendee.reason = dto.reason;
-    attendee.proofUrl = uploadResult.url;
+    attendee.proofUrl = uploadResult.objectName;
     await this.attendeeRepo.save(attendee);
     return {
       success: true,
       message: 'Đã gửi đơn xin vắng mặt, vui lòng chờ Chi ủy phê duyệt.',
-      proofUrl: uploadResult.url,
+      proofUrl: uploadResult.objectName,
     };
   }
 
@@ -719,7 +729,7 @@ export class MeetingsService {
       const newDoc = this.meetingDocRepo.create({
         meetingId,
         originalName: uploadedInfo.fileName,
-        fileUrl: uploadedInfo.url,
+        fileUrl: uploadedInfo.objectName,
         fileSize: uploadedInfo.size,
       });
 

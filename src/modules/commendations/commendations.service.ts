@@ -42,7 +42,7 @@ export class CommendationsService {
         file: file,
         folder: `commendations/${new Date().getFullYear()}`,
       });
-      uploadedUrl = uploadResult.url;
+      uploadedUrl = uploadResult.objectName;
     }
 
     const newCommendation = this.commendationRepo.create({
@@ -72,10 +72,8 @@ export class CommendationsService {
         file: file,
         folder: `commendations/${new Date().getFullYear()}`,
       });
-      uploadedUrl = uploadResult.url; // Có file mới thì đè link mới vào
+      uploadedUrl = uploadResult.objectName;
     }
-
-    // Lưu đè data
     Object.assign(commendation, {
       ...dto,
       decisionFileUrl: uploadedUrl,
