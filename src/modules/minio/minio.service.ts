@@ -98,4 +98,8 @@ export class MinioService implements OnModuleInit {
       throw new InternalServerErrorException("Không lấy được thông tin file");
     }
   }
+
+  async getFileStream(objectName: string) {
+    return this.client.getObject(this.bucket, objectName);
+  }
 }
