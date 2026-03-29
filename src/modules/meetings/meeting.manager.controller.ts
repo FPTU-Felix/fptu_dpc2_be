@@ -10,12 +10,16 @@ import {
   Put,
   UseInterceptors,
   UploadedFiles,
+  DefaultValuePipe,
+  ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
   ApiConsumes,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { MeetingsService } from './meetings.service';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
@@ -23,7 +27,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
-import { UserRole } from 'src/common/enums';
+import { AttendeeStatus, UserRole } from 'src/common/enums';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { ReviewLeaveRequestDto } from './dto/leave-request.dto';
 import { ManualAttendanceDto } from './dto/manual-attendance.dto';
@@ -36,6 +40,37 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 @Controller('meetings')
 export class MeetingsManagerController {
   constructor(private readonly meetingsService: MeetingsService) {}
+
+  @Get('leave-requests')
+  @Roles(UserRole.ADMIN, UserRole.SECRETARY, UserRole.DEPUTY_SECRETARY)
+  @ApiOperation({
+    summary: 'Lấy danh sách đơn xin nghỉ họp (Phân trang + Lọc)',
+  })
+  @Get('leave-requests')
+  @Roles(UserRole.ADMIN, UserRole.SECRETARY, UserRole.DEPUTY_SECRETARY)
+  @ApiOperation({
+    summary: 'Lấy danh sách đơn xin nghỉ họp (Phân trang + Lọc)',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: AttendeeStatus,
+    description: 'Trạng thái đơn xin nghỉ',
+  })
+  async getLeaveRequests(
+    @GetCurrentUser('sub') userId: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('status') status?: AttendeeStatus,
+  ) {
+    return await this.meetingsService.findAllLeaveRequests(
+      { page, limit },
+      userId,
+      status,
+    );
+  }
 
   @Post()
   @Roles(

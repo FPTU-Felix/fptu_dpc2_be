@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsEnum } from 'class-validator';
-import { AttendeeStatus } from 'src/common/enums'; // Sửa đường dẫn nếu cần
+import { IsString, IsNotEmpty, IsEnum, IsOptional } from 'class-validator';
+import { AttendeeStatus } from 'src/common/enums';
 
 export class SubmitLeaveRequestDto {
   @ApiProperty({
@@ -16,6 +16,7 @@ export class SubmitLeaveRequestDto {
     format: 'binary',
     description: 'BẮT BUỘC: File hoặc Ảnh minh chứng (PDF, JPG, PNG...)',
   })
+  @IsOptional()
   file: any;
 }
 

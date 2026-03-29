@@ -4,14 +4,15 @@ import {
   IsNumber,
   IsEnum,
   IsString,
-  IsUrl,
   IsOptional,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { AssessmentRank } from 'src/common/enums';
 
 export class CreateAnnualAssessmentDto {
   @ApiProperty({ description: 'Năm đánh giá', example: 2026 })
   @IsNotEmpty()
+  @Type(() => Number)
   @IsNumber()
   year: number;
 
@@ -33,10 +34,9 @@ export class CreateAnnualAssessmentDto {
   remarks?: string;
 
   @ApiProperty({
-    description: 'Link file bản kiểm điểm cá nhân (Bắt buộc)',
-    example: 'https://storage.googleapis.com/.../kiem-diem-2026.pdf',
+    type: 'string',
+    format: 'binary',
+    description: 'File bản kiểm điểm cá nhân (PDF, DOCX...) Bắt buộc đính kèm',
   })
-  @IsNotEmpty({ message: 'Bắt buộc phải đính kèm bản kiểm điểm cá nhân' })
-  @IsUrl()
-  assessmentFileUrl: string;
+  file: any;
 }

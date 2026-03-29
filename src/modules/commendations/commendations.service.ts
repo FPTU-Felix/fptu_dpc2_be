@@ -4,6 +4,13 @@ import { Commendation } from './entities/commendation.entity';
 import { PartyMember } from '../party-members/entities/party-member.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { MinioService } from '../minio/minio.service';
+import { UpdateCommendationDto } from './dto/update-commendation.dto';
+import {
+  IPaginationOptions,
+  paginate,
+  Pagination,
+} from 'nestjs-typeorm-paginate';
 
 @Injectable()
 export class CommendationsService {
@@ -12,10 +19,14 @@ export class CommendationsService {
     private readonly commendationRepo: Repository<Commendation>,
     @InjectRepository(PartyMember)
     private readonly partyMemberRepo: Repository<PartyMember>,
+    private readonly minioService: MinioService,
   ) {}
 
-  async create(creatorId: string, dto: CreateCommendationDto) {
-    // Check xem Đảng viên có tồn tại không
+  async create(
+    creatorId: string,
+    dto: CreateCommendationDto,
+    file?: Express.Multer.File,
+  ) {
     const member = await this.partyMemberRepo.findOne({
       where: { id: dto.memberId },
     });
@@ -24,20 +35,81 @@ export class CommendationsService {
       throw new NotFoundException('Không tìm thấy hồ sơ Đảng viên này!');
     }
 
-    // Tạo bản ghi Khen thưởng & Lưu vết người tạo
+    // Xử lý upload MinIO
+    let uploadedUrl: string | undefined = undefined;
+    if (file) {
+      const uploadResult = await this.minioService.uploadFile({
+        file: file,
+        folder: `commendations/${new Date().getFullYear()}`,
+      });
+      uploadedUrl = uploadResult.url;
+    }
+
     const newCommendation = this.commendationRepo.create({
       ...dto,
+      decisionFileUrl: uploadedUrl,
       createdBy: creatorId,
     });
 
     return await this.commendationRepo.save(newCommendation);
   }
+  async update(
+    id: string,
+    dto: UpdateCommendationDto,
+    file?: Express.Multer.File,
+  ) {
+    const commendation = await this.commendationRepo.findOne({
+      where: { id },
+    });
 
-  // Lấy lịch sử khen thưởng của 1 người
+    if (!commendation) {
+      throw new NotFoundException('Không tìm thấy quyết định khen thưởng này!');
+    }
+
+    let uploadedUrl = commendation.decisionFileUrl;
+    if (file) {
+      const uploadResult = await this.minioService.uploadFile({
+        file: file,
+        folder: `commendations/${new Date().getFullYear()}`,
+      });
+      uploadedUrl = uploadResult.url; // Có file mới thì đè link mới vào
+    }
+
+    // Lưu đè data
+    Object.assign(commendation, {
+      ...dto,
+      decisionFileUrl: uploadedUrl,
+    });
+
+    return await this.commendationRepo.save(commendation);
+  }
   async findByMember(memberId: string) {
     return await this.commendationRepo.find({
       where: { memberId },
-      order: { date: 'DESC' }, // Thành tích mới nhất xếp lên đầu
+      order: { date: 'DESC' },
     });
+  }
+
+  async findAll(
+    options: IPaginationOptions,
+    year?: number,
+    memberId?: string,
+  ): Promise<Pagination<Commendation>> {
+    const queryBuilder = this.commendationRepo
+      .createQueryBuilder('c')
+      .leftJoinAndSelect('c.member', 'member')
+      .leftJoinAndSelect('member.partyCell', 'cell');
+
+    if (year) {
+      queryBuilder.andWhere('YEAR(c.date) = :year', { year });
+    }
+
+    if (memberId) {
+      queryBuilder.andWhere('c.memberId = :memberId', { memberId });
+    }
+
+    queryBuilder.orderBy('c.date', 'DESC');
+
+    return paginate<Commendation>(queryBuilder, options);
   }
 }

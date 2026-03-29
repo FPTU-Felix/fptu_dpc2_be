@@ -508,7 +508,7 @@ export class UsersService extends BaseService<User> {
   async getProfile(userId: string) {
     const member = await this.dataSource.getRepository(PartyMember).findOne({
       where: { userId: userId },
-      relations: ['user', 'partyCell', 'positions'],
+      relations: ['user', 'user.role', 'partyCell', 'positions'],
     });
 
     if (!member) {
@@ -516,26 +516,21 @@ export class UsersService extends BaseService<User> {
         'Không tìm thấy thông tin hồ sơ của đồng chí',
       );
     }
-
+    console.log(member);
     const currentPosRecord = member.positions?.find(
       (p) => p.isCurrent === true,
     );
-    if (!currentPosRecord) {
-      console.warn(
-        `Đồng chí ${member.fullName} (${member.user?.username}) không có vị trí công tác nào được đánh dấu là "hiện tại".`,
-      );
-    }
-
-    const currentPosition = currentPosRecord
+    const currentPositionId = currentPosRecord
       ? currentPosRecord.positionId
-      : "f2917fad-de89-4051-bcf5-a9343fe0aacb"; // ID của "Không có vị trí công tác hiện tại"
-
+      : null;
+    const systemRoleCode = member.user?.role?.name || null;
     return {
       id: member.id,
       userId: member.userId,
       employeeCode: member.user?.username || null,
       email: member.user?.email || null,
-      position: currentPosition,
+      position: currentPositionId,
+      roleCode: systemRoleCode,
       fullName: member.fullName,
       dob: member.dob,
       gender: member.gender,
@@ -546,7 +541,6 @@ export class UsersService extends BaseService<User> {
       officialDate: member.officialDate,
       partyCardId: member.partyCardId,
       status: member.status,
-
       ethnicity: member.ethnicity,
       religion: member.religion,
       targetGroup: member.targetGroup,

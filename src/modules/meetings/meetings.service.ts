@@ -32,6 +32,11 @@ import { PartyCell } from '../party-cells/entities/party-cell.entity';
 import { ManualAttendanceDto } from './dto/manual-attendance.dto';
 import { MinioService } from '../minio/minio.service';
 import { MeetingDocument } from './entities/meeting-document.entity';
+import {
+  IPaginationOptions,
+  paginate,
+  Pagination,
+} from 'nestjs-typeorm-paginate';
 
 @Injectable()
 export class MeetingsService {
@@ -722,5 +727,70 @@ export class MeetingsService {
       message: `Đã tải lên thành công ${savedDocuments.length} tài liệu!`,
       documents: savedDocuments,
     };
+  }
+
+  async findAllLeaveRequests(
+    options: IPaginationOptions,
+    userId: string,
+    status?: AttendeeStatus,
+  ): Promise<Pagination<any>> {
+    const currentUser = await this.dataSource
+      .getRepository(PartyMember)
+      .findOne({
+        where: { userId: userId },
+        relations: ['user', 'user.role'],
+      });
+
+    if (!currentUser) {
+      throw new NotFoundException(
+        'Không tìm thấy thông tin Đảng viên của bạn!',
+      );
+    }
+    const queryBuilder = this.dataSource
+      .getRepository(MeetingAttendee)
+      .createQueryBuilder('attendee')
+      .leftJoinAndSelect('attendee.member', 'member')
+      .leftJoinAndSelect('attendee.meeting', 'meeting')
+      .leftJoinAndSelect('member.partyCell', 'cell');
+    if (currentUser.user?.role?.name !== UserRole.ADMIN) {
+      queryBuilder.andWhere('member.party_cell_id = :partyCellId', {
+        partyCellId: currentUser.partyCellId,
+      });
+    }
+
+    if (status) {
+      queryBuilder.andWhere('attendee.status = :status', { status });
+    } else {
+      queryBuilder.andWhere('attendee.status IN (:...statuses)', {
+        statuses: [
+          AttendeeStatus.PENDING_EXCUSE,
+          AttendeeStatus.EXCUSED,
+          AttendeeStatus.ABSENT,
+        ],
+      });
+    }
+    queryBuilder.orderBy('meeting.startTime', 'DESC');
+    const result = await paginate<MeetingAttendee>(queryBuilder, options);
+    return new Pagination(
+      result.items.map((item) => ({
+        id: item.id,
+        status: item.status,
+        reason: item.reason,
+        proofUrl: item.proofUrl,
+        member: {
+          id: item.member?.id,
+          fullName: item.member?.fullName,
+        },
+        meeting: {
+          id: item.meeting?.id,
+          title: item.meeting?.title,
+          startTime: item.meeting?.startTime,
+          location: item.meeting?.location,
+        },
+        partyCellName: item.member?.partyCell?.name || 'Không xác định',
+      })),
+      result.meta,
+      result.links,
+    );
   }
 }

@@ -4,7 +4,6 @@ import {
   IsString,
   IsUUID,
   IsDateString,
-  IsUrl,
   IsOptional,
 } from 'class-validator';
 
@@ -49,9 +48,9 @@ export class CreateCommendationDto {
   description?: string;
 
   @ApiProperty({
-    description: 'Link file scan Quyết định khen thưởng (Bắt buộc)',
+    type: 'string',
+    format: 'binary',
+    description: 'File scan Quyết định khen thưởng (PDF, PNG, JPG)',
   })
-  @IsNotEmpty({ message: 'Bắt buộc đính kèm minh chứng khen thưởng' })
-  @IsUrl()
-  decisionFileUrl: string;
+  file: any;
 }
