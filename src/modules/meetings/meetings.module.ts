@@ -27,7 +27,7 @@ import { MeetingDocument } from './entities/meeting-document.entity';
       MeetingDocument,
     ]),
   ],
-  controllers: [MeetingsController, MeetingsManagerController],
+  controllers: [MeetingsManagerController, MeetingsController],
   providers: [MeetingsService, MeetingsCronService, MailService],
   exports: [MeetingsService],
 })

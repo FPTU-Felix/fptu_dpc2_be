@@ -4,7 +4,6 @@ import {
   IsString,
   IsUUID,
   IsDateString,
-  IsUrl,
   IsOptional,
 } from 'class-validator';
 
@@ -46,9 +45,9 @@ export class CreateDisciplineDto {
   description?: string;
 
   @ApiProperty({
-    description: 'Link file scan Quyết định có dấu đỏ (Bắt buộc)',
+    type: 'string',
+    format: 'binary',
+    description: 'File scan Quyết định có dấu đỏ (PDF, PNG, JPG)',
   })
-  @IsNotEmpty({ message: 'Bắt buộc phải đính kèm bản scan Quyết định kỷ luật' })
-  @IsUrl()
-  decisionFileUrl: string;
+  file: any;
 }
