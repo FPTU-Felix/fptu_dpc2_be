@@ -12,6 +12,9 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     }),
   );
 
@@ -26,7 +29,11 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
-  app.enableCors();
+  app.enableCors({
+    origin: ['https://dpc-client-fe.vercel.app/'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
   await app.listen(3000);
 }
 bootstrap();
