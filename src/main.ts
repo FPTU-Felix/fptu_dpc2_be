@@ -30,7 +30,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
   app.enableCors({
-    origin: ['https://dpc-client-fe.vercel.app/'],
+    origin: ['https://dpc-client-fe.vercel.app', 'http://localhost:3000'],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
