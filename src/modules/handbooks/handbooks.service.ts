@@ -11,6 +11,9 @@ import {
 } from './dto/handbook.dto';
 import { IPaginationOptions, paginate } from 'nestjs-typeorm-paginate';
 import { MinioService } from '../minio/minio.service';
+import { User } from '../users/entities/user.entity';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from 'src/common/enums';
 
 @Injectable()
 export class HandbooksService {
@@ -21,6 +24,9 @@ export class HandbooksService {
     @InjectRepository(HandbookLink)
     private readonly linkRepo: Repository<HandbookLink>,
     private minioService: MinioService,
+    private notificationsService: NotificationsService,
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
   ) {}
 
   async findAll(options: IPaginationOptions, isActiveOnly: boolean = false) {
@@ -47,13 +53,24 @@ export class HandbooksService {
 
   async create(dto: CreateHandbookDto) {
     const newHandbook = this.handbookRepo.create(dto);
-    return await this.handbookRepo.save(newHandbook);
+    const savedHandbook = await this.handbookRepo.save(newHandbook);
+    if (savedHandbook.isActive) {
+      this.notifyAllUsers(savedHandbook.title);
+    }
+
+    return savedHandbook;
   }
 
   async update(id: string, dto: UpdateHandbookDto) {
     const handbook = await this.findOne(id);
+    const isJustPublished = !handbook.isActive && dto.isActive;
     Object.assign(handbook, dto);
-    return await this.handbookRepo.save(handbook);
+    const updatedHandbook = await this.handbookRepo.save(handbook);
+    if (isJustPublished) {
+      this.notifyAllUsers(updatedHandbook.title);
+    }
+
+    return updatedHandbook;
   }
 
   async remove(id: string) {
@@ -129,5 +146,24 @@ export class HandbooksService {
     }
     await this.linkRepo.remove(link);
     return { message: 'Xóa tài liệu thành công' };
+  }
+
+  private async notifyAllUsers(handbookTitle: string) {
+    try {
+      const allUsers = await this.userRepo.find({
+        select: ['id', 'email'],
+      });
+      for (const user of allUsers) {
+        this.notificationsService.createInternal(
+          user.id,
+          `📚 Cẩm nang mới: ${handbookTitle}`,
+          `Chi ủy vừa đăng tải tài liệu/cẩm nang mới: <b>${handbookTitle}</b>.<br/>Đồng chí vui lòng truy cập vào hệ thống để cập nhật thông tin mới nhất.`,
+          NotificationType.HANDBOOK,
+          user.email,
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Lỗi khi bắn thông báo cẩm nang: ${error.message}`);
+    }
   }
 }

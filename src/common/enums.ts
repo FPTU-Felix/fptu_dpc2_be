@@ -85,3 +85,12 @@ export enum ParticipantType {
   COMMITTEE = 'COMMITTEE', // Ban lãnh đạo (Chi ủy)
   MANUAL = 'MANUAL', // Chọn thủ công
 }
+
+export enum NotificationType {
+  ADMISSION_PROGRESS = 'ADMISSION_PROGRESS', // Tiến độ hồ sơ
+  MEETING = 'MEETING', // Lịch họp
+  APPROVAL = 'APPROVAL', // Duyệt thưởng/phạt
+  SUBMISSION = 'SUBMISSION', // Gửi đánh giá
+  HANDBOOK = 'HANDBOOK', // Sổ tay/Cẩm nang
+  PARTY_FEE = 'PARTY_FEE', // Đảng phí
+}

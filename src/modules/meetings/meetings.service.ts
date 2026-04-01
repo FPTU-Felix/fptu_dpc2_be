@@ -13,6 +13,7 @@ import {
   AttendeeStatus,
   MeetingFormat,
   MeetingStatus,
+  NotificationType,
   ParticipantType,
   UserRole,
 } from 'src/common/enums';
@@ -37,6 +38,7 @@ import {
   paginate,
   Pagination,
 } from 'nestjs-typeorm-paginate';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class MeetingsService {
@@ -53,6 +55,7 @@ export class MeetingsService {
     private minioService: MinioService,
     @InjectRepository(MeetingDocument)
     private readonly meetingDocRepo: Repository<MeetingDocument>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(userId: string, createMeetingDto: CreateMeetingDto) {
@@ -65,7 +68,6 @@ export class MeetingsService {
       participantIds,
       ...restMeetingData
     } = createMeetingDto;
-    console.log('Received CreateMeetingDto:', createMeetingDto);
     if (format === MeetingFormat.ONLINE && !onlineLink) {
       throw new BadRequestException(
         'Họp trực tuyến (ONLINE) bắt buộc phải nhập đường link Google Meet/Zoom!',
@@ -104,7 +106,6 @@ export class MeetingsService {
     });
     const savedMeeting = await this.meetingRepo.save(meeting);
     let targetMemberIds: string[] = [];
-
     switch (savedMeeting.participantType) {
       case ParticipantType.ALL: {
         const allMembers = await this.partyMemberRepo.find({
@@ -152,29 +153,46 @@ export class MeetingsService {
         break;
     }
     if (targetMemberIds.length > 0) {
-      for (const memberId of targetMemberIds) {
-        const member = await this.partyMemberRepo.findOne({
-          where: { id: memberId },
+      const membersToInvite = await this.partyMemberRepo.find({
+        where: { id: In(targetMemberIds) },
+        relations: ['user'], // 👈 Cực kỳ quan trọng để lấy email gửi mail
+      });
+
+      if (membersToInvite.length !== targetMemberIds.length) {
+        throw new NotFoundException(
+          'Một hoặc nhiều đảng viên không tồn tại trong hệ thống!',
+        );
+      }
+      const attendeesToInsert = membersToInvite.map((member) => {
+        return this.attendeeRepo.create({
+          meetingId: savedMeeting.id,
+          memberId: member.id,
+          status: AttendeeStatus.PENDING,
         });
-        if (!member) {
-          throw new NotFoundException(
-            `Không tìm thấy đảng viên với ID: ${memberId} để mời họp!`,
+      });
+
+      await this.attendeeRepo.save(attendeesToInsert);
+      const formatText =
+        format === MeetingFormat.ONLINE ? 'Trực tuyến' : 'Trực tiếp';
+      const locationText =
+        format === MeetingFormat.ONLINE ? onlineLink : location;
+      for (const member of membersToInvite) {
+        if (member.user) {
+          this.notificationsService.createInternal(
+            member.user.id,
+            `Mời họp: ${savedMeeting.title}`,
+            `Đồng chí có lịch mời họp <b>${formatText}</b> vào lúc <b>${new Date(startTime).toLocaleString('vi-VN')}</b>.<br/>Địa điểm/Link: ${locationText}.<br/>Vui lòng sắp xếp thời gian tham gia đúng giờ.`,
+            NotificationType.MEETING,
+            member.user.email,
           );
         }
-        const attendeesToInsert = targetMemberIds.map((memberId) => {
-          return this.attendeeRepo.create({
-            meetingId: savedMeeting.id,
-            memberId: memberId,
-            status: AttendeeStatus.PENDING,
-          });
-        });
-        await this.attendeeRepo.save(attendeesToInsert);
       }
-      return {
-        ...savedMeeting,
-        totalAttendees: targetMemberIds.length,
-      };
     }
+
+    return {
+      ...savedMeeting,
+      totalAttendees: targetMemberIds.length,
+    };
   }
 
   async getCurrentPin(meetingId: string) {
@@ -296,15 +314,19 @@ export class MeetingsService {
       where: { id },
     });
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+
     const { participantIds, participantType, ...updateData } = updateMeetingDto;
     Object.assign(meeting, updateData);
+
     if (participantType) {
       meeting.participantType = participantType;
     }
     await this.meetingRepo.save(meeting);
+
     if (participantType || participantIds) {
       const actualType = participantType || meeting.participantType;
       let targetMemberIds: string[] = [];
+
       switch (actualType) {
         case ParticipantType.ALL: {
           const allMembers = await this.partyMemberRepo.find({
@@ -338,10 +360,12 @@ export class MeetingsService {
           targetMemberIds = participantIds || [];
           break;
       }
+
       const currentAttendees = await this.attendeeRepo.find({
         where: { meetingId: id },
       });
       const currentMemberIds = currentAttendees.map((a) => a.memberId);
+
       const membersToAdd = targetMemberIds.filter(
         (targetId) => !currentMemberIds.includes(targetId),
       );
@@ -349,23 +373,47 @@ export class MeetingsService {
         (currentId) => !targetMemberIds.includes(currentId),
       );
       if (membersToAdd.length > 0) {
-        const attendeesToInsert = membersToAdd.map((memberId) =>
+        const newMembersInfo = await this.partyMemberRepo.find({
+          where: { id: In(membersToAdd) },
+          relations: ['user'],
+        });
+
+        const attendeesToInsert = newMembersInfo.map((member) =>
           this.attendeeRepo.create({
             meetingId: id,
-            memberId: memberId,
+            memberId: member.id,
             status: AttendeeStatus.PENDING,
           }),
         );
         await this.attendeeRepo.save(attendeesToInsert);
+        const formatText =
+          meeting.format === MeetingFormat.ONLINE ? 'Trực tuyến' : 'Trực tiếp';
+        const locationText =
+          meeting.format === MeetingFormat.ONLINE
+            ? meeting.onlineLink
+            : meeting.location;
+
+        for (const member of newMembersInfo) {
+          if (member.user) {
+            this.notificationsService.createInternal(
+              member.user.id,
+              `Bổ sung lịch họp: ${meeting.title}`,
+              `Đồng chí vừa được bổ sung vào danh sách mời họp <b>${formatText}</b> vào lúc <b>${new Date(meeting.startTime).toLocaleString('vi-VN')}</b>.<br/>Địa điểm/Link: ${locationText}.<br/>Vui lòng sắp xếp thời gian tham gia đúng giờ.`,
+              NotificationType.MEETING,
+              member.user.email,
+            );
+          }
+        }
       }
       if (membersToRemove.length > 0) {
         await this.attendeeRepo.delete({
           meetingId: id,
           memberId: In(membersToRemove),
-          status: AttendeeStatus.PENDING,
+          status: AttendeeStatus.PENDING, // Chỉ xóa những người chưa điểm danh
         });
       }
     }
+
     return await this.meetingRepo.findOne({
       where: { id },
     });
@@ -440,6 +488,7 @@ export class MeetingsService {
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
     const member = await this.partyMemberRepo.findOne({
       where: { userId: userId },
+      relations: ['user'],
     });
     if (!member) throw new NotFoundException('Không tìm thấy đảng viên');
 
@@ -462,7 +511,6 @@ export class MeetingsService {
         memberId: member.id,
       });
     }
-
     if (attendee.proofUrl) {
       try {
         const parts = attendee.proofUrl.split(`leave-requests/${meetingId}/`);
@@ -477,6 +525,7 @@ export class MeetingsService {
         console.error('Lỗi khi dọn dẹp file MinIO cũ:', error.message);
       }
     }
+
     const uploadResult = await this.minioService.uploadFile({
       file: file,
       folder: `leave-requests/${meetingId}`,
@@ -486,6 +535,44 @@ export class MeetingsService {
     attendee.reason = dto.reason;
     attendee.proofUrl = uploadResult.objectName;
     await this.attendeeRepo.save(attendee);
+    try {
+      const committeeMembers = await this.partyMemberRepo.find({
+        where: {
+          partyCellId: meeting.partyCellId,
+          user: {
+            role: {
+              name: In([
+                UserRole.SECRETARY,
+                UserRole.DEPUTY_SECRETARY,
+                UserRole.COMMITTEE_MEMBER,
+              ]),
+            },
+          },
+        },
+        relations: ['user', 'user.role'],
+      });
+
+      const submitterName = member.fullName;
+      for (const boss of committeeMembers) {
+        if (boss.user) {
+          this.notificationsService.createInternal(
+            boss.user.id,
+            `[Đơn xin phép] Có đơn vắng mặt mới`,
+            `Đồng chí <b>${submitterName}</b> vừa nộp đơn xin phép vắng mặt cho cuộc họp: <b>${meeting.title}</b>.<br/>
+            Lý do: <i>${dto.reason}</i>.<br/>
+            Kính đề nghị Chi ủy vào hệ thống kiểm tra minh chứng và phê duyệt.`,
+            NotificationType.SUBMISSION,
+            boss.user.email,
+          );
+        }
+      }
+    } catch (error) {
+      console.error(
+        'Lỗi khi gửi thông báo xin phép cho Chi ủy:',
+        error.message,
+      );
+    }
+
     return {
       success: true,
       message: 'Đã gửi đơn xin vắng mặt, vui lòng chờ Chi ủy phê duyệt.',
@@ -496,6 +583,7 @@ export class MeetingsService {
   async reviewLeaveRequest(attendeeId: string, dto: ReviewLeaveRequestDto) {
     const attendee = await this.attendeeRepo.findOne({
       where: { id: attendeeId },
+      relations: ['member', 'member.user', 'meeting'],
     });
 
     if (!attendee)
@@ -506,12 +594,25 @@ export class MeetingsService {
         'Chỉ có thể duyệt các đơn đang ở trạng thái chờ (PENDING_EXCUSE).',
       );
     }
-
-    attendee.status = dto.status; // Nhận EXCUSED hoặc ABSENT
+    attendee.status = dto.status;
     await this.attendeeRepo.save(attendee);
 
-    const statusText =
-      dto.status === AttendeeStatus.EXCUSED ? 'CHẤP NHẬN' : 'TỪ CHỐI';
+    const isApproved = dto.status === AttendeeStatus.EXCUSED;
+    const statusText = isApproved ? 'CHẤP NHẬN' : 'TỪ CHỐI';
+    const meetingTitle = attendee.meeting?.title || 'Không xác định';
+    if (attendee.member?.user) {
+      const user = attendee.member.user;
+      const colorText = isApproved ? '#28a745' : '#dc3545';
+
+      this.notificationsService.createInternal(
+        user.id,
+        `Kết quả duyệt đơn xin vắng mặt`, // Tiêu đề Noti
+        `Đơn xin phép vắng mặt của đồng chí cho cuộc họp <b>${meetingTitle}</b> đã bị Chi ủy <b style="color: ${colorText}">${statusText}</b>.<br/>
+        ${isApproved ? 'Đồng chí không cần tham gia cuộc họp này.' : 'Vui lòng sắp xếp công việc để tham gia cuộc họp đầy đủ theo quy định.'}`,
+        NotificationType.APPROVAL, // Dùng loại APPROVAL (Phê duyệt)
+        user.email, // Bắn mail luôn
+      );
+    }
 
     return {
       success: true,

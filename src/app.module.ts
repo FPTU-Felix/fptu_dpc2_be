@@ -22,6 +22,7 @@ import { AiKnowledgeModule } from './modules/ai-knowledge/ai-knowledge.module';
 import { PartyAdmissionsModule } from './modules/party-admissions/party-admissions.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { MinioModule } from './modules/minio/minio.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import minioConfig from './config/minio.config';
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import minioConfig from './config/minio.config';
     AiKnowledgeModule,
     PartyAdmissionsModule,
     MinioModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -9,10 +9,11 @@ import { MeetingOpinion } from './entities/meeting-opinion.entity';
 import { PartyMember } from '../party-members/entities/party-member.entity';
 import { MeetingsManagerController } from './meeting.manager.controller';
 import { PartyCell } from '../party-cells/entities/party-cell.entity';
-import { MailService } from '../mail/mail.service';
 import { MeetingsCronService } from './meetings-cron.service';
 import { User } from '../users/entities/user.entity';
 import { MeetingDocument } from './entities/meeting-document.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -26,9 +27,11 @@ import { MeetingDocument } from './entities/meeting-document.entity';
       User,
       MeetingDocument,
     ]),
+    NotificationsModule,
+    MailModule,
   ],
   controllers: [MeetingsManagerController, MeetingsController],
-  providers: [MeetingsService, MeetingsCronService, MailService],
+  providers: [MeetingsService, MeetingsCronService],
   exports: [MeetingsService],
 })
 export class MeetingsModule {}
