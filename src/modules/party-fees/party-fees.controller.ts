@@ -1,34 +1,37 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Param,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
 import { PartyFeesService } from './party-fees.service';
-import { CreatePartyFeeDto } from './dto/create-party-fee.dto';
-import { UpdatePartyFeeDto } from './dto/update-party-fee.dto';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
+import { GetPartyFeesDto } from './dto/party-fee.dto';
+import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
 
+@ApiTags('Party Fees - Quản lý Đảng phí')
+@ApiBearerAuth()
+@UseGuards(AuthGuard('jwt'))
 @Controller('party-fees')
 export class PartyFeesController {
   constructor(private readonly partyFeesService: PartyFeesService) {}
 
-  @Post()
-  create(@Body() createPartyFeeDto: CreatePartyFeeDto) {
-    return this.partyFeesService.create(createPartyFeeDto);
-  }
-
   @Get()
-  findAll() {
-    return this.partyFeesService.findAll();
+  @ApiOperation({ summary: 'Lấy danh sách Đảng phí của Chi bộ theo tháng/năm' })
+  async getFeesList(@Query() dto: GetPartyFeesDto) {
+    const { page = 1, limit = 10 } = dto;
+    return await this.partyFeesService.getFeesByChiBo(dto, { page, limit });
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.partyFeesService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updatePartyFeeDto: UpdatePartyFeeDto) {
-    return this.partyFeesService.update(+id, updatePartyFeeDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.partyFeesService.remove(+id);
+  @Patch(':id/confirm')
+  @ApiOperation({ summary: 'Xác nhận đã thu Đảng phí (Chuyển sang PAID)' })
+  async confirmPayment(
+    @Param('id') feeId: string,
+    @GetCurrentUser('sub') userId: string, // ID của Bí thư/người thao tác
+  ) {
+    return await this.partyFeesService.confirmPayment(feeId, userId);
   }
 }

@@ -5,8 +5,10 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 import { PartyMember } from '../../party-members/entities/party-member.entity';
+import { User } from '../../users/entities/user.entity';
 
 export enum FeeStatusEnum {
   PAID = 'PAID',
@@ -15,6 +17,7 @@ export enum FeeStatusEnum {
 }
 
 @Entity('party_fees')
+@Unique(['memberId', 'month', 'year'])
 export class PartyFee {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -34,14 +37,21 @@ export class PartyFee {
   @Column()
   year: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 0, default: 0 })
-  amount: number; // Số tiền
+  @Column({ type: 'decimal', precision: 10, scale: 0, nullable: true })
+  amount: number;
 
   @Column({ type: 'enum', enum: FeeStatusEnum, default: FeeStatusEnum.PENDING })
   status: FeeStatusEnum;
 
   @Column({ name: 'payment_date', type: 'timestamp', nullable: true })
   paymentDate: Date;
+
+  @Column({ name: 'recorded_by', nullable: true })
+  recordedById: string;
+
+  @ManyToOne(() => User, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'recorded_by' })
+  recordedBy: User;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

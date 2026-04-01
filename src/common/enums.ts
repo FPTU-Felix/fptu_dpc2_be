@@ -19,7 +19,6 @@ export enum AiDataStatus {
   REJECTED = 'REJECTED',
 }
 
-// Giữ nguyên của ông: Loại cuộc họp (Định kỳ / Đột xuất)
 export enum MeetingType {
   PERIODIC = 'PERIODIC',
   EXTRAORDINARY = 'EXTRAORDINARY',
