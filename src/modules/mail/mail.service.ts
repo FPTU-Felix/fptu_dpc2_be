@@ -26,8 +26,6 @@ export class MailService {
       );
       return false;
     }
-
-    // Cấu hình nội dung email gửi đi
     const mailOptions = {
       from: `"Hệ thống Quản lý Chi bộ" <${this.configService.get<string>('MAIL_USER')}>`,
       to: cleanTo,
@@ -36,7 +34,6 @@ export class MailService {
     };
 
     try {
-      // Thực thi gửi mail
       await this.transporter.sendMail(mailOptions);
       this.logger.log(
         `✅ Đã gửi mail (Nodemailer) thành công đến: [${cleanTo}]`,

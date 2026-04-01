@@ -89,7 +89,7 @@ export class MeetingsManagerController {
     UserRole.COMMITTEE_MEMBER,
     UserRole.DEPUTY_SECRETARY,
   )
-  @ApiOperation({ summary: 'Lấy mã PIN hiện tại (Gọi mỗi 5s để cập nhật)' })
+  @ApiOperation({ summary: 'Lấy mã PIN hiện tại (Gọi mỗi 30s để cập nhật)' })
   getPin(@Param('id') id: string) {
     return this.meetingsService.getCurrentPin(id);
   }
