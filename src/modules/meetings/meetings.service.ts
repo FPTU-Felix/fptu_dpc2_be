@@ -673,7 +673,13 @@ export class MeetingsService {
         status: AttendeeStatus.PENDING,
       });
     } else {
-      attendee.checkOutTime = now;
+      if (!attendee.checkInTime) {
+        attendee.checkInTime = now;
+        attendee.method = CheckInMethod.ONLINE_EXT;
+        attendee.status = AttendeeStatus.PRESENT;
+      } else {
+        attendee.checkOutTime = now;
+      }
     }
 
     await this.attendeeRepo.save(attendee);
