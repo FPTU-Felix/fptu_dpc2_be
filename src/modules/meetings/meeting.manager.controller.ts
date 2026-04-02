@@ -13,6 +13,7 @@ import {
   DefaultValuePipe,
   ParseIntPipe,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -41,11 +42,6 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 export class MeetingsManagerController {
   constructor(private readonly meetingsService: MeetingsService) {}
 
-  @Get('leave-requests')
-  @Roles(UserRole.ADMIN, UserRole.SECRETARY, UserRole.DEPUTY_SECRETARY)
-  @ApiOperation({
-    summary: 'Lấy danh sách đơn xin nghỉ họp (Phân trang + Lọc)',
-  })
   @Get('leave-requests')
   @Roles(UserRole.ADMIN, UserRole.SECRETARY, UserRole.DEPUTY_SECRETARY)
   @ApiOperation({
@@ -90,7 +86,7 @@ export class MeetingsManagerController {
     UserRole.DEPUTY_SECRETARY,
   )
   @ApiOperation({ summary: 'Lấy mã PIN hiện tại (Gọi mỗi 30s để cập nhật)' })
-  getPin(@Param('id') id: string) {
+  getPin(@Param('id', ParseUUIDPipe) id: string) {
     return this.meetingsService.getCurrentPin(id);
   }
 
@@ -101,7 +97,7 @@ export class MeetingsManagerController {
     UserRole.DEPUTY_SECRETARY,
   )
   @ApiOperation({ summary: 'Bật/Tắt chế độ điểm danh' })
-  toggleCheckIn(@Param('id') id: string) {
+  toggleCheckIn(@Param('id', ParseUUIDPipe) id: string) {
     return this.meetingsService.toggleCheckIn(id);
   }
   @Patch(':id')
@@ -111,7 +107,10 @@ export class MeetingsManagerController {
     UserRole.COMMITTEE_MEMBER,
     UserRole.DEPUTY_SECRETARY,
   )
-  update(@Param('id') id: string, @Body() updateMeetingDto: UpdateMeetingDto) {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateMeetingDto: UpdateMeetingDto,
+  ) {
     return this.meetingsService.update(id, updateMeetingDto);
   }
 
@@ -122,7 +121,7 @@ export class MeetingsManagerController {
     UserRole.COMMITTEE_MEMBER,
     UserRole.DEPUTY_SECRETARY,
   )
-  remove(@Param('id') id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.meetingsService.remove(id);
   }
 
@@ -133,7 +132,7 @@ export class MeetingsManagerController {
     UserRole.COMMITTEE_MEMBER,
     UserRole.DEPUTY_SECRETARY,
   )
-  getAttendees(@Param('id') id: string) {
+  getAttendees(@Param('id', ParseUUIDPipe) id: string) {
     return this.meetingsService.getAttendees(id);
   }
 
@@ -145,7 +144,7 @@ export class MeetingsManagerController {
     UserRole.DEPUTY_SECRETARY,
   )
   async reviewLeaveRequest(
-    @Param('attendeeId') attendeeId: string,
+    @Param('attendeeId', ParseUUIDPipe) attendeeId: string,
     @Body() dto: ReviewLeaveRequestDto,
   ) {
     return this.meetingsService.reviewLeaveRequest(attendeeId, dto);
@@ -155,8 +154,8 @@ export class MeetingsManagerController {
   @ApiOperation({
     summary: 'Kết thúc cuộc họp và tự động chốt danh sách vắng/có mặt',
   })
-  @Roles('ADMIN', 'SECRETARY', 'COMMITTEE_MEMBER')
-  async endMeeting(@Param('id') meetingId: string) {
+  @Roles(UserRole.SECRETARY, UserRole.COMMITTEE_MEMBER, UserRole.ADMIN)
+  async endMeeting(@Param('id', ParseUUIDPipe) meetingId: string) {
     return this.meetingsService.endMeeting(meetingId);
   }
 
@@ -170,7 +169,7 @@ export class MeetingsManagerController {
     UserRole.DEPUTY_SECRETARY,
   )
   async manualAttendance(
-    @Param('id') meetingId: string,
+    @Param('id', ParseUUIDPipe) meetingId: string,
     @Body() dto: ManualAttendanceDto,
     // @Req() req: any,
   ) {
@@ -191,7 +190,7 @@ export class MeetingsManagerController {
     UserRole.DEPUTY_SECRETARY,
   )
   async uploadDocuments(
-    @Param('id') meetingId: string,
+    @Param('id', ParseUUIDPipe) meetingId: string,
     @Body() dto: UploadMeetingDocumentsDto,
     @UploadedFiles() files: Express.Multer.File[],
   ) {

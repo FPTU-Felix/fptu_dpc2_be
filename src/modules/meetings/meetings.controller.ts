@@ -112,7 +112,7 @@ export class MeetingsController {
     UserRole.DEPUTY_SECRETARY,
   )
   async submitLeaveRequest(
-    @Param('id') meetingId: string,
+    @Param('id', ParseUUIDPipe) meetingId: string,
     @Body() dto: SubmitLeaveRequestDto,
     @GetCurrentUser('sub') userId: string,
     @UploadedFile(
@@ -141,7 +141,7 @@ export class MeetingsController {
     summary: 'FE Extension: Bắn lặp lại mỗi 60s để cộng dồn giờ',
   })
   async recordHeartbeat(
-    @Param('id') meetingId: string,
+    @Param('id', ParseUUIDPipe) meetingId: string,
     @Body() dto: OnlineAttendanceDto,
     @GetCurrentUser('sub') userId: string,
   ) {
