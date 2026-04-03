@@ -31,6 +31,7 @@ export class AuthService {
     return {
       ...tokens,
       isFirstLogin: user.isFirstLogin,
+      role: user.role?.name,
     };
   }
 
