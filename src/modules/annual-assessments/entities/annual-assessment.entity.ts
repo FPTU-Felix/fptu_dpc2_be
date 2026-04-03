@@ -13,7 +13,6 @@ import { PartyMember } from 'src/modules/party-members/entities/party-member.ent
 import { User } from 'src/modules/users/entities/user.entity';
 
 @Entity('annual_assessments')
-// 👇 Chốt chặn 1: Mỗi Đảng viên chỉ có 1 bản đánh giá/năm
 @Unique(['memberId', 'year'])
 export class AnnualAssessment {
   @PrimaryGeneratedColumn('uuid')
@@ -29,11 +28,21 @@ export class AnnualAssessment {
   @Column({ type: 'int' })
   year: number;
 
-  // Cấp bậc Đảng viên tự nhận
+  @Column({ type: 'text', nullable: true })
+  remarks: string;
+
   @Column({ type: 'enum', enum: AssessmentRank, name: 'self_rank' })
   selfRank: AssessmentRank;
 
-  // Cấp bậc Chi ủy chốt cuối cùng (Lúc đầu sẽ null)
+  @Column({ name: 'assessment_file_url', nullable: true })
+  assessmentFileUrl: string;
+
+  @Column({ type: 'jsonb', name: 'criteria_checklist', nullable: true })
+  criteriaChecklist?: any;
+
+  @Column({ type: 'int', nullable: true })
+  score?: number;
+
   @Column({
     type: 'enum',
     enum: AssessmentRank,
@@ -49,14 +58,6 @@ export class AnnualAssessment {
   })
   status: AssessmentStatus;
 
-  @Column({ type: 'text', nullable: true })
-  remarks: string; // Tự nhận xét ưu khuyết điểm
-
-  // 👇 Chốt chặn 2: File minh chứng
-  @Column({ name: 'assessment_file_url' })
-  assessmentFileUrl: string;
-
-  // 👇 Vết kiểm toán: Ai duyệt? Duyệt lúc nào?
   @Column({ name: 'reviewer_id', nullable: true })
   reviewerId: string;
 

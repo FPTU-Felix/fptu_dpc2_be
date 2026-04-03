@@ -3,13 +3,19 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, Between } from 'typeorm';
 import { AnnualAssessment } from './entities/annual-assessment.entity';
 import { Discipline } from '../disciplines/entities/discipline.entity'; // Đường dẫn tùy project ông
 import { PartyMember } from '../party-members/entities/party-member.entity';
-import { AssessmentRank, AssessmentStatus } from 'src/common/enums';
+import {
+  AssessmentRank,
+  AssessmentStatus,
+  NotificationType,
+  UserRole,
+} from 'src/common/enums';
 import { CreateAnnualAssessmentDto } from './dto/create-annual-assessment.dto';
 import { ReviewAnnualAssessmentDto } from './dto/review-annual-assessment.dto';
 import { MinioService } from '../minio/minio.service';
@@ -19,9 +25,13 @@ import {
   paginate,
   Pagination,
 } from 'nestjs-typeorm-paginate';
+import { EvaluationConfig } from './entities/evaluation-config.entity';
+import { NotificationsService } from '../notifications/notifications.service';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class AnnualAssessmentsService {
+  private readonly logger = new Logger(AnnualAssessmentsService.name);
   constructor(
     @InjectRepository(AnnualAssessment)
     private readonly assessmentRepo: Repository<AnnualAssessment>,
@@ -30,7 +40,53 @@ export class AnnualAssessmentsService {
     @InjectRepository(Discipline)
     private readonly disciplineRepo: Repository<Discipline>,
     private readonly minioService: MinioService,
+    @InjectRepository(EvaluationConfig)
+    private readonly configRepo: Repository<EvaluationConfig>,
+    private readonly notiService: NotificationsService,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
   ) {}
+
+  async upsertEvaluationConfig(
+    partyCellId: string,
+    year: number,
+    criteriaTemplate: string[],
+  ) {
+    const exitingPartyCell = await this.partyMemberRepo
+      .createQueryBuilder('member')
+      .leftJoin('member.partyCell', 'cell')
+      .where('cell.id = :partyCellId', { partyCellId })
+      .getOne();
+    if (!exitingPartyCell) {
+      throw new NotFoundException('Chi bộ không tồn tại!');
+    }
+    let config = await this.configRepo.findOne({
+      where: { partyCellId, year },
+    });
+
+    if (config) {
+      config.criteriaTemplate = criteriaTemplate;
+    } else {
+      config = this.configRepo.create({
+        partyCellId,
+        year,
+        criteriaTemplate,
+      });
+    }
+
+    return await this.configRepo.save(config);
+  }
+  async getEvaluationConfig(partyCellId: string, year: number) {
+    const config = await this.configRepo.findOne({
+      where: { partyCellId, year },
+    });
+    if (!config) {
+      throw new NotFoundException(
+        `Chi bộ chưa cấu hình bộ tiêu chí đánh giá cho năm ${year}`,
+      );
+    }
+    return config;
+  }
 
   async submitAssessment(
     userId: string,
@@ -39,9 +95,10 @@ export class AnnualAssessmentsService {
   ) {
     const { year, selfRank, remarks } = dto;
     const member = await this.partyMemberRepo.findOne({ where: { userId } });
-    if (!member) {
+
+    if (!member)
       throw new NotFoundException('Tài khoản này chưa có hồ sơ Đảng viên!');
-    }
+
     const existingAssessment = await this.assessmentRepo.findOne({
       where: { memberId: member.id, year },
     });
@@ -50,6 +107,7 @@ export class AnnualAssessmentsService {
         `Bạn đã nộp bản tự đánh giá cho năm ${year} rồi!`,
       );
     }
+
     if (selfRank === AssessmentRank.EXCELLENT) {
       const hasDiscipline = await this.disciplineRepo.findOne({
         where: {
@@ -60,12 +118,12 @@ export class AnnualAssessmentsService {
 
       if (hasDiscipline) {
         throw new BadRequestException(
-          `Bạn đã bị kỷ luật trong năm ${year}, không được phép tự xếp loại ${AssessmentRank.EXCELLENT}!`,
+          `Bạn đã bị kỷ luật trong năm ${year}, không được tự xếp loại ${AssessmentRank.EXCELLENT}!`,
         );
       }
     }
-    let uploadedUrl: string | undefined = undefined;
 
+    let uploadedUrl: string | undefined = undefined;
     if (file) {
       const uploadResult = await this.minioService.uploadFile({
         file: file,
@@ -86,29 +144,63 @@ export class AnnualAssessmentsService {
     return await this.assessmentRepo.save(newAssessment);
   }
 
+  private async notifyCommittee(member: PartyMember, year: number) {
+    try {
+      const committeeMembers = await this.userRepo
+        .createQueryBuilder('u')
+        .innerJoin('party_members', 'pm', 'pm.user_id = u.id')
+        .where('pm.party_cell_id = :cellId', { cellId: member.partyCellId })
+        .andWhere('u.role_id IN (:...roleIds)', {
+          roleIds: [
+            'ea9be120-91f4-4430-a0ec-667e54bd1d7a',
+            'eee09c6c-460c-43ac-bbd8-c741d6c76aac',
+            'e6bafbfc-a3a9-4f7f-90da-903850d059e9',
+          ],
+        })
+        .getMany();
+
+      if (!committeeMembers.length) return;
+      for (const admin of committeeMembers) {
+        if (admin.id === member.userId) continue;
+
+        this.notiService.createInternal(
+          admin.id,
+          `Có bản tự đánh giá mới - Năm ${year}`,
+          `Đồng chí <b>${member.fullName}</b> vừa nộp bản tự đánh giá năm ${year}.<br>Mời đồng chí vào kiểm tra.`,
+          NotificationType.SUBMISSION,
+          admin.email,
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Lỗi khi thông báo Chi ủy: ${error.message}`);
+    }
+  }
+
   async reviewAssessment(
     assessmentId: string,
     reviewerId: string,
     dto: ReviewAnnualAssessmentDto,
   ) {
-    const { status, finalRank } = dto;
+    const { status, finalRank, score, criteriaChecklist } = dto;
+
     const assessment = await this.assessmentRepo.findOne({
       where: { id: assessmentId },
     });
 
-    if (!assessment) {
+    if (!assessment)
       throw new NotFoundException('Không tìm thấy bản tự đánh giá này!');
-    }
+
     if (assessment.status !== AssessmentStatus.PENDING) {
       throw new BadRequestException(
         'Bản đánh giá này đã được xử lý từ trước, không thể sửa đổi!',
       );
     }
+
     if (finalRank === AssessmentRank.EXCELLENT) {
       const hasDiscipline = await this.disciplineRepo.findOne({
         where: {
           memberId: assessment.memberId,
-          date: Like(`${assessment.year}-%`),
+          date: Between(`${assessment.year}-01-01`, `${assessment.year}-12-31`),
         },
       });
 
@@ -121,9 +213,26 @@ export class AnnualAssessmentsService {
 
     assessment.status = status;
     assessment.finalRank = finalRank;
+    assessment.score = score;
+    assessment.criteriaChecklist = criteriaChecklist;
     assessment.reviewerId = reviewerId;
     assessment.reviewedAt = new Date();
 
+    const member = await this.partyMemberRepo.findOne({
+      where: { id: assessment.memberId },
+      relations: ['user'],
+    });
+    if (member && member.user) {
+      this.notiService.createInternal(
+        member.user.id,
+        `Kết quả đánh giá Đảng viên năm ${assessment.year}`,
+        `Kính gửi đồng chí <b>${member.fullName}</b>,<br><br>Chi ủy đã hoàn tất việc chấm điểm thi đua năm ${assessment.year} của đồng chí.<br>
+        - Điểm số: <b style="color: #da251d">${assessment.score}/100</b><br>
+        - Xếp loại: <b>${assessment.finalRank}</b><br><br>`,
+        NotificationType.SUBMISSION,
+        member.user.email,
+      );
+    }
     return await this.assessmentRepo.save(assessment);
   }
 
@@ -136,21 +245,22 @@ export class AnnualAssessmentsService {
       .createQueryBuilder('a')
       .leftJoinAndSelect('a.member', 'member')
       .leftJoinAndSelect('member.partyCell', 'cell');
-    if (year) {
-      queryBuilder.andWhere('a.year = :year', { year });
-    }
 
-    if (status) {
-      queryBuilder.andWhere('a.status = :status', { status });
-    }
+    if (year) queryBuilder.andWhere('a.year = :year', { year });
+    if (status) queryBuilder.andWhere('a.status = :status', { status });
+    queryBuilder.addOrderBy('a.score', 'DESC', 'NULLS LAST');
     queryBuilder.orderBy('a.createdAt', 'DESC');
+
     const result = await paginate<AnnualAssessment>(queryBuilder, options);
+
     return new Pagination(
       result.items.map((assessment) => ({
         id: assessment.id,
         year: assessment.year,
         selfRank: assessment.selfRank,
         finalRank: assessment.finalRank,
+        score: assessment.score,
+        criteriaChecklist: assessment.criteriaChecklist,
         remarks: assessment.remarks,
         assessmentFileUrl: assessment.assessmentFileUrl,
         status: assessment.status,
@@ -165,9 +275,9 @@ export class AnnualAssessmentsService {
       result.links,
     );
   }
-  async updateAssessment(
-    id: string,
+  async updateMyAssessment(
     userId: string,
+    year: number,
     dto: UpdateAnnualAssessmentDto,
     file?: Express.Multer.File,
   ) {
@@ -176,59 +286,71 @@ export class AnnualAssessmentsService {
       throw new NotFoundException('Tài khoản này chưa có hồ sơ Đảng viên!');
     }
     const assessment = await this.assessmentRepo.findOne({
-      where: { id, memberId: member.id },
+      where: { memberId: member.id, year },
     });
 
     if (!assessment) {
-      throw new NotFoundException('Không tìm thấy bản tự đánh giá của bạn!');
+      throw new NotFoundException(
+        `Không tìm thấy bản tự đánh giá năm ${year} của bạn!`,
+      );
     }
+
     if (assessment.status !== AssessmentStatus.PENDING) {
       throw new BadRequestException(
         'Bản đánh giá này đã được Chi ủy xử lý, không thể chỉnh sửa!',
       );
     }
-    if (dto.year && dto.year !== assessment.year) {
-      const existing = await this.assessmentRepo.findOne({
-        where: { memberId: member.id, year: dto.year },
-      });
-      if (existing) {
-        throw new ConflictException(
-          `Bạn đã có bản đánh giá cho năm ${dto.year} rồi!`,
-        );
-      }
-    }
 
-    const targetYear = dto.year || assessment.year;
     const targetRank = dto.selfRank || assessment.selfRank;
+
     if (targetRank === AssessmentRank.EXCELLENT) {
       const hasDiscipline = await this.disciplineRepo.findOne({
         where: {
           memberId: member.id,
-          date: Like(`${targetYear}-%`),
+          date: Between(`${year}-01-01`, `${year}-12-31`),
         },
       });
 
       if (hasDiscipline) {
         throw new BadRequestException(
-          `Bạn đã bị kỷ luật trong năm ${targetYear}, không được phép tự xếp loại ${AssessmentRank.EXCELLENT}!`,
+          `Bạn đã bị kỷ luật trong năm ${year}, không được phép tự xếp loại ${AssessmentRank.EXCELLENT}!`,
         );
       }
     }
+
     let uploadedUrl = assessment.assessmentFileUrl;
     if (file) {
       const uploadResult = await this.minioService.uploadFile({
         file: file,
-        folder: `annual-assessments/${targetYear}`,
+        folder: `annual-assessments/${year}`,
       });
       uploadedUrl = uploadResult.objectName;
     }
     Object.assign(assessment, {
-      year: dto.year,
       selfRank: dto.selfRank,
       remarks: dto.remarks,
       assessmentFileUrl: uploadedUrl,
     });
 
     return await this.assessmentRepo.save(assessment);
+  }
+
+  async getMyAssessmentByYear(userId: string, year: number) {
+    const member = await this.partyMemberRepo.findOne({ where: { userId } });
+    if (!member) {
+      throw new NotFoundException('Tài khoản này chưa có hồ sơ Đảng viên!');
+    }
+
+    const assessment = await this.assessmentRepo.findOne({
+      where: { memberId: member.id, year },
+    });
+
+    if (!assessment) {
+      throw new NotFoundException(
+        `Bạn chưa có bản đánh giá nào trong năm ${year}!`,
+      );
+    }
+
+    return assessment;
   }
 }
