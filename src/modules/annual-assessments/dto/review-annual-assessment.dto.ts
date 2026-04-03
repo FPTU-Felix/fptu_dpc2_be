@@ -1,24 +1,68 @@
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsArray,
+  Min,
+  Max,
+  IsString,
+  IsBoolean,
+  ValidateNested,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsEnum } from 'class-validator';
-import { AssessmentRank, AssessmentStatus } from 'src/common/enums';
+import { AssessmentStatus, AssessmentRank } from 'src/common/enums';
+import { Type } from 'class-transformer';
+
+export class CriteriaItemDto {
+  @ApiProperty({ description: 'Tên tiêu chí' })
+  @IsString()
+  name: string;
+
+  @ApiProperty({ description: 'Đạt hay không đạt' })
+  @IsBoolean()
+  isChecked: boolean;
+
+  @ApiProperty({ description: 'Ghi chú thêm', required: false })
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
 
 export class ReviewAnnualAssessmentDto {
   @ApiProperty({
     enum: AssessmentStatus,
-    description: 'Trạng thái duyệt (Thường là APPROVED)',
     example: AssessmentStatus.APPROVED,
+    description: 'Trạng thái sau khi duyệt',
   })
-  @IsNotEmpty()
   @IsEnum(AssessmentStatus)
   status: AssessmentStatus;
 
   @ApiProperty({
     enum: AssessmentRank,
-    description:
-      'Mức xếp loại CHÍNH THỨC do Chi ủy quyết định (Có thể giống hoặc khác mức tự nhận)',
     example: AssessmentRank.GOOD,
+    description: 'Mức xếp loại Chi ủy chốt',
   })
-  @IsNotEmpty()
   @IsEnum(AssessmentRank)
   finalRank: AssessmentRank;
+
+  @ApiProperty({
+    description: 'Điểm số Chi ủy chấm (0 - 100)',
+    example: 95,
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  score?: number;
+
+  @ApiProperty({
+    type: [CriteriaItemDto],
+    required: false,
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CriteriaItemDto)
+  criteriaChecklist?: CriteriaItemDto[];
 }
