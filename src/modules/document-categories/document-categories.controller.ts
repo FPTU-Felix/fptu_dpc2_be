@@ -1,6 +1,6 @@
 import { 
   Controller, Get, Post, Body, Patch, Param, Delete, 
-  UseGuards, ParseIntPipe 
+  UseGuards, ParseUUIDPipe 
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DocumentCategoriesService } from './document-categories.service';
@@ -33,7 +33,7 @@ export class DocumentCategoriesController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Chi tiết danh mục tài liệu' })
-  findOne(@Param('id', ParseIntPipe) id: number) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) { // Đổi sang string và ParseUUIDPipe
     return this.documentCategoriesService.findOne(id);
   }
 
@@ -41,7 +41,7 @@ export class DocumentCategoriesController {
   @Roles(UserRole.ADMIN, UserRole.SECRETARY)
   @ApiOperation({ summary: 'Cập nhật danh mục tài liệu' })
   update(
-    @Param('id', ParseIntPipe) id: number, 
+    @Param('id', ParseUUIDPipe) id: string, // Đổi sang string và ParseUUIDPipe
     @Body() updateDocumentCategoryDto: UpdateDocumentCategoryDto
   ) {
     return this.documentCategoriesService.update(id, updateDocumentCategoryDto);
@@ -50,7 +50,7 @@ export class DocumentCategoriesController {
   @Delete(':id')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Xóa danh mục tài liệu' })
-  remove(@Param('id', ParseIntPipe) id: number) {
+  remove(@Param('id', ParseUUIDPipe) id: string) { // Đổi sang string và ParseUUIDPipe
     return this.documentCategoriesService.remove(id);
   }
 }

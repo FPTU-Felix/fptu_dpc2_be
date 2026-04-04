@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, MaxLength, IsOptional, IsInt, IsHexColor } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength, IsOptional, IsInt } from 'class-validator';
 
 export class CreateDocumentCategoryDto {
   @ApiProperty({ example: 'Điều lệ Đảng', description: 'Tên danh mục' })
@@ -22,7 +22,6 @@ export class CreateDocumentCategoryDto {
   @ApiProperty({ example: '#D32F2F', default: '#D32F2F', required: false })
   @IsString()
   @IsOptional()
-  // @IsHexColor() // Bạn có thể dùng cái này nếu muốn bắt buộc định dạng màu hex
   color?: string;
 
   @ApiProperty({ example: 'book-open', required: false })

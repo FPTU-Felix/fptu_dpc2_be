@@ -13,7 +13,6 @@ export class DocumentCategoriesService {
   ) {}
 
   async create(dto: CreateDocumentCategoryDto) {
-    // Kiểm tra slug trùng lặp
     const existing = await this.categoryRepo.findOne({ where: { slug: dto.slug } });
     if (existing) {
       throw new ConflictException('Slug này đã tồn tại, vui lòng chọn slug khác');
@@ -26,11 +25,11 @@ export class DocumentCategoriesService {
   async findAll() {
     return await this.categoryRepo.find({
       relations: ['documents'],
-      order: { sortOrder: 'ASC', createdAt: 'DESC' }, // Ưu tiên sắp xếp theo thứ tự sortOrder
+      order: { sortOrder: 'ASC', createdAt: 'DESC' },
     });
   }
 
-  async findOne(id: number) {
+  async findOne(id: string) { // Đổi tham số sang string
     const category = await this.categoryRepo.findOne({
       where: { id },
       relations: ['documents'],
@@ -42,10 +41,9 @@ export class DocumentCategoriesService {
     return category;
   }
 
-  async update(id: number, dto: UpdateDocumentCategoryDto) {
+  async update(id: string, dto: UpdateDocumentCategoryDto) { // Đổi tham số sang string
     const category = await this.findOne(id);
     
-    // Nếu cập nhật slug, kiểm tra xem slug mới có bị trùng không
     if (dto.slug && dto.slug !== category.slug) {
       const existing = await this.categoryRepo.findOne({ where: { slug: dto.slug } });
       if (existing) throw new ConflictException('Slug mới đã tồn tại');
@@ -55,7 +53,7 @@ export class DocumentCategoriesService {
     return await this.categoryRepo.save(category);
   }
 
-  async remove(id: number) {
+  async remove(id: string) { // Đổi tham số sang string
     const category = await this.findOne(id);
     await this.categoryRepo.remove(category);
     return { message: `Đã xóa danh mục "${category.name}" thành công` };

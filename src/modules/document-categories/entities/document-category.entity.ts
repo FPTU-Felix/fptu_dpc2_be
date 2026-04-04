@@ -12,8 +12,8 @@ import { Document } from '../../documents/entities/document.entity';
 
 @Entity('document_categories')
 export class DocumentCategory {
-  @PrimaryGeneratedColumn({ type: 'int', name: 'id' })
-  id: number;
+  @PrimaryGeneratedColumn('uuid', { name: 'id' })
+  id: string; // Chuyển từ number sang string (UUID)
 
   @Column({ name: 'name', type: 'varchar', length: 255 })
   name: string;

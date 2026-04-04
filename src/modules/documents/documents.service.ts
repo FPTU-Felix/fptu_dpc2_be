@@ -3,8 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Document } from './entities/document.entity';
 import { CreateDocumentDto } from './dto/create-document.dto';
-import { UpdateDocumentDto } from './dto/update-document.dto';
-import { MinioService } from '../minio/minio.service'; // Giả định bạn đã có MinioService
+import { MinioService } from '../minio/minio.service';
+import slugify from 'slugify';
 
 @Injectable()
 export class DocumentsService {
@@ -16,28 +16,26 @@ export class DocumentsService {
 
   async create(dto: CreateDocumentDto, file: Express.Multer.File, userId: string) {
     if (!file) {
-      throw new BadRequestException('Vui lòng chọn file tài liệu để tải lên!');
+      throw new BadRequestException('Vui lòng chọn file tài liệu!');
     }
 
-    // 1. Upload file lên MinIO
+    const fileExtension = file.originalname.split('.').pop()?.toLowerCase();
+    const generatedSlug = dto.slug || slugify(dto.title, { lower: true, strict: true });
+
     const uploadResult = await this.minioService.uploadFile({
       file: file,
       folder: 'documents',
     });
 
-    // 2. Xác định người đăng (uploadedBy)
-    // Ưu tiên 1: Giá trị từ DTO gửi lên
-    // Ưu tiên 2: Tên của User (nếu bạn có logic lấy tên từ userId)
-    // Ưu tiên 3: Mặc định là 'Chi ủy'
-    const creator = dto.uploadedBy || 'Chi ủy'; 
-
-    // 3. Lưu vào Database
     const newDocument = this.documentRepo.create({
       ...dto,
+      slug: generatedSlug,
       fileName: uploadResult.fileName,
       fileUrl: uploadResult.objectName,
-      uploadedBy: creator,
-      // Nếu entity có thêm trường creatorId thì gán: creatorId: userId
+      fileType: fileExtension,
+      uploadedBy: dto.uploadedBy || 'Chi ủy',
+      status: 'active',
+      downloadCount: 0,
     });
 
     return await this.documentRepo.save(newDocument);
@@ -45,6 +43,7 @@ export class DocumentsService {
 
   async findAll() {
     return await this.documentRepo.find({
+      where: { status: 'active' },
       relations: ['category'],
       order: { createdAt: 'DESC' },
     });
@@ -52,23 +51,43 @@ export class DocumentsService {
 
   async findOne(id: string) {
     const document = await this.documentRepo.findOne({
-      where: { id },
+      where: { 
+        id, 
+        status: 'active' // Chỉ tìm những tài liệu đang hoạt động
+      },
       relations: ['category'],
     });
-    if (!document) throw new NotFoundException('Không tìm thấy tài liệu');
+
+    if (!document) {
+      throw new NotFoundException('Không tìm thấy tài liệu hoặc tài liệu đã bị xóa');
+    }
     return document;
   }
 
   async remove(id: string) {
+    // 1. Tìm tài liệu xem có tồn tại không
     const document = await this.findOne(id);
+
+    // 2. Cập nhật trạng thái thành 'deleted'
+    document.status = 'deleted';
     
-    // Xóa file trên MinIO để tránh rác server
+    // Lưu ý: Nếu bạn xóa mềm, thường người ta SẼ KHÔNG xóa file trên MinIO ngay 
+    // để có thể khôi phục (Restore). Nếu bạn xóa file MinIO ở đây, 
+    // bản ghi 'deleted' trong DB sẽ bị mất file đính kèm.
+    /*
     try {
       await this.minioService.deleteFile(document.fileUrl);
     } catch (error) {
-      console.error('Lỗi khi xóa file trên MinIO:', error.message);
+      console.error('Lỗi khi xóa file MinIO:', error.message);
     }
+    */
 
-    return await this.documentRepo.remove(document);
+    // 3. Lưu lại thay đổi
+    await this.documentRepo.save(document);
+
+    return {
+      message: 'Xóa tài liệu thành công (Soft Delete)',
+      id: id
+    };
   }
 }

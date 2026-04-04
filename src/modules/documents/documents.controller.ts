@@ -6,7 +6,6 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagg
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
-import { UpdateDocumentDto } from './dto/update-document.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
 
@@ -30,7 +29,7 @@ export class DocumentsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lấy danh sách tất cả tài liệu' })
+  @ApiOperation({ summary: 'Lấy tất cả tài liệu' })
   findAll() {
     return this.documentsService.findAll();
   }
