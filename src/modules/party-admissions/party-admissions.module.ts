@@ -12,17 +12,33 @@ import { PartyAdmissionApplicationEntity } from './entities/party-admission-appl
 import { PartyAdmissionStepEntity } from './entities/party-admission-step.entity';
 import { PartyAdmissionStepSubmissionEntity } from './entities/party-admission-step-submission.entity';
 import { PartyAdmissionDocumentEntity } from './entities/party-admission-document.entity';
-import { AdmissionWorkflowLogService } from './services/admission-workflow-log.service';
 import { PartyAdmissionWorkflowLogEntity } from './entities/party-admission-workflow-log.entity';
-
+import { PartyAdmissionStepReviewEntity } from './entities/party-admission-step-review.entity';
+console.log({
+  PartyAdmission,
+  PartyMember,
+  PartyAdmissionDocumentEntity,
+  PartyAdmissionWorkflowLogEntity,
+});
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PartyAdmission, PartyMember, PartyAdmissionApplicationEntity,
-      PartyAdmissionStepEntity, PartyAdmissionStepSubmissionEntity, PartyAdmissionDocumentEntity, 
-      PartyAdmissionWorkflowLogEntity
+    TypeOrmModule.forFeature([
+      PartyAdmission,
+      PartyMember,
+      PartyAdmissionApplicationEntity,
+      PartyAdmissionStepEntity,
+      PartyAdmissionStepSubmissionEntity,
+      PartyAdmissionDocumentEntity,
+      PartyAdmissionWorkflowLogEntity,
+      PartyAdmissionStepReviewEntity,
+
     ]),
   ],
   controllers: [PartyAdmissionsController, AdmissionApplicationController],
-  providers: [PartyAdmissionsService, AdmissionApplicationService, AdmissionWorkflowLogService],
+  providers: [
+    PartyAdmissionsService,
+    AdmissionApplicationService,
+  ],
+  exports: [AdmissionApplicationService],
 })
-export class PartyAdmissionsModule {}
+export class PartyAdmissionsModule { }

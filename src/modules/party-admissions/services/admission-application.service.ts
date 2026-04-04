@@ -1,28 +1,32 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
+import { randomUUID } from 'crypto';
+
 import { PartyAdmissionApplicationEntity } from '../entities/party-admission-application.entity';
 import { PartyAdmissionStepEntity } from '../entities/party-admission-step.entity';
-import { PartyAdmissionStepSubmissionEntity } from '../entities/party-admission-step-submission.entity';
-import { PartyAdmissionDocumentEntity } from '../entities/party-admission-document.entity';
-import { MinioService } from 'src/modules/minio/minio.service';
 
-import { AdmissionLogAction } from '../enum/admission-log-action.enum';
-import { UpdateApplicationDraftDto } from '../dto/update-application-draft.dto';
-import { AdmissionDocumentType } from '../enum/admission-document-type.enum';
-import { SubmitApplicationDto } from '../dto/submit-application.dto';
-import { AdmissionWorkflowLogService } from './admission-workflow-log.service';
-import { CreateApplicationDraftDto } from '../dto/create-application-draft.dto';
 import { AdmissionOverallStatus } from '../enum/admission-overall-status';
 import { AdmissionWorkflowStep } from '../enum/admission-workflow-step.enum';
 import { AdmissionWorkflowStepStatus } from '../enum/admission-workflow-step-status.enum';
-
+import { MyAdmissionCurrentStatusResponseDto } from "../dto/response/my-admission-current-status.response.dto"
+import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { MyAdmissionStepReviewResponseDto } from "../dto/response/my-admission-current-status.response.dto"
+import { PartyAdmissionStepReviewEntity } from "../entities/party-admission-step-review.entity"
+import { PartyAdmissionStepSubmissionEntity } from "../entities/party-admission-step-submission.entity"
+import { MyAdmissionStepSubmissionResponseDto } from "../dto/response/my-admission-current-status.response.dto"
+import { MyAdmissionStepResponseDto } from "../dto/response/my-admission-current-status.response.dto"
+import { AdmissionSubmissionStatus } from '../dto/admission-submission-status.dto';
+console.log({
+  PartyAdmissionApplicationEntity,
+  PartyAdmissionStepEntity,
+  PartyAdmissionStepSubmissionEntity,
+  PartyAdmissionStepReviewEntity,
+});
 @Injectable()
+
 export class AdmissionApplicationService {
+
   constructor(
     @InjectRepository(PartyAdmissionApplicationEntity)
     private readonly applicationRepo: Repository<PartyAdmissionApplicationEntity>,
@@ -33,618 +37,745 @@ export class AdmissionApplicationService {
     @InjectRepository(PartyAdmissionStepSubmissionEntity)
     private readonly submissionRepo: Repository<PartyAdmissionStepSubmissionEntity>,
 
-    @InjectRepository(PartyAdmissionDocumentEntity)
-    private readonly documentRepo: Repository<PartyAdmissionDocumentEntity>,
+    @InjectRepository(PartyAdmissionStepReviewEntity)
+    private readonly reviewRepo: Repository<PartyAdmissionStepReviewEntity>,
 
-    private readonly minioService: MinioService,
-    private readonly workflowLogService: AdmissionWorkflowLogService,
-  ) {}
+    private readonly dataSource: DataSource,
+  ) { }
 
-  private getStepName(stepCode: AdmissionWorkflowStep): string {
-    switch (stepCode) {
-      case AdmissionWorkflowStep.DRAFT:
-        return 'Bản nháp';
-      case AdmissionWorkflowStep.APPLICATION_SUBMISSION:
-        return 'Nộp hồ sơ';
-      case AdmissionWorkflowStep.CHI_UY_REVIEW:
-        return 'Chi ủy kiểm tra';
-      case AdmissionWorkflowStep.PBT_CONTENT_REVIEW:
-        return 'PBT duyệt nội dung';
-      case AdmissionWorkflowStep.LOCAL_VERIFICATION:
-        return 'Xác minh lý lịch';
-      case AdmissionWorkflowStep.RED_SEAL_CHECK:
-        return 'Kiểm tra dấu đỏ';
-      case AdmissionWorkflowStep.RESOLUTION_DRAFTING:
-        return 'Soạn nghị quyết';
-      case AdmissionWorkflowStep.SECRETARY_RESOLUTION_REVIEW:
-        return 'Bí thư duyệt nghị quyết';
-      case AdmissionWorkflowStep.COMPLETED:
-        return 'Hoàn thành';
-      default:
-        return stepCode;
-    }
+  private generateApplicationCode(): string {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const suffix = randomUUID().slice(0, 8).toUpperCase();
+
+    return `PADM-${yyyy}${mm}${dd}-${suffix}`;
   }
 
-  async uploadApplicationAttachment(params: {
-    applicationId: string;
-    outstandingIndividualId: string;
-    file: Express.Multer.File;
-    documentType?: AdmissionDocumentType;
-  }) {
-    const { applicationId, outstandingIndividualId, file, documentType } =
-      params;
-
-    if (!file) {
-      throw new BadRequestException('Vui lòng chọn file');
-    }
-
-    const application = await this.applicationRepo.findOne({
-      where: {
-        id: applicationId,
-        outstandingIndividualId,
-      },
-    });
-
-    if (!application) {
-      throw new NotFoundException('Không tìm thấy hồ sơ kết nạp');
-    }
-
-    if (
-      ![AdmissionOverallStatus.DRAFT, AdmissionOverallStatus.RETURNED].includes(
-        application.overallStatus,
-      )
-    ) {
-      throw new BadRequestException(
-        'Không thể tải thêm file sau khi đã gửi duyệt',
+  async initAdmissionForQCUT(userId: string) {
+    return await this.dataSource.transaction(async (manager) => {
+      const applicationRepo = manager.getRepository(
+        PartyAdmissionApplicationEntity,
       );
-    }
+      const stepRepo = manager.getRepository(PartyAdmissionStepEntity);
 
-    const step = await this.stepRepo.findOne({
-      where: {
-        applicationId,
-        stepCode: AdmissionWorkflowStep.APPLICATION_SUBMISSION,
-      },
-    });
-
-    if (!step) {
-      throw new NotFoundException('Không tìm thấy bước nộp hồ sơ');
-    }
-
-    const submission = await this.submissionRepo.findOne({
-      where: {
-        applicationId,
-        stepId: step.id,
-        isLatest: true,
-      },
-      order: {
-        version: 'DESC',
-      },
-    });
-
-    const uploadResult = await this.minioService.uploadFile({
-      file,
-      folder: `party-admissions/${applicationId}/application`,
-    });
-
-    const document = this.documentRepo.create({
-      applicationId,
-      stepId: step.id,
-      submissionId: submission?.id,
-      documentType: documentType || AdmissionDocumentType.OTHER,
-      originalFileName: uploadResult.fileName,
-      storedFileName: uploadResult.safeFileName,
-      objectKey: uploadResult.objectName,
-      mimeType: uploadResult.mimeType,
-      size: uploadResult.size,
-      version: 1,
-      isLatest: true,
-      uploadedById: outstandingIndividualId,
-      uploadedAt: new Date(),
-    });
-
-    const savedDocument = await this.documentRepo.save(document);
-
-    await this.workflowLogService.createLog({
-      applicationId,
-      stepId: step.id,
-      action: AdmissionLogAction.UPLOAD_APPLICATION_ATTACHMENT,
-      toStatus: step.status,
-      toStepCode: AdmissionWorkflowStep.APPLICATION_SUBMISSION,
-      message: 'Tải lên file đính kèm đơn xin vào Đảng',
-      actorId: outstandingIndividualId,
-      actorRole: 'OUTSTANDING_INDIVIDUAL',
-      metadata: {
-        documentId: savedDocument.id,
-        objectKey: savedDocument.objectKey,
-      },
-    });
-
-    return savedDocument;
-  }
-
-  async createInitialDraft(params: {
-    outstandingIndividualId: string;
-    dto?: Partial<CreateApplicationDraftDto>;
-  }) {
-    const { outstandingIndividualId, dto } = params;
-
-    const existingApplication = await this.applicationRepo.findOne({
-      where: { outstandingIndividualId },
-      order: { createdAt: 'DESC' },
-    });
-
-    if (existingApplication) {
-      return {
-        application: existingApplication,
-        currentStep: await this.stepRepo.findOne({
-          where: {
-            applicationId: existingApplication.id,
-            stepCode: AdmissionWorkflowStep.APPLICATION_SUBMISSION,
-          },
-        }),
-        submission: await this.submissionRepo.findOne({
-          where: {
-            applicationId: existingApplication.id,
-            stepCode: AdmissionWorkflowStep.APPLICATION_SUBMISSION,
-            isLatest: true,
-          },
-          order: { createdAt: 'DESC' },
-        }),
-      };
-    }
-
-    const application = this.applicationRepo.create({
-      outstandingIndividualId,
-      overallStatus: AdmissionOverallStatus.DRAFT,
-      currentStepCode: AdmissionWorkflowStep.APPLICATION_SUBMISSION,
-      currentStepStatus: AdmissionWorkflowStepStatus.DRAFT,
-      isLocked: false,
-      createdById: outstandingIndividualId,
-      updatedById: outstandingIndividualId,
-    });
-
-    const savedApplication = await this.applicationRepo.save(application);
-
-    const step = this.stepRepo.create({
-      applicationId: savedApplication.id,
-      stepCode: AdmissionWorkflowStep.DRAFT,
-      stepName: this.getStepName(AdmissionWorkflowStep.DRAFT),
-      stepOrder: 1,
-      status: AdmissionWorkflowStepStatus.DRAFT,
-      isLocked: false,
-      isCurrent: true,
-      isCompleted: false,
-      startedAt: new Date(),
-    });
-
-    const savedStep = await this.stepRepo.save(step);
-
-    const submission = this.submissionRepo.create({
-      applicationId: savedApplication.id,
-      stepId: savedStep.id,
-      stepCode: AdmissionWorkflowStep.APPLICATION_SUBMISSION,
-      version: 1,
-      status: AdmissionWorkflowStepStatus.DRAFT,
-      formData: {
-        reasonForJoining: dto?.reasonForJoining ?? '',
-        partyApplicationLetter: dto?.partyApplicationLetter ?? null,
-        personalBiography: dto?.personalBiography ?? null,
-        partyMemberRecommendation: dto?.partyMemberRecommendation ?? null,
-        youthUnionResolution: dto?.youthUnionResolution ?? null,
-        otherDocuments: dto?.otherDocuments ?? null,
-      },
-      submittedById: outstandingIndividualId,
-      isLatest: true,
-    });
-
-    const savedSubmission = await this.submissionRepo.save(submission);
-
-    await this.workflowLogService.createLog({
-      applicationId: savedApplication.id,
-      stepId: savedStep.id,
-      action: AdmissionLogAction.CREATE_APPLICATION_DRAFT,
-      toStatus: AdmissionWorkflowStepStatus.DRAFT,
-      toStepCode: AdmissionWorkflowStep.APPLICATION_SUBMISSION,
-      message: 'Tạo mới bản nháp đơn xin vào Đảng',
-      actorId: outstandingIndividualId,
-      actorRole: 'OUTSTANDING_INDIVIDUAL',
-      metadata: {
-        submissionId: savedSubmission.id,
-        autoCreated: true,
-      },
-    });
-
-    return {
-      application: savedApplication,
-      currentStep: savedStep,
-      submission: savedSubmission,
-    };
-  }
-
-  async getMyApplicationDetail(params: { outstandingIndividualId: string }) {
-    const { outstandingIndividualId } = params;
-
-    let application = await this.applicationRepo.findOne({
-      where: { outstandingIndividualId },
-      order: { createdAt: 'DESC' },
-    });
-
-    if (!application) {
-      const created = await this.createInitialDraft({
-        outstandingIndividualId,
+      // 🔥 chỉ lấy hồ sơ đang active
+      const existed = await applicationRepo.findOne({
+        where: {
+          outstandingIndividualId: userId,
+          overallStatus: In([
+            AdmissionOverallStatus.DRAFT,
+            AdmissionOverallStatus.IN_PROGRESS,
+            AdmissionOverallStatus.RETURNED,
+          ]),
+        },
+        order: {
+          createdAt: 'DESC',
+        },
       });
-      application = created.application;
-    }
 
-    const steps = await this.stepRepo.find({
-      where: { applicationId: application.id },
-      order: { stepOrder: 'ASC' },
+      if (existed) {
+        const steps = await stepRepo.find({
+          where: { applicationId: existed.id },
+          order: { stepOrder: 'ASC' },
+        });
+
+        return {
+          application: existed,
+          steps,
+          isNew: false,
+        };
+      }
+
+      // 1. tạo application
+      const application = applicationRepo.create({
+        code: this.generateApplicationCode(),
+        outstandingIndividualId: userId,
+        overallStatus: AdmissionOverallStatus.DRAFT,
+        currentStepCode: AdmissionWorkflowStep.APPLICATION,
+        currentStepStatus: AdmissionWorkflowStepStatus.IN_PROGRESS,
+        isLocked: false,
+      });
+
+      const savedApplication = await applicationRepo.save(application);
+
+      // 2. tạo steps
+      const stepsPayload: Partial<PartyAdmissionStepEntity>[] = [
+        {
+          applicationId: savedApplication.id,
+          stepCode: AdmissionWorkflowStep.APPLICATION,
+          stepName: 'Nộp hồ sơ',
+          stepOrder: 1,
+          status: AdmissionWorkflowStepStatus.IN_PROGRESS, // ✅ fix
+          isLocked: false,
+          isCurrent: true,
+          isCompleted: false,
+          startedAt: new Date(),
+          note: 'QCUT nộp hồ sơ xin kết nạp',
+        },
+        {
+          applicationId: savedApplication.id,
+          stepCode: AdmissionWorkflowStep.CHI_UY_REVIEW,
+          stepName: 'Chi uỷ kiểm tra',
+          stepOrder: 2,
+          status: AdmissionWorkflowStepStatus.NOT_STARTED,
+          isLocked: true,
+          isCurrent: false,
+          isCompleted: false,
+          note: 'Chi uỷ kiểm tra lỗi hồ sơ',
+        },
+        {
+          applicationId: savedApplication.id,
+          stepCode: AdmissionWorkflowStep.PBT_CONTENT_REVIEW,
+          stepName: 'PBT duyệt nội dung',
+          stepOrder: 3,
+          status: AdmissionWorkflowStepStatus.NOT_STARTED,
+          isLocked: true,
+          isCurrent: false,
+          isCompleted: false,
+          note: 'PBT duyệt nội dung hồ sơ',
+        },
+        {
+          applicationId: savedApplication.id,
+          stepCode: AdmissionWorkflowStep.LOCAL_VERIFICATION,
+          stepName: 'Xác minh lý lịch',
+          stepOrder: 4,
+          status: AdmissionWorkflowStepStatus.NOT_STARTED,
+          isLocked: true,
+          isCurrent: false,
+          isCompleted: false,
+          note: 'QCUT đi xác minh lý lịch tại địa phương',
+        },
+        {
+          applicationId: savedApplication.id,
+          stepCode: AdmissionWorkflowStep.RED_SEAL_CHECK,
+          stepName: 'Kiểm tra dấu đỏ',
+          stepOrder: 5,
+          status: AdmissionWorkflowStepStatus.NOT_STARTED,
+          isLocked: true,
+          isCurrent: false,
+          isCompleted: false,
+          note: 'PBT kiểm tra dấu đỏ và chốt',
+        },
+        {
+          applicationId: savedApplication.id,
+          stepCode: AdmissionWorkflowStep.RESOLUTION_DRAFTING,
+          stepName: 'Soạn nghị quyết',
+          stepOrder: 6,
+          status: AdmissionWorkflowStepStatus.NOT_STARTED,
+          isLocked: true,
+          isCurrent: false,
+          isCompleted: false,
+          note: 'Chi uỷ soạn Nghị quyết kết nạp',
+        },
+        {
+          applicationId: savedApplication.id,
+          stepCode: AdmissionWorkflowStep.SECRETARY_RESOLUTION_REVIEW,
+          stepName: 'Duyệt nghị quyết',
+          stepOrder: 7,
+          status: AdmissionWorkflowStepStatus.NOT_STARTED,
+          isLocked: true,
+          isCurrent: false,
+          isCompleted: false,
+          note: 'Bí thư duyệt Nghị quyết',
+        },
+      ];
+
+      const savedSteps = await stepRepo.save(
+        stepRepo.create(stepsPayload),
+      );
+
+      return {
+        application: savedApplication,
+        steps: savedSteps,
+        isNew: true,
+      };
     });
+  }
 
-    const submissions = await this.submissionRepo.find({
-      where: { applicationId: application.id },
-      order: { createdAt: 'DESC' },
-    });
-
-    const documents = await this.documentRepo.find({
-      where: { applicationId: application.id },
-      order: { createdAt: 'DESC' },
-    });
-
+  private mapReviewToResponse(
+    review: PartyAdmissionStepReviewEntity,
+  ): MyAdmissionStepReviewResponseDto {
     return {
-      application,
-      steps,
-      submissions,
-      documents,
+      id: review.id,
+      applicationId: review.applicationId,
+      stepId: review.stepId,
+      submissionId: review.submissionId,
+      action: review.action,
+      fromStatus: review.fromStatus,
+      toStatus: review.toStatus,
+      note: review.note,
+      reason: review.reason,
+      reviewerId: review.reviewerId,
+      processedAt: review.processedAt,
+      createdAt: (review as any).createdAt,
+      updatedAt: (review as any).updatedAt,
     };
   }
 
-  async updateApplicationDraft(params: {
-    applicationId: string;
-    outstandingIndividualId: string;
-    dto: UpdateApplicationDraftDto;
-  }) {
-    const { applicationId, outstandingIndividualId, dto } = params;
+  private mapSubmissionToResponse(
+    submission: PartyAdmissionStepSubmissionEntity,
+    reviews: PartyAdmissionStepReviewEntity[],
+  ): MyAdmissionStepSubmissionResponseDto {
+    const submissionReviews = reviews
+      .filter((review) => review.submissionId === submission.id)
+      .sort((a, b) => {
+        const aTime = a.processedAt
+          ? new Date(a.processedAt).getTime()
+          : (a as any).createdAt
+            ? new Date((a as any).createdAt).getTime()
+            : 0;
+        const bTime = b.processedAt
+          ? new Date(b.processedAt).getTime()
+          : (b as any).createdAt
+            ? new Date((b as any).createdAt).getTime()
+            : 0;
+        return bTime - aTime;
+      });
 
+    return {
+      id: submission.id,
+      applicationId: submission.applicationId,
+      stepId: submission.stepId,
+      stepCode: submission.stepCode,
+      version: submission.version,
+      formData: submission.formData,
+      note: submission.note,
+      submittedById: submission.submittedById,
+      submittedAt: submission.submittedAt,
+      isLatest: submission.isLatest,
+      createdAt: (submission as any).createdAt,
+      updatedAt: (submission as any).updatedAt,
+      reviews: submissionReviews.map((review) =>
+        this.mapReviewToResponse(review),
+      ),
+    };
+  }
+
+  private mapStepToResponse(
+    step: PartyAdmissionStepEntity,
+    submissions: PartyAdmissionStepSubmissionEntity[],
+    reviews: PartyAdmissionStepReviewEntity[],
+  ): MyAdmissionStepResponseDto {
+    const stepSubmissions = submissions
+      .filter((submission) => submission.stepId === step.id)
+      .sort((a, b) => {
+        if (a.version !== b.version) {
+          return b.version - a.version;
+        }
+
+        const aTime = a.submittedAt
+          ? new Date(a.submittedAt).getTime()
+          : (a as any).createdAt
+            ? new Date((a as any).createdAt).getTime()
+            : 0;
+        const bTime = b.submittedAt
+          ? new Date(b.submittedAt).getTime()
+          : (b as any).createdAt
+            ? new Date((b as any).createdAt).getTime()
+            : 0;
+        return bTime - aTime;
+      });
+
+    const stepReviews = reviews
+      .filter((review) => review.stepId === step.id)
+      .sort((a, b) => {
+        const aTime = a.processedAt
+          ? new Date(a.processedAt).getTime()
+          : (a as any).createdAt
+            ? new Date((a as any).createdAt).getTime()
+            : 0;
+        const bTime = b.processedAt
+          ? new Date(b.processedAt).getTime()
+          : (b as any).createdAt
+            ? new Date((b as any).createdAt).getTime()
+            : 0;
+        return bTime - aTime;
+      });
+
+    const latestSubmission =
+      stepSubmissions.find((submission) => submission.isLatest) ??
+      stepSubmissions[0] ??
+      null;
+
+    const latestReview = stepReviews[0] ?? null;
+
+    return {
+      id: step.id,
+      applicationId: step.applicationId,
+      stepCode: step.stepCode,
+      stepName: step.stepName,
+      stepOrder: step.stepOrder,
+      status: step.status,
+      isLocked: step.isLocked,
+      isCurrent: step.isCurrent,
+      isCompleted: step.isCompleted,
+      assignedToId: step.assignedToId,
+      processedById: step.processedById,
+      startedAt: step.startedAt,
+      submittedAt: step.submittedAt,
+      processedAt: step.processedAt,
+      completedAt: step.completedAt,
+      returnedAt: step.returnedAt,
+      note: step.note,
+      createdAt: (step as any).createdAt,
+      updatedAt: (step as any).updatedAt,
+      latestSubmission: latestSubmission
+        ? this.mapSubmissionToResponse(latestSubmission, stepReviews)
+        : null,
+      latestReview: latestReview
+        ? this.mapReviewToResponse(latestReview)
+        : null,
+      submissions: stepSubmissions.map((submission) =>
+        this.mapSubmissionToResponse(submission, stepReviews),
+      ),
+      reviews: stepReviews.map((review) => this.mapReviewToResponse(review)),
+    };
+  }
+
+  async getMyCurrentStatus(
+    outstandingIndividualId: string,
+  ): Promise<MyAdmissionCurrentStatusResponseDto> {
     const application = await this.applicationRepo.findOne({
       where: {
-        id: applicationId,
         outstandingIndividualId,
+      },
+      order: {
+        createdAt: 'DESC',
       },
     });
 
     if (!application) {
-      throw new NotFoundException('Không tìm thấy hồ sơ kết nạp');
-    }
-
-    if (
-      ![AdmissionOverallStatus.DRAFT, AdmissionOverallStatus.RETURNED].includes(
-        application.overallStatus,
-      )
-    ) {
-      throw new BadRequestException(
-        'Không thể chỉnh sửa hồ sơ sau khi đã gửi duyệt',
+      throw new NotFoundException(
+        'Không tìm thấy hồ sơ kết nạp của người dùng hiện tại',
       );
     }
 
-    const step = await this.stepRepo.findOne({
-      where: {
-        applicationId,
-        stepCode: AdmissionWorkflowStep.APPLICATION_SUBMISSION,
-      },
-    });
+    const [steps, submissions, reviews] = await Promise.all([
+      this.stepRepo.find({
+        where: {
+          applicationId: application.id,
+        },
+        order: {
+          stepOrder: 'ASC',
+        },
+      }),
+      this.submissionRepo.find({
+        where: {
+          applicationId: application.id,
+        },
+        order: {
+          version: 'DESC',
+        },
+      }),
+      this.reviewRepo.find({
+        where: {
+          applicationId: application.id,
+        },
+        order: {
+          processedAt: 'DESC',
+        },
+      }),
+    ]);
 
-    if (!step) {
-      throw new NotFoundException('Không tìm thấy bước nộp hồ sơ');
-    }
-
-    const submission = await this.submissionRepo.findOne({
-      where: {
-        applicationId,
-        stepId: step.id,
-        isLatest: true,
-      },
-      order: {
-        version: 'DESC',
-      },
-    });
-
-    if (!submission) {
-      throw new NotFoundException('Không tìm thấy bản nháp');
-    }
-
-    submission.formData = {
-      ...submission.formData,
-      reasonForJoining: dto.reasonForJoining ?? submission.formData?.reasonForJoining,
-      partyApplicationLetter: dto.partyApplicationLetter ?? submission.formData?.partyApplicationLetter,
-      personalBiography: dto.personalBiography ?? submission.formData?.personalBiography,
-      partyMemberRecommendation: dto.partyMemberRecommendation ?? submission.formData?.partyMemberRecommendation,
-      youthUnionResolution: dto.youthUnionResolution ?? submission.formData?.youthUnionResolution,
-      otherDocuments: dto.otherDocuments ?? submission.formData?.otherDocuments,
-    };
-
-    const savedSubmission = await this.submissionRepo.save(submission);
-
-    await this.workflowLogService.createLog({
-      applicationId,
-      stepId: step.id,
-      action: AdmissionLogAction.UPDATE_APPLICATION_DRAFT,
-      toStatus: step.status,
-      toStepCode: AdmissionWorkflowStep.APPLICATION_SUBMISSION,
-      message: 'Cập nhật bản nháp đơn xin vào Đảng',
-      actorId: outstandingIndividualId,
-      actorRole: 'OUTSTANDING_INDIVIDUAL',
-      metadata: {
-        submissionId: savedSubmission.id,
-      },
-    });
-
-    return savedSubmission;
-  }
-
-  async getApplicationDetail(params: {
-    applicationId: string;
-    userId: string;
-  }) {
-    const { applicationId, userId } = params;
-
-    const application = await this.applicationRepo.findOne({
-      where: { id: applicationId },
-    });
-
-    if (!application) {
-      throw new NotFoundException('Không tìm thấy hồ sơ kết nạp');
-    }
-
-    const steps = await this.stepRepo.find({
-      where: { applicationId: application.id },
-      order: { stepOrder: 'ASC' },
-    });
-
-    const submissions = await this.submissionRepo.find({
-      where: { applicationId: application.id },
-      order: { createdAt: 'DESC' },
-    });
-
-    const documents = await this.documentRepo.find({
-      where: { applicationId: application.id },
-      order: { createdAt: 'DESC' },
-    });
-
-    return {
-      application,
-      steps,
-      submissions,
-      documents,
-    };
-  }
-
-  async createDraft(params: {
-    outstandingIndividualId: string;
-    dto: Partial<CreateApplicationDraftDto>;
-  }) {
-    return await this.createInitialDraft(params);
-  }
-
-  async updateDraft(params: {
-    outstandingIndividualId: string;
-    dto: UpdateApplicationDraftDto;
-  }) {
-    const { outstandingIndividualId, dto } = params;
-
-    let application = await this.applicationRepo.findOne({
-      where: { outstandingIndividualId },
-      order: { createdAt: 'DESC' },
-    });
-
-    if (!application) {
-      throw new NotFoundException('Không tìm thấy hồ sơ kết nạp');
-    }
-
-    return await this.updateApplicationDraft({
-      applicationId: application.id,
-      outstandingIndividualId,
-      dto,
-    });
-  }
-
-  async submitApplicationByUser(params: {
-    outstandingIndividualId: string;
-    dto?: SubmitApplicationDto;
-  }) {
-    const { outstandingIndividualId, dto } = params;
-
-    let application = await this.applicationRepo.findOne({
-      where: { outstandingIndividualId },
-      order: { createdAt: 'DESC' },
-    });
-
-    if (!application) {
-      throw new NotFoundException('Không tìm thấy hồ sơ kết nạp');
-    }
-
-    await this.validateRequiredDocuments(application.id);
-
-    return await this.submitApplication({
-      applicationId: application.id,
-      outstandingIndividualId,
-      dto,
-    });
-  }
-
-  private async validateRequiredDocuments(applicationId: string): Promise<void> {
-    const REQUIRED_DOCUMENT_TYPES = [
-      AdmissionDocumentType.DON_XIN_VAO_DANG,
-      AdmissionDocumentType.LY_LICH_NGUOI_XIN_VAO_DANG,
-      AdmissionDocumentType.GIAY_GIOI_THIEU_DANG_VIEN_1,
-      AdmissionDocumentType.GIAY_GIOI_THIEU_DANG_VIEN_2,
-      AdmissionDocumentType.NGHI_QUYET_CHI_DOAN,
-    ];
-
-    const documents = await this.documentRepo.find({
-      where: {
-        applicationId,
-        isLatest: true,
-      },
-    });
-
-    const uploadedTypes = new Set(
-      documents.map((doc) => doc.documentType),
+    const mappedSteps = steps.map((step) =>
+      this.mapStepToResponse(step, submissions, reviews),
     );
 
-    const missingDocuments: string[] = [];
+    const currentStep =
+      mappedSteps.find((step) => step.isCurrent) ||
+      mappedSteps.find(
+        (step) => step.stepCode === application.currentStepCode,
+      ) ||
+      null;
 
-    for (const docType of REQUIRED_DOCUMENT_TYPES) {
-      if (!uploadedTypes.has(docType)) {
-        const docName = this.getDocumentTypeName(docType);
-        missingDocuments.push(docName);
-      }
+    return {
+      applicationId: application.id,
+      code: application.code,
+      outstandingIndividualId: application.outstandingIndividualId,
+      overallStatus: application.overallStatus,
+      currentStepCode: application.currentStepCode,
+      currentStepStatus: application.currentStepStatus,
+      isLocked: application.isLocked,
+      createdAt: application.createdAt,
+      currentStep,
+      steps: mappedSteps,
+    };
+  }
+
+  async getMyCurrentStatusWithRoleCheck(user: {
+    id: string;
+    role?: { name?: string } | string;
+    roleName?: string;
+  }): Promise<MyAdmissionCurrentStatusResponseDto> {
+    const roleName =
+      user.roleName ||
+      (typeof user.role === 'string' ? user.role : user.role?.name);
+
+    if (
+      roleName &&
+      roleName !== 'OUTSTANDING_INDIVIDUAL' &&
+      roleName !== 'QCUT'
+    ) {
+      throw new ForbiddenException(
+        'Chỉ QCUT / OUTSTANDING_INDIVIDUAL mới được truy cập API này',
+      );
     }
 
-    if (missingDocuments.length > 0) {
-      throw new BadRequestException(
-        `Hồ sơ chưa đầy đủ. Vui lòng bổ sung các giấy tờ sau: ${missingDocuments.join(', ')}`,
+    return this.getMyCurrentStatus(user.id);
+  }
+
+  private getRoleName(user: {
+    role?: { name?: string } | string;
+    roleName?: string;
+  }): string | undefined {
+    return (
+      user.roleName ||
+      (typeof user.role === 'string' ? user.role : user.role?.name)
+    );
+  }
+
+  private validateQcutRole(user: {
+    id: string;
+    role?: { name?: string } | string;
+    roleName?: string;
+  }) {
+    const roleName = this.getRoleName(user);
+
+    if (
+      roleName &&
+      roleName !== 'OUTSTANDING_INDIVIDUAL' &&
+      roleName !== 'QCUT'
+    ) {
+      throw new ForbiddenException(
+        'Chỉ QCUT / OUTSTANDING_INDIVIDUAL mới được thao tác API này',
       );
     }
   }
 
-  private getDocumentTypeName(docType: AdmissionDocumentType): string {
-    switch (docType) {
-      case AdmissionDocumentType.DON_XIN_VAO_DANG:
-        return 'Đơn xin vào Đảng';
-      case AdmissionDocumentType.LY_LICH_NGUOI_XIN_VAO_DANG:
-        return 'Lý lịch của người xin vào Đảng';
-      case AdmissionDocumentType.GIAY_GIOI_THIEU_DANG_VIEN_1:
-        return 'Giấy giới thiệu của đảng viên chính thức (người 1)';
-      case AdmissionDocumentType.GIAY_GIOI_THIEU_DANG_VIEN_2:
-        return 'Giấy giới thiệu của đảng viên chính thức (người 2)';
-      case AdmissionDocumentType.NGHI_QUYET_CHI_DOAN:
-        return 'Nghị quyết giới thiệu đoàn viên của Chi đoàn';
-      case AdmissionDocumentType.LY_LICH:
-        return 'Lý lịch';
-      case AdmissionDocumentType.XAC_MINH_DIA_PHUONG:
-        return 'Xác minh địa phương';
-      case AdmissionDocumentType.NGHI_QUYET_KET_NAP_DU_THAO:
-        return 'Nghị quyết kết nạp dự thảo';
-      case AdmissionDocumentType.OTHER:
-        return 'Giấy tờ khác';
-      default:
-        return docType;
+  private validateApplicationEditable(
+    application: PartyAdmissionApplicationEntity,
+  ) {
+    const blockedStatuses: AdmissionOverallStatus[] = [
+      AdmissionOverallStatus.APPROVED,
+      AdmissionOverallStatus.REJECTED,
+      AdmissionOverallStatus.CANCELLED,
+    ];
+
+    if (blockedStatuses.includes(application.overallStatus)) {
+      throw new BadRequestException(
+        `Hồ sơ đang ở trạng thái ${application.overallStatus}, không thể chỉnh sửa`,
+      );
     }
   }
 
-  async submitApplication(params: {
-    applicationId: string;
-    outstandingIndividualId: string;
-    dto?: SubmitApplicationDto;
-  }) {
-    const { applicationId, outstandingIndividualId, dto } = params;
+  private validateStepEditableForDraft(step: PartyAdmissionStepEntity) {
+    if (!step.isCurrent) {
+      throw new BadRequestException(
+        'Chỉ được thao tác trên bước hiện tại của hồ sơ',
+      );
+    }
 
+    if (step.isCompleted) {
+      throw new BadRequestException('Bước này đã hoàn thành');
+    }
+
+    const allowedStatuses: AdmissionWorkflowStepStatus[] = [
+      AdmissionWorkflowStepStatus.NOT_STARTED,
+      AdmissionWorkflowStepStatus.RETURNED,
+      AdmissionWorkflowStepStatus.IN_PROGRESS,
+    ];
+
+    if (!allowedStatuses.includes(step.status)) {
+      throw new BadRequestException(
+        `Bước hiện tại đang ở trạng thái ${step.status}, không thể lưu draft`,
+      );
+    }
+  }
+
+  private validateStepEditableForSubmit(step: PartyAdmissionStepEntity) {
+    if (!step.isCurrent) {
+      throw new BadRequestException(
+        'Chỉ được submit bước hiện tại của hồ sơ',
+      );
+    }
+
+    if (step.isCompleted) {
+      throw new BadRequestException('Bước này đã hoàn thành');
+    }
+
+    const allowedStatuses: AdmissionWorkflowStepStatus[] = [
+      AdmissionWorkflowStepStatus.NOT_STARTED,
+      AdmissionWorkflowStepStatus.RETURNED,
+      AdmissionWorkflowStepStatus.IN_PROGRESS,
+    ];
+
+    if (!allowedStatuses.includes(step.status)) {
+      throw new BadRequestException(
+        `Bước hiện tại đang ở trạng thái ${step.status}, không thể submit`,
+      );
+    }
+  }
+
+  private validateLatestSubmissionForDraft(
+    latestSubmission?: PartyAdmissionStepSubmissionEntity | null,
+  ) {
+    if (!latestSubmission) return;
+
+    const blockedStatuses: AdmissionSubmissionStatus[] = [
+      AdmissionSubmissionStatus.PENDING,
+      AdmissionSubmissionStatus.APPROVED,
+      AdmissionSubmissionStatus.REJECTED,
+    ];
+
+    if (blockedStatuses.includes(latestSubmission.stepSubmissionStatus)) {
+      throw new BadRequestException(
+        `Submission mới nhất đang ở trạng thái ${latestSubmission.status}, không thể lưu draft`,
+      );
+    }
+  }
+
+  private validateLatestSubmissionForSubmit(
+    latestSubmission?: PartyAdmissionStepSubmissionEntity | null,
+  ) {
+    if (!latestSubmission) return;
+
+    const blockedStatuses: AdmissionSubmissionStatus[] = [
+      AdmissionSubmissionStatus.PENDING,
+      AdmissionSubmissionStatus.APPROVED,
+      AdmissionSubmissionStatus.REJECTED,
+    ];
+
+    if (blockedStatuses.includes(latestSubmission.status)) {
+      throw new BadRequestException(
+        `Submission mới nhất đang ở trạng thái ${latestSubmission.status}, không thể submit`,
+      );
+    }
+  }
+
+  private async getMyApplicationOrFail(userId: string) {
     const application = await this.applicationRepo.findOne({
-      where: {
-        id: applicationId,
-        outstandingIndividualId,
-      },
+      where: { outstandingIndividualId: userId },
+      order: { createdAt: 'DESC' },
     });
 
     if (!application) {
-      throw new NotFoundException('Không tìm thấy hồ sơ kết nạp');
+      throw new NotFoundException(
+        'Không tìm thấy hồ sơ kết nạp của người dùng hiện tại',
+      );
     }
 
-    if (
-      ![AdmissionOverallStatus.DRAFT, AdmissionOverallStatus.RETURNED].includes(
-        application.overallStatus,
-      )
-    ) {
-      throw new BadRequestException('Đơn đã được gửi trước đó');
-    }
+    return application;
+  }
 
+  private async getMyStepOrFail(
+    applicationId: string,
+    stepCode: AdmissionWorkflowStep,
+  ) {
     const step = await this.stepRepo.findOne({
       where: {
         applicationId,
+        stepCode,
       },
     });
 
     if (!step) {
-      throw new NotFoundException('Không tìm thấy bước nộp hồ sơ');
+      throw new NotFoundException('Không tìm thấy bước xử lý');
     }
 
-    if (
-      ![AdmissionWorkflowStepStatus.DRAFT, AdmissionWorkflowStepStatus.RETURNED].includes(
-        step.status,
-      )
-    ) {
-      throw new BadRequestException('Bước hiện tại không thể nộp đơn');
-    }
+    return step;
+  }
 
-    const latestSubmission = await this.submissionRepo.findOne({
+  private async getLatestSubmission(
+    applicationId: string,
+    stepId: string,
+  ): Promise<PartyAdmissionStepSubmissionEntity | null> {
+    return this.submissionRepo.findOne({
       where: {
         applicationId,
-        stepId: step.id,
+        stepId,
         isLatest: true,
       },
       order: {
         version: 'DESC',
       },
     });
+  }
 
-    if (!latestSubmission) {
-      throw new BadRequestException('Chưa có nội dung đơn để nộp');
+  private async getMaxVersion(
+    applicationId: string,
+    stepId: string,
+  ): Promise<number> {
+    const latest = await this.submissionRepo.findOne({
+      where: {
+        applicationId,
+        stepId,
+      },
+      order: {
+        version: 'DESC',
+      },
+    });
+
+    return latest?.version ?? 0;
+  }
+
+  async saveDraftStep(
+    user: {
+      id: string;
+      role?: { name?: string } | string;
+      roleName?: string;
+    },
+    stepCode: AdmissionWorkflowStep,
+    dto: SaveStepDraftDto,
+  ): Promise<PartyAdmissionStepSubmissionEntity> {
+    this.validateQcutRole(user);
+
+    const application = await this.getMyApplicationOrFail(user.id);
+    this.validateApplicationEditable(application);
+
+    const step = await this.getMyStepOrFail(application.id, stepCode);
+    this.validateStepEditableForDraft(step);
+
+    const latestSubmission = await this.getLatestSubmission(
+      application.id,
+      step.id,
+    );
+    this.validateLatestSubmissionForDraft(latestSubmission);
+
+    let draftSubmission: PartyAdmissionStepSubmissionEntity;
+
+    if (
+      latestSubmission &&
+      latestSubmission.status === AdmissionSubmissionStatus.DRAFT
+    ) {
+      draftSubmission = latestSubmission;
+      draftSubmission.formData = dto.formData ?? draftSubmission.formData;
+      draftSubmission.note = dto.note ?? draftSubmission.note;
+      draftSubmission.submittedById = user.id;
+      draftSubmission.lastSavedAt = new Date();
+    } else {
+      if (latestSubmission?.isLatest) {
+        latestSubmission.isLatest = false;
+        await this.submissionRepo.save(latestSubmission);
+      }
+
+      const nextVersion = (await this.getMaxVersion(application.id, step.id)) + 1;
+
+      draftSubmission = this.submissionRepo.create({
+        applicationId: application.id,
+        stepId: step.id,
+        stepCode: step.stepCode,
+        version: nextVersion,
+        status: AdmissionSubmissionStatus.DRAFT,
+        formData: dto.formData,
+        note: dto.note,
+        submittedById: user.id,
+        isLatest: true,
+        lastSavedAt: new Date(),
+      });
     }
 
-    const mergedReason =
-      dto?.reasonForJoining ??
-      String(latestSubmission.formData?.reasonForJoining ?? '').trim();
+    const savedDraft = await this.submissionRepo.save(draftSubmission);
 
-    if (!mergedReason) {
-      throw new BadRequestException('Lý do xin vào Đảng không được để trống');
+    if (
+      step.status === AdmissionWorkflowStepStatus.NOT_STARTED ||
+      step.status === AdmissionWorkflowStepStatus.RETURNED
+    ) {
+      step.status = AdmissionWorkflowStepStatus.DRAFT;
     }
 
-    latestSubmission.formData = {
-      ...latestSubmission.formData,
-      ...(dto?.reasonForJoining !== undefined
-        ? { reasonForJoining: dto.reasonForJoining }
-        : {}),
-      ...(dto?.note !== undefined ? { note: dto.note } : {}),
-    };
+    if (!step.startedAt) {
+      step.startedAt = new Date();
+    }
 
-    latestSubmission.status = AdmissionWorkflowStepStatus.PENDING;
-    latestSubmission.submittedById = outstandingIndividualId;
-    latestSubmission.submittedAt = new Date();
+    step.isLocked = false;
+    await this.stepRepo.save(step);
 
-    const savedSubmission = await this.submissionRepo.save(latestSubmission);
+    if (application.overallStatus === AdmissionOverallStatus.DRAFT) {
+      application.overallStatus = AdmissionOverallStatus.IN_PROGRESS;
+      application.currentStepStatus = step.status;
+      await this.applicationRepo.save(application);
+    }
+
+    return savedDraft;
+  }
+
+  async submitStep(
+    user: {
+      id: string;
+      role?: { name?: string } | string;
+      roleName?: string;
+    },
+    stepCode: AdmissionWorkflowStep,
+    dto: SubmitStepDto,
+  ): Promise<PartyAdmissionStepSubmissionEntity> {
+    this.validateQcutRole(user);
+
+    const application = await this.getMyApplicationOrFail(user.id);
+    this.validateApplicationEditable(application);
+
+    const step = await this.getMyStepOrFail(application.id, stepCode);
+    this.validateStepEditableForSubmit(step);
+
+    const latestSubmission = await this.getLatestSubmission(
+      application.id,
+      step.id,
+    );
+    this.validateLatestSubmissionForSubmit(latestSubmission);
+
+    let submissionToSubmit: PartyAdmissionStepSubmissionEntity;
+
+    if (
+      latestSubmission &&
+      latestSubmission.status === AdmissionSubmissionStatus.DRAFT
+    ) {
+      submissionToSubmit = latestSubmission;
+      submissionToSubmit.formData = dto.formData ?? submissionToSubmit.formData;
+      submissionToSubmit.note = dto.note ?? submissionToSubmit.note;
+    } else {
+      if (latestSubmission?.isLatest) {
+        latestSubmission.isLatest = false;
+        await this.submissionRepo.save(latestSubmission);
+      }
+
+      const nextVersion = (await this.getMaxVersion(application.id, step.id)) + 1;
+
+      submissionToSubmit = this.submissionRepo.create({
+        applicationId: application.id,
+        stepId: step.id,
+        stepCode: step.stepCode,
+        version: nextVersion,
+        formData: dto.formData,
+        note: dto.note,
+        submittedById: user.id,
+        isLatest: true,
+      });
+    }
+
+    if (!submissionToSubmit.formData) {
+      throw new BadRequestException('Không có dữ liệu để submit');
+    }
+
+    submissionToSubmit.status = AdmissionSubmissionStatus.PENDING;
+    submissionToSubmit.submittedById = user.id;
+    submissionToSubmit.submittedAt = new Date();
+
+    const savedSubmission = await this.submissionRepo.save(submissionToSubmit);
 
     step.status = AdmissionWorkflowStepStatus.PENDING;
     step.submittedAt = new Date();
-    step.isCurrent = true;
+    step.isLocked = true;
+    if (!step.startedAt) {
+      step.startedAt = new Date();
+    }
     await this.stepRepo.save(step);
 
     application.overallStatus = AdmissionOverallStatus.IN_PROGRESS;
-    application.currentStepCode = AdmissionWorkflowStep.DRAFT;
+    application.currentStepCode = step.stepCode;
     application.currentStepStatus = AdmissionWorkflowStepStatus.PENDING;
-    application.submittedAt = new Date();
-    application.updatedById = outstandingIndividualId;
     await this.applicationRepo.save(application);
 
-    await this.workflowLogService.createLog({
-      applicationId,
-      stepId: step.id,
-      action: AdmissionLogAction.SUBMIT_APPLICATION,
-      toStatus: AdmissionWorkflowStepStatus.PENDING,
-      toStepCode: AdmissionWorkflowStep.APPLICATION_SUBMISSION,
-      message: 'Nộp đơn xin vào Đảng thành công, chờ Chi uỷ duyệt',
-      actorId: outstandingIndividualId,
-      actorRole: 'OUTSTANDING_INDIVIDUAL',
-      metadata: {
-        submissionId: savedSubmission.id,
-      },
-    });
-
-    return {
-      message: 'Đơn đã được gửi thành công. Vui lòng chờ Chi uỷ xác nhận.',
-      application,
-      currentStep: step,
-      submission: savedSubmission,
-    };
+    return savedSubmission;
   }
 }

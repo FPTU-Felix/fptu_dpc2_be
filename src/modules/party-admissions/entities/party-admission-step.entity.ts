@@ -3,12 +3,21 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   Unique,
-  UpdateDateColumn,
 } from 'typeorm';
 import { AdmissionWorkflowStep } from '../enum/admission-workflow-step.enum';
 import { AdmissionWorkflowStepStatus } from '../enum/admission-workflow-step-status.enum';
+import { PartyAdmissionApplicationEntity } from './party-admission-application.entity';
+import { PartyAdmissionStepSubmissionEntity } from './party-admission-step-submission.entity';
+import { PartyAdmissionStepReviewEntity } from './party-admission-step-review.entity';
+import { PartyAdmissionDocumentEntity } from './party-admission-document.entity';
+import { PartyAdmissionWorkflowLogEntity } from './party-admission-workflow-log.entity';
+import { BaseEntity } from 'src/common/base.entity';
+
 @Entity('party_admission_steps')
 @Unique('uq_party_admission_steps_application_step_code', [
   'applicationId',
@@ -16,12 +25,23 @@ import { AdmissionWorkflowStepStatus } from '../enum/admission-workflow-step-sta
 ])
 @Index('idx_party_admission_steps_application_id', ['applicationId'])
 @Index('idx_party_admission_steps_status', ['status'])
+@Index('idx_party_admission_steps_is_current', ['isCurrent'])
 export class PartyAdmissionStepEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'uuid' })
   applicationId: string;
+
+  @ManyToOne(
+    () => PartyAdmissionApplicationEntity,
+    (application) => application.steps,
+    {
+      onDelete: 'CASCADE',
+    },
+  )
+  @JoinColumn({ name: 'applicationId' })
+  application: PartyAdmissionApplicationEntity;
 
   @Column({
     type: 'enum',
@@ -38,7 +58,7 @@ export class PartyAdmissionStepEntity {
   @Column({
     type: 'enum',
     enum: AdmissionWorkflowStepStatus,
-    default: AdmissionWorkflowStepStatus.IN_PROGRESS,
+    default: AdmissionWorkflowStepStatus.NOT_STARTED,
   })
   status: AdmissionWorkflowStepStatus;
 
@@ -72,24 +92,27 @@ export class PartyAdmissionStepEntity {
   @Column({ type: 'timestamp', nullable: true })
   returnedAt?: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
-  rejectedAt?: Date;
-
   @Column({ type: 'text', nullable: true })
   note?: string;
 
-  @Column({ type: 'text', nullable: true })
-  resultNote?: string;
+  @OneToMany(
+    () => PartyAdmissionStepSubmissionEntity,
+    (submission) => submission.applicationId,
+  )
+  submissions: PartyAdmissionStepSubmissionEntity[];
 
-  @Column({ type: 'text', nullable: true })
-  returnReason?: string;
+  @OneToMany(
+    () => PartyAdmissionStepReviewEntity,
+    (review) => review.applicationId,
+  )
+  reviews: PartyAdmissionStepReviewEntity[];
 
-  @Column({ type: 'text', nullable: true })
-  rejectionReason?: string;
+  @OneToMany(
+    () => PartyAdmissionDocumentEntity,
+    (document) => document.applicationId,
+  )
+  documents: PartyAdmissionDocumentEntity[];
 
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
+  @OneToMany(() => PartyAdmissionWorkflowLogEntity, (log) => log.applicationId)
+  workflowLogs: PartyAdmissionWorkflowLogEntity[];
 }

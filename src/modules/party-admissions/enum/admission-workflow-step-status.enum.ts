@@ -1,9 +1,8 @@
+// day la trang thai cua moi step, tra loi rieng cau hoi : rieng buoc nay hien nay ra sao 
 export enum AdmissionWorkflowStepStatus {
-    NOT_STARTED = "NOT_STARTED",   // chưa mở (bị lock)
-    DRAFT = "DRAFT",               // đang soạn (áp dụng cho QCUT)
-    PENDING = "PENDING",           // đã gửi, chờ người tiếp theo xử lý
-    IN_PROGRESS = "IN_PROGRESS",   // đang được xử lý bởi người có trách nhiệm
-    COMPLETED = "COMPLETED",       // bước đã hoàn thành
-    RETURNED = "RETURNED",         // bị trả lại để bổ sung/chỉnh sửa
-    REJECTED = "REJECTED",         // bị từ chối ở bước này (dừng flow)
-  }
+  NOT_STARTED = "NOT_STARTED",   // chua toi luot o buoc nay
+  IN_PROGRESS = "IN_PROGRESS",   // dang la buoc active hien tai
+  COMPLETED = "COMPLETED",       // buoc nay da xong
+  RETURNED = "RETURNED",         // buoc nay da tra lai ho so
+  REJECTED = "REJECTED",         // buoc nay da tu choi ho so
+}

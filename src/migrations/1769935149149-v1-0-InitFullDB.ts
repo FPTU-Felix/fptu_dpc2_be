@@ -159,36 +159,40 @@ export class V10InitFullDB1769935149149 implements MigrationInterface {
       `ALTER TABLE "handbook_links" ADD CONSTRAINT "FK_08ca89b7c2d7ed362f8cbc46cbc" FOREIGN KEY ("handbook_id") REFERENCES "handbooks"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
 
+    // admin - admin123
     await queryRunner.query(`
-  INSERT INTO "roles" ("id", "name", "description")
-  VALUES (uuid_generate_v4(), 'ADMIN', 'Administrator')
-  ON CONFLICT ("name") DO NOTHING;
-`);
+      INSERT INTO "roles" ("id", "name", "description")
+      VALUES
+        ('ea9be120-91f4-4430-a0ec-667e54bd1d7a', 'SECRETARY', 'SECRETARY'),
+        ('eee09c6c-460c-43ac-bbd8-c741d6c76aac', 'DEPUTY_SECRETARY', 'DEPUTY_SECRETARY'),
+        ('e6bafbfc-a3a9-4f7f-90da-903850d059e9', 'COMMITTEE_MEMBER', 'COMMITTEE_MEMBER'),
+        ('8a903c66-9057-4125-855a-7e90125a2e6f', 'PARTY_MEMBER', 'PARTY_MEMBER'),
+        ('d1b0aa74-08d4-47a2-b917-a283561b8fdb', 'OUTSTANDING_INDIVIDUAL', 'OUTSTANDING_INDIVIDUAL'),
+        (uuid_generate_v4(), 'ADMIN', 'Administrator')
+      ON CONFLICT ("name") DO NOTHING;
+    `);
 
-    // 2. Insert admin user, mat khau mac dinh cua admin la admin - admin123
     await queryRunner.query(`
-  INSERT INTO "users" (
-    "id",
-    "username",
-    "password",
-    "email",
-    "role_id",
-    "is_active",
-    "isFirstLogin"
-  )
-  VALUES (
-    uuid_generate_v4(),
-    'admin',
-    '$2b$10$mnM.PpW0d9rfbjGhfsDp.OJak6l8gvOt3rKDsaV9dMXne6ani/Yli', 
-    'admin@gmail.com',
-    (SELECT id FROM roles WHERE name = 'ADMIN' LIMIT 1),
-    true,
-    false
-  )
-  ON CONFLICT ("username") DO NOTHING;
-`);
-
-
+      INSERT INTO "users" (
+        "id",
+        "username",
+        "password",
+        "email",
+        "role_id",
+        "is_active",
+        "isFirstLogin"
+      )
+      VALUES (
+        uuid_generate_v4(),
+        'admin',
+        '$2b$10$mnM.PpW0d9rfbjGhfsDp.OJak6l8gvOt3rKDsaV9dMXne6ani/Yli',
+        'admin@gmail.com',
+        (SELECT id FROM "roles" WHERE "name" = 'ADMIN' LIMIT 1),
+        true,
+        false
+      )
+      ON CONFLICT ("username") DO NOTHING;
+    `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

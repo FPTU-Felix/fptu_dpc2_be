@@ -3,13 +3,22 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { AdmissionWorkflowStep } from '../enum/admission-workflow-step.enum';
-import { AdmissionWorkflowStepStatus } from '../enum/admission-workflow-step-status.enum';
+import { PartyAdmissionApplicationEntity } from './party-admission-application.entity';
+import { PartyAdmissionStepEntity } from './party-admission-step.entity';
+import { PartyAdmissionDocumentEntity } from './party-admission-document.entity';
+import { PartyAdmissionStepReviewEntity } from './party-admission-step-review.entity';
+
 @Entity('party_admission_step_submissions')
 @Index('idx_party_admission_step_submissions_application_id', ['applicationId'])
 @Index('idx_party_admission_step_submissions_step_id', ['stepId'])
+@Index('idx_party_admission_step_submissions_is_latest', ['isLatest'])
 export class PartyAdmissionStepSubmissionEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -17,8 +26,20 @@ export class PartyAdmissionStepSubmissionEntity {
   @Column({ type: 'uuid' })
   applicationId: string;
 
+  @ManyToOne(() => PartyAdmissionApplicationEntity, (application) => application.submissions, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'applicationId' })
+  application: PartyAdmissionApplicationEntity;
+
   @Column({ type: 'uuid' })
   stepId: string;
+
+  @ManyToOne(() => PartyAdmissionStepEntity, (step) => step.submissions, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'stepId' })
+  step: PartyAdmissionStepEntity;
 
   @Column({
     type: 'enum',
@@ -28,13 +49,6 @@ export class PartyAdmissionStepSubmissionEntity {
 
   @Column({ type: 'int', default: 1 })
   version: number;
-
-  @Column({
-    type: 'enum',
-    enum: AdmissionWorkflowStepStatus,
-    default: AdmissionWorkflowStepStatus.PENDING,
-  })
-  status: AdmissionWorkflowStepStatus;
 
   @Column({ type: 'jsonb', nullable: true })
   formData?: Record<string, any>;
@@ -51,6 +65,15 @@ export class PartyAdmissionStepSubmissionEntity {
   @Column({ type: 'boolean', default: true })
   isLatest: boolean;
 
+  @OneToMany(() => PartyAdmissionDocumentEntity, (document) => document.submission)
+  documents: PartyAdmissionDocumentEntity[];
+
+  @OneToMany(() => PartyAdmissionStepReviewEntity, (review) => review.submission)
+  reviews: PartyAdmissionStepReviewEntity[];
+
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

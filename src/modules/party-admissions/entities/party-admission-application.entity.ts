@@ -3,13 +3,21 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { AdmissionOverallStatus } from '../enum/admission-overall-status';
 import { AdmissionWorkflowStep } from '../enum/admission-workflow-step.enum';
 import { AdmissionWorkflowStepStatus } from '../enum/admission-workflow-step-status.enum';
+import { PartyAdmissionStepEntity } from './party-admission-step.entity';
+import { PartyAdmissionStepSubmissionEntity } from './party-admission-step-submission.entity';
+import { PartyAdmissionStepReviewEntity } from './party-admission-step-review.entity';
+import { PartyAdmissionDocumentEntity } from './party-admission-document.entity';
+import { PartyAdmissionWorkflowLogEntity } from './party-admission-workflow-log.entity';
+import { AdmissionOverallStatus } from '../enum/admission-overall-status';
+
 @Entity('party_admission_applications')
+@Index('idx_party_admission_applications_code', ['code'], { unique: true })
 @Index('idx_party_admission_applications_outstanding_individual_id', [
   'outstandingIndividualId',
 ])
@@ -17,9 +25,16 @@ import { AdmissionWorkflowStepStatus } from '../enum/admission-workflow-step-sta
 @Index('idx_party_admission_applications_current_step_code', [
   'currentStepCode',
 ])
+@Index('idx_party_admission_applications_overall_status_current_step_code', [
+  'overallStatus',
+  'currentStepCode',
+])
 export class PartyAdmissionApplicationEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ type: 'varchar', length: 50, unique: true })
+  code: string;
 
   @Column({ type: 'uuid' })
   outstandingIndividualId: string;
@@ -34,7 +49,7 @@ export class PartyAdmissionApplicationEntity {
   @Column({
     type: 'enum',
     enum: AdmissionWorkflowStep,
-    default: AdmissionWorkflowStep.DRAFT,
+    default: AdmissionWorkflowStep.APPLICATION,
   })
   currentStepCode: AdmissionWorkflowStep;
 
@@ -48,27 +63,31 @@ export class PartyAdmissionApplicationEntity {
   @Column({ type: 'boolean', default: false })
   isLocked: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
-  submittedAt?: Date;
+  @OneToMany(() => PartyAdmissionStepEntity, (step) => step.application)
+  steps: PartyAdmissionStepEntity[];
 
-  @Column({ type: 'timestamp', nullable: true })
-  admittedAt?: Date;
+  @OneToMany(
+    () => PartyAdmissionStepSubmissionEntity,
+    (submission) => submission.applicationId,
+  )
+  submissions: PartyAdmissionStepSubmissionEntity[];
 
-  @Column({ type: 'timestamp', nullable: true })
-  rejectedAt?: Date;
+  @OneToMany(
+    () => PartyAdmissionStepReviewEntity,
+    (review) => review.applicationId,
+  )
+  reviews: PartyAdmissionStepReviewEntity[];
 
-  @Column({ type: 'text', nullable: true })
-  latestReturnReason?: string;
+  @OneToMany(
+    () => PartyAdmissionDocumentEntity,
+    (document) => document.applicationId,
+  )
+  documents: PartyAdmissionDocumentEntity[];
 
-  @Column({ type: 'uuid', nullable: true })
-  createdById?: string;
+  @OneToMany(() => PartyAdmissionWorkflowLogEntity, (log) => log.applicationId)
+  workflowLogs: PartyAdmissionWorkflowLogEntity[];
 
-  @Column({ type: 'uuid', nullable: true })
-  updatedById?: string;
 
   @CreateDateColumn()
   createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
 }

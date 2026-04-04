@@ -23,6 +23,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { PartyCell } from '../party-cells/entities/party-cell.entity';
+import { AdmissionApplicationService } from '../party-admissions/services/admission-application.service';
 
 @Injectable()
 export class UsersService extends BaseService<User> {
@@ -35,6 +36,8 @@ export class UsersService extends BaseService<User> {
     private dataSource: DataSource,
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
+
+    private readonly admissionApplicationService: AdmissionApplicationService,
   ) {
     super(usersRepository);
   }
@@ -127,6 +130,10 @@ export class UsersService extends BaseService<User> {
       isFirstLogin: true,
     });
     const savedUser = await this.usersRepository.save(user);
+
+    if (role.name === 'OUTSTANDING_INDIVIDUAL') {
+      await this.admissionApplicationService.initAdmissionForQCUT(user.id);
+    }
 
     // 4. Gửi Email
     try {
