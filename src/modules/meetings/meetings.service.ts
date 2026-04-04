@@ -277,17 +277,26 @@ export class MeetingsService {
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
     });
+
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+
     const currentState = !!meeting.isCheckinActive;
     const newState = !currentState;
 
     meeting.isCheckinActive = newState;
+    if (newState === true && meeting.status !== MeetingStatus.HAPPENING) {
+      meeting.startTime = new Date();
+      meeting.status = MeetingStatus.HAPPENING;
+    }
+
     await this.meetingRepo.save(meeting);
 
     return {
       message: newState ? 'Đã MỞ phiên điểm danh' : 'Đã ĐÓNG phiên điểm danh',
       meetingId,
       isCheckinActive: newState,
+      // Trả về thêm startTime để FE biết (nếu cần)
+      actualStartTime: meeting.startTime,
     };
   }
 
@@ -688,43 +697,63 @@ export class MeetingsService {
 
   // API Heartbeat (FE gọi LẶP LẠI mỗi 60s)
   async recordHeartbeat(meetingId: string, userId: string, currentUrl: string) {
+    // 1. Kiểm tra cuộc họp
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
     });
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+
     if (meeting.format !== MeetingFormat.ONLINE) {
       throw new BadRequestException(
         'API này chỉ dành cho họp trực tuyến (ONLINE)!',
       );
     }
+
+    // 2. Kiểm tra hồ sơ Đảng viên
     const member = await this.partyMemberRepo.findOne({
       where: { userId: userId },
     });
-    if (!member)
+    if (!member) {
       throw new ForbiddenException(
         'Tài khoản chưa được liên kết hồ sơ Đảng viên',
       );
+    }
     const memberId = member.id;
-    if (!meeting.isCheckinActive)
+
+    if (!meeting.isCheckinActive) {
       return { success: false, message: 'Bỏ qua (Meeting đóng)' };
+    }
+
     this.validateMeetUrl(meeting.onlineLink, currentUrl);
+
     const attendee = await this.attendeeRepo.findOne({
       where: { meetingId, memberId },
     });
-    if (!attendee)
+    if (!attendee) {
       throw new BadRequestException('Vui lòng gọi API Check-in trước!');
-
-    const now = new Date();
-    const timeSinceLastPingMs = now.getTime() - attendee.checkOutTime.getTime();
-    if (timeSinceLastPingMs <= 300000) {
-      const addedSeconds = Math.floor(timeSinceLastPingMs / 1000);
-      attendee.onlineDuration += addedSeconds;
     }
+    const now = new Date();
 
+    if (attendee.checkOutTime) {
+      // Đảm bảo ép kiểu Date an toàn đề phòng DB trả về String
+      const timeSinceLastPingMs =
+        now.getTime() - new Date(attendee.checkOutTime).getTime();
+
+      if (timeSinceLastPingMs > 0 && timeSinceLastPingMs <= 360000) {
+        const addedSeconds = Math.floor(timeSinceLastPingMs / 1000);
+        attendee.onlineDuration = (attendee.onlineDuration || 0) + addedSeconds;
+      }
+    } else {
+      attendee.onlineDuration = attendee.onlineDuration || 0;
+    }
     attendee.checkOutTime = now;
     await this.attendeeRepo.save(attendee);
 
-    return { success: true, message: 'Đã đập nhịp tim & cộng dồn giờ!' };
+    return {
+      success: true,
+      message: 'Đã đập nhịp tim & cộng dồn giờ!',
+      currentDuration: attendee.onlineDuration,
+    };
   }
 
   async endMeeting(meetingId: string) {
@@ -745,25 +774,26 @@ export class MeetingsService {
       const meetingDurationSeconds = Math.floor(
         (meeting.endTime.getTime() - meeting.startTime.getTime()) / 1000,
       );
-      const requiredDurationSeconds = (2 / 3) * meetingDurationSeconds;
+      const validMeetingDuration = Math.max(0, meetingDurationSeconds);
+      const requiredDurationSeconds = (2 / 3) * validMeetingDuration;
+      console.log(
+        `[DEBUG CHỐT SỔ] Tổng thời gian Meeting: ${validMeetingDuration}s. Yêu cầu để Điểm danh thành công: >= ${requiredDurationSeconds}s`,
+      );
 
       const attendeesToUpdate = meeting.attendees.map((attendee) => {
         if (attendee.status === AttendeeStatus.EXCUSED) return attendee;
-        if (attendee.onlineDuration >= requiredDurationSeconds) {
+
+        const userOnlineDuration = attendee.onlineDuration || 0;
+
+        if (userOnlineDuration >= requiredDurationSeconds) {
           attendee.status = AttendeeStatus.PRESENT;
         } else {
           attendee.status = AttendeeStatus.ABSENT;
         }
+
         return attendee;
       });
-      await this.attendeeRepo.save(attendeesToUpdate);
-    } else {
-      const attendeesToUpdate = meeting.attendees.map((attendee) => {
-        if (attendee.status === AttendeeStatus.PENDING) {
-          attendee.status = AttendeeStatus.ABSENT;
-        }
-        return attendee;
-      });
+
       await this.attendeeRepo.save(attendeesToUpdate);
     }
     await this.meetingRepo.save(meeting);
