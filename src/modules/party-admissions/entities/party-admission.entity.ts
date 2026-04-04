@@ -16,7 +16,6 @@ export class PartyAdmission {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // 1. Thay thế member_id bằng user_id
   @Column({ name: 'user_id' })
   userId: string;
 
@@ -38,7 +37,6 @@ export class PartyAdmission {
   })
   status: AdmissionStatusEnum;
 
-  // Giữ lại cột này theo schema cũ của bạn (nếu cần xóa nốt thì bảo tôi nhé)
   @Column({ name: 'admission_documents_url', nullable: true })
   admissionDocumentsUrl: string;
 
@@ -51,9 +49,4 @@ export class PartyAdmission {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  /** * ĐÃ XÓA CÁC CỘT:
-   * - application_file_url
-   * - resolution_file_url
-   * - ceremony_meeting_id và quan hệ ceremonyMeeting
-   */
 }
