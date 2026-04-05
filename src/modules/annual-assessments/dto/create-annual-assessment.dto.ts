@@ -38,5 +38,6 @@ export class CreateAnnualAssessmentDto {
     format: 'binary',
     description: 'File bản kiểm điểm cá nhân (PDF, DOCX...) Bắt buộc đính kèm',
   })
+  @IsOptional()
   file: any;
 }

@@ -31,5 +31,6 @@ export class UpdateAnnualAssessmentDto {
     description:
       'File bản kiểm điểm cá nhân mới (Nếu không chọn sẽ giữ nguyên file cũ)',
   })
+  @IsOptional()
   file?: any;
 }

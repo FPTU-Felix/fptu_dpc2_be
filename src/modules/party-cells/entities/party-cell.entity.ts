@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { PartyMember } from '../../party-members/entities/party-member.entity';
 import { Meeting } from '../../meetings/entities/meeting.entity';
+import { EvaluationConfig } from 'src/modules/annual-assessments/entities/evaluation-config.entity';
 
 @Entity('party_cells')
 export class PartyCell {
@@ -30,4 +31,7 @@ export class PartyCell {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @OneToMany(() => EvaluationConfig, (config) => config.partyCell)
+  evaluationConfigs: EvaluationConfig[];
 }
