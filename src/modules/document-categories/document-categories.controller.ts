@@ -38,7 +38,7 @@ export class DocumentCategoriesController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN, UserRole.SECRETARY)
+  @Roles(UserRole.ADMIN, UserRole.COMMITTEE_MEMBER)
   @ApiOperation({ summary: 'Cập nhật danh mục tài liệu' })
   update(
     @Param('id', ParseUUIDPipe) id: string, // Đổi sang string và ParseUUIDPipe
