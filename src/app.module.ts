@@ -23,6 +23,8 @@ import { PartyAdmissionsModule } from './modules/party-admissions/party-admissio
 import { ScheduleModule } from '@nestjs/schedule';
 import { MinioModule } from './modules/minio/minio.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { DocumentsModule } from './modules/documents/documents.module';
+import { DocumentCategoriesModule } from './modules/document-categories/document-categories.module';
 import minioConfig from './config/minio.config';
 @Module({
   imports: [
@@ -74,6 +76,8 @@ import minioConfig from './config/minio.config';
     PartyAdmissionsModule,
     MinioModule,
     NotificationsModule,
+    DocumentsModule,
+    DocumentCategoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
