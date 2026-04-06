@@ -53,7 +53,7 @@ describe('DocumentCategoriesService', () => {
 
   // --- CREATE ---
   describe('create', () => {
-    it('Normal: nên tạo danh mục thành công khi slug chưa tồn tại', async () => {
+    it(' nên tạo danh mục thành công khi slug chưa tồn tại', async () => {
       (repo.findOne as jest.Mock).mockResolvedValue(null); // Không tìm thấy trùng slug
 
       const result = await service.create(mockCreateDto);
@@ -64,7 +64,7 @@ describe('DocumentCategoriesService', () => {
       expect(result).toEqual(mockCategory);
     });
 
-    it('Abnormal: nên ném lỗi ConflictException nếu slug đã tồn tại', async () => {
+    it(' nên ném lỗi ConflictException nếu slug đã tồn tại', async () => {
       (repo.findOne as jest.Mock).mockResolvedValue(mockCategory); // Giả lập đã có slug này
 
       await expect(service.create(mockCreateDto))
@@ -74,7 +74,7 @@ describe('DocumentCategoriesService', () => {
 
   // --- FIND ALL ---
   describe('findAll', () => {
-    it('Normal: nên trả về danh sách danh mục được sắp xếp', async () => {
+    it(' nên trả về danh sách danh mục được sắp xếp', async () => {
       const mockList = [mockCategory];
       (repo.find as jest.Mock).mockResolvedValue(mockList);
 
@@ -87,7 +87,7 @@ describe('DocumentCategoriesService', () => {
       expect(result).toEqual(mockList);
     });
 
-    it('Boundary: trả về mảng rỗng nếu không có danh mục nào', async () => {
+    it(' trả về mảng rỗng nếu không có danh mục nào', async () => {
       (repo.find as jest.Mock).mockResolvedValue([]);
       const result = await service.findAll();
       expect(result).toEqual([]);
@@ -96,7 +96,7 @@ describe('DocumentCategoriesService', () => {
 
   // --- FIND ONE ---
   describe('findOne', () => {
-    it('Normal: nên trả về danh mục nếu ID tồn tại', async () => {
+    it(' nên trả về danh mục nếu ID tồn tại', async () => {
       (repo.findOne as jest.Mock).mockResolvedValue(mockCategory);
 
       const result = await service.findOne(mockId);
@@ -108,7 +108,7 @@ describe('DocumentCategoriesService', () => {
       expect(result).toEqual(mockCategory);
     });
 
-    it('Abnormal: nên ném lỗi NotFoundException nếu ID không tồn tại', async () => {
+    it(' nên ném lỗi NotFoundException nếu ID không tồn tại', async () => {
       (repo.findOne as jest.Mock).mockResolvedValue(null);
 
       await expect(service.findOne(mockId))
@@ -118,8 +118,8 @@ describe('DocumentCategoriesService', () => {
 
   // --- UPDATE ---
   describe('update', () => {
-    it('Normal: nên cập nhật thành công khi không đổi slug', async () => {
-      (repo.findOne as jest.Mock).mockResolvedValue(mockCategory); // Tìm thấy record cần update
+    it(' nên cập nhật thành công khi không đổi slug', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue(mockCategory); 
       
       const updateDto = { name: 'Tên mới' };
       const result = await service.update(mockId, updateDto);
@@ -128,10 +128,10 @@ describe('DocumentCategoriesService', () => {
       expect(result.name).toBe('Tên mới');
     });
 
-    it('Normal: nên cập nhật thành công khi đổi sang slug mới chưa tồn tại', async () => {
+    it(' nên cập nhật thành công khi đổi sang slug mới chưa tồn tại', async () => {
       (repo.findOne as jest.Mock)
-        .mockResolvedValueOnce(mockCategory) // Lần 1: tìm record hiện tại
-        .mockResolvedValueOnce(null);        // Lần 2: kiểm tra slug mới (không trùng)
+        .mockResolvedValueOnce(mockCategory) 
+        .mockResolvedValueOnce(null);      
 
       const updateDto = { slug: 'slug-moi' };
       const result = await service.update(mockId, updateDto);
@@ -140,7 +140,7 @@ describe('DocumentCategoriesService', () => {
       expect(result.slug).toBe('slug-moi');
     });
 
-    it('Abnormal: nên ném lỗi ConflictException nếu đổi sang slug đã bị dùng bởi record khác', async () => {
+    it(' nên ném lỗi ConflictException nếu đổi sang slug đã bị dùng bởi record khác', async () => {
       (repo.findOne as jest.Mock)
         .mockResolvedValueOnce(mockCategory) // Record hiện tại
         .mockResolvedValueOnce({ id: 'other-id', slug: 'slug-trung' }); // Slug mới bị trùng
@@ -152,7 +152,7 @@ describe('DocumentCategoriesService', () => {
 
   // --- REMOVE ---
   describe('remove', () => {
-    it('Normal: nên xóa danh mục thành công', async () => {
+    it(' nên xóa danh mục thành công', async () => {
       (repo.findOne as jest.Mock).mockResolvedValue(mockCategory);
       (repo.remove as jest.Mock).mockResolvedValue(mockCategory);
 
@@ -162,7 +162,7 @@ describe('DocumentCategoriesService', () => {
       expect(result.message).toContain('thành công');
     });
 
-    it('Abnormal: nên thất bại nếu không tìm thấy danh mục để xóa', async () => {
+    it(' nên thất bại nếu không tìm thấy danh mục để xóa', async () => {
       (repo.findOne as jest.Mock).mockResolvedValue(null);
 
       await expect(service.remove(mockId))
