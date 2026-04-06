@@ -70,8 +70,6 @@ export class DocumentsService {
 
       return await this.documentRepo.save(newDocument);
     } catch (error) {
-      // Nếu lưu DB thất bại, ta nên xóa file vừa up lên MinIO để tránh rác (Optional)
-      // await this.minioService.deleteFile(uploadResult.objectName);
       
       if (error.code === '23505') { // Mã lỗi trùng lặp (Unique Violation) trong Postgres
         throw new ConflictException('Đường dẫn (slug) hoặc dữ liệu đã tồn tại');
@@ -110,22 +108,18 @@ async update(id: string, dto: UpdateDocumentDto, file?: Express.Multer.File) {
       }
     }
 
-    // 2. Xử lý Slug (Giữ nguyên logic của bạn)
-    // ... (phần code slug của bạn) ...
-
-    // 3. FIX LỖI UPDATE CATEGORY
     if (dto.categoryId && dto.categoryId !== document.categoryId) {
-      // Cách 1: Gán trực tiếp ID và xóa object relation cũ để TypeORM nhận diện lại
       document.categoryId = dto.categoryId;
-      document.category = null; // Quan trọng: Xóa object relation đã load từ findOne
+      document.category = null; 
     }
 
-    // 4. Cập nhật các trường khác
     Object.assign(document, dto);
 
     try {
-      // Lưu ý: Nếu dùng .save() trên một object đã tồn tại, TypeORM sẽ thực hiện UPDATE
-      return await this.documentRepo.save(document);
+      await this.documentRepo.save(document);
+
+      return await this.findOne(id); 
+
     } catch (error) {
       if (error.code === '23505') throw new ConflictException('Slug đã tồn tại');
       throw new InternalServerErrorException('Lỗi khi cập nhật tài liệu database');
