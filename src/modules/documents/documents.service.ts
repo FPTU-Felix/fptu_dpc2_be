@@ -6,9 +6,10 @@ import {
   ConflictException 
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not } from 'typeorm'; // <--- Quan trọng nhất ở đây
 import { Document } from './entities/document.entity';
 import { CreateDocumentDto } from './dto/create-document.dto';
+import { UpdateDocumentDto } from './dto/update-document.dto';
 import { MinioService } from '../minio/minio.service';
 import slugify from 'slugify';
 
@@ -90,7 +91,58 @@ export class DocumentsService {
       throw new InternalServerErrorException('Lỗi khi lấy danh sách tài liệu');
     }
   }
+async update(id: string, dto: UpdateDocumentDto, file?: Express.Multer.File) {
+    const document = await this.findOne(id); // Tự động throw NotFound nếu không thấy
 
+    // 1. Xử lý File mới (nếu có)
+    if (file) {
+      try {
+        // Xóa file cũ trên MinIO để tiết kiệm bộ nhớ
+        await this.minioService.deleteFile(document.fileUrl);
+
+        // Upload file mới
+        const uploadResult = await this.minioService.uploadFile({
+          file: file,
+          folder: 'documents',
+        });
+
+        document.fileName = uploadResult.fileName;
+        document.fileUrl = uploadResult.objectName;
+        document.fileType = file.originalname.split('.').pop()?.toLowerCase();
+      } catch (error) {
+        throw new InternalServerErrorException('Lỗi khi thay thế file trên hệ thống MinIO');
+      }
+    }
+
+    // 2. Xử lý Slug nếu title thay đổi
+    if (dto.title && dto.title !== document.title && !dto.slug) {
+      let newSlug = slugify(dto.title, { lower: true, strict: true });
+      let count = 1;
+      const originalSlug = newSlug;
+      
+      // Kiểm tra trùng slug (trừ chính nó)
+      while (await this.documentRepo.findOne({ 
+        where: { slug: newSlug, id: Not(id) as any }, // Cần import Not từ typeorm
+        withDeleted: true 
+      })) {
+        newSlug = `${originalSlug}-${count}`;
+        count++;
+      }
+      document.slug = newSlug;
+    } else if (dto.slug) {
+      document.slug = dto.slug;
+    }
+
+    // 3. Cập nhật các trường khác
+    Object.assign(document, dto);
+
+    try {
+      return await this.documentRepo.save(document);
+    } catch (error) {
+      if (error.code === '23505') throw new ConflictException('Slug đã tồn tại');
+      throw new InternalServerErrorException('Lỗi khi cập nhật tài liệu database');
+    }
+  }
   async findOne(id: string) {
     let document;
     try {
@@ -126,4 +178,27 @@ export class DocumentsService {
       throw new InternalServerErrorException('Lỗi khi thực hiện xóa tài liệu');
     }
   }
+  // Thêm vào trong class DocumentsService
+
+async download(id: string) {
+  const document = await this.findOne(id);
+
+  try {
+    // 1. Tăng số lượt tải
+    document.downloadCount += 1;
+    await this.documentRepo.save(document);
+
+    // 2. Lấy stream từ MinIO 
+    // Giả định MinioService của bạn có hàm getFileStream
+    const fileStream = await this.minioService.getFileStream(document.fileUrl);
+
+    return {
+      stream: fileStream,
+      fileName: document.fileName,
+      fileType: document.fileType
+    };
+  } catch (error) {
+    throw new InternalServerErrorException('Lỗi khi chuẩn bị tệp tin để tải xuống');
+  }
+}
 }
