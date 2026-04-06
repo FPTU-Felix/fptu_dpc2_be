@@ -6,13 +6,14 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, Between } from 'typeorm';
+import { Repository, Like, Between, In } from 'typeorm';
 import { AnnualAssessment } from './entities/annual-assessment.entity';
 import { Discipline } from '../disciplines/entities/discipline.entity'; // Đường dẫn tùy project ông
 import { PartyMember } from '../party-members/entities/party-member.entity';
 import {
   AssessmentRank,
   AssessmentStatus,
+  MemberStatusEnum,
   NotificationType,
   UserRole,
 } from 'src/common/enums';
@@ -275,6 +276,7 @@ export class AnnualAssessmentsService {
       result.links,
     );
   }
+
   async updateMyAssessment(
     userId: string,
     year: number,
@@ -352,5 +354,93 @@ export class AnnualAssessmentsService {
     }
 
     return assessment;
+  }
+
+  async getAssessmentStatistics(partyCellId: string, year: number) {
+    const totalMembers = await this.partyMemberRepo.count({
+      where: {
+        partyCellId: partyCellId,
+        status: In([MemberStatusEnum.RESERVE, MemberStatusEnum.OFFICIAL]),
+      },
+    });
+
+    if (totalMembers === 0) {
+      return { total: 0, stats: [], unclassified: 0 };
+    }
+    const rankCounts = await this.partyMemberRepo
+      .createQueryBuilder('member')
+      .leftJoin(
+        'annual_assessments',
+        'assessment',
+        'assessment.member_id = member.id AND assessment.year = :year',
+        { year },
+      )
+      .select('assessment.final_rank', 'rank')
+      .addSelect('COUNT(member.id)', 'count')
+      .where('member.party_cell_id = :partyCellId', { partyCellId })
+      .andWhere('member.status IN (:...statuses)', {
+        statuses: [MemberStatusEnum.RESERVE, MemberStatusEnum.OFFICIAL],
+      })
+      .andWhere('assessment.final_rank IS NOT NULL')
+      .groupBy('assessment.final_rank')
+      .getRawMany();
+
+    let totalClassified = 0;
+    const statsMap: Record<string, { count: number; percentage: number }> = {
+      [AssessmentRank.EXCELLENT]: { count: 0, percentage: 0 },
+      [AssessmentRank.GOOD]: { count: 0, percentage: 0 },
+      [AssessmentRank.AVERAGE]: { count: 0, percentage: 0 },
+      [AssessmentRank.POOR]: { count: 0, percentage: 0 },
+    };
+
+    rankCounts.forEach((row) => {
+      const rank = row.rank as AssessmentRank;
+      const count = parseInt(row.count, 10);
+
+      if (statsMap[rank]) {
+        statsMap[rank].count = count;
+        totalClassified += count;
+      }
+    });
+
+    // Tính phần trăm (dựa trên tống số người ĐÃ CÓ KẾT QUẢ xếp loại)
+    if (totalClassified > 0) {
+      Object.keys(statsMap).forEach((key) => {
+        const percentage = (statsMap[key].count / totalClassified) * 100;
+        statsMap[key].percentage = Math.round(percentage * 10) / 10;
+      });
+    }
+
+    return {
+      totalMembers,
+      totalClassified,
+      unclassified: totalMembers - totalClassified,
+      statistics: [
+        {
+          label: 'Hoàn thành xuất sắc',
+          rank: AssessmentRank.EXCELLENT,
+          count: statsMap[AssessmentRank.EXCELLENT].count,
+          percentage: statsMap[AssessmentRank.EXCELLENT].percentage,
+        },
+        {
+          label: 'Hoàn thành tốt',
+          rank: AssessmentRank.GOOD,
+          count: statsMap[AssessmentRank.GOOD].count,
+          percentage: statsMap[AssessmentRank.GOOD].percentage,
+        },
+        {
+          label: 'Hoàn thành',
+          rank: AssessmentRank.AVERAGE,
+          count: statsMap[AssessmentRank.AVERAGE].count,
+          percentage: statsMap[AssessmentRank.AVERAGE].percentage,
+        },
+        {
+          label: 'Không hoàn thành',
+          rank: AssessmentRank.POOR,
+          count: statsMap[AssessmentRank.POOR].count,
+          percentage: statsMap[AssessmentRank.POOR].percentage,
+        },
+      ],
+    };
   }
 }

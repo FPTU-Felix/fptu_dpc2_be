@@ -107,4 +107,17 @@ export class DisciplinesService {
 
     return paginate<Discipline>(queryBuilder, options);
   }
+
+  async findMyDisciplines(userId: string) {
+    const member = await this.partyMemberRepo.findOne({
+      where: { userId: userId },
+    });
+
+    if (!member) {
+      throw new NotFoundException(
+        'Không tìm thấy thông tin hồ sơ Đảng viên của bạn',
+      );
+    }
+    return await this.findByMember(member.id);
+  }
 }
