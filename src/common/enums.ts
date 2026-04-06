@@ -93,3 +93,21 @@ export enum NotificationType {
   HANDBOOK = 'HANDBOOK', // Sổ tay/Cẩm nang
   PARTY_FEE = 'PARTY_FEE', // Đảng phí
 }
+
+export enum MemberStatusEnum {
+  MASSES = 'MASSES',
+  POTENTIAL = 'POTENTIAL',
+  RESERVE = 'RESERVE',
+  OFFICIAL = 'OFFICIAL',
+  TRANSFERRED = 'TRANSFERRED',
+  DELETED = 'DELETED',
+}
+
+export enum AdmissionStepEnum {
+  STEP_1_INTRO = 'STEP_1_INTRO',
+  STEP_2_TRAINING = 'STEP_2_TRAINING',
+  STEP_3_FILE_PREP = 'STEP_3_FILE_PREP',
+  STEP_4_VERIFICATION = 'STEP_4_VERIFICATION',
+  STEP_5_ADMISSION = 'STEP_5_ADMISSION',
+  STEP_6_OFFICIAL = 'STEP_6_OFFICIAL',
+}

@@ -7,15 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { PartyMember } from './party-member.entity';
-
-export enum AdmissionStepEnum {
-  STEP_1_INTRO = 'STEP_1_INTRO',
-  STEP_2_TRAINING = 'STEP_2_TRAINING',
-  STEP_3_FILE_PREP = 'STEP_3_FILE_PREP',
-  STEP_4_VERIFICATION = 'STEP_4_VERIFICATION',
-  STEP_5_ADMISSION = 'STEP_5_ADMISSION',
-  STEP_6_OFFICIAL = 'STEP_6_OFFICIAL',
-}
+import { AdmissionStepEnum } from 'src/common/enums';
 
 @Entity('admission_progress')
 export class AdmissionProgress {

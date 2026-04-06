@@ -28,6 +28,7 @@ import { UserRole } from 'src/common/enums';
 import { GetCurrentUser } from '../../modules/auth/decorators/get-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateDisciplineDto } from './dto/update-discipline.dto';
+import { Role } from '../roles/entities/role.entity';
 
 @ApiTags('Disciplines (Kỷ luật Đảng viên)')
 @Controller('disciplines')
@@ -97,5 +98,20 @@ export class DisciplinesController {
       year ? Number(year) : undefined,
       memberId,
     );
+  }
+
+  @Get('my-disciplines')
+  @Roles(
+    UserRole.PARTY_MEMBER,
+    UserRole.ADMIN,
+    UserRole.SECRETARY,
+    UserRole.DEPUTY_SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+  )
+  @ApiOperation({
+    summary: 'Lấy danh sách kỷ luật của bản thân (Dành cho Đảng viên)',
+  })
+  async getMyDisciplines(@GetCurrentUser('sub') userId: string) {
+    return await this.disciplinesService.findMyDisciplines(userId);
   }
 }

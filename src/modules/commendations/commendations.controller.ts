@@ -98,4 +98,19 @@ export class CommendationsController {
   async getByMember(@Param('memberId') memberId: string) {
     return await this.commendationsService.findByMember(memberId);
   }
+
+  @Get('my-commendations')
+  @Roles(
+    UserRole.PARTY_MEMBER,
+    UserRole.ADMIN,
+    UserRole.SECRETARY,
+    UserRole.DEPUTY_SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+  )
+  @ApiOperation({
+    summary: 'Lấy danh sách khen thưởng của bản thân (Dành cho Đảng viên)',
+  })
+  async getMyCommendations(@GetCurrentUser('sub') userId: string) {
+    return await this.commendationsService.findMyCommendations(userId);
+  }
 }
