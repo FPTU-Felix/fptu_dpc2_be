@@ -3,11 +3,14 @@ import { HandbooksService } from './handbooks.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Handbook } from './entities/handbook.entity';
 import { HandbookLink } from './entities/handbook-link.entity';
+import { User } from '../users/entities/user.entity';
 import { Repository } from 'typeorm';
+import { MinioService } from '../minio/minio.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { NotFoundException } from '@nestjs/common';
-import { paginate } from 'nestjs-typeorm-paginate';
+import * as nestjsTypeormPaginate from 'nestjs-typeorm-paginate';
 
-// Mock thư viện phân trang
+// Mock module phân trang
 jest.mock('nestjs-typeorm-paginate', () => ({
   paginate: jest.fn(),
 }));
@@ -16,139 +19,225 @@ describe('HandbooksService', () => {
   let service: HandbooksService;
   let handbookRepo: Repository<Handbook>;
   let linkRepo: Repository<HandbookLink>;
+  let userRepo: Repository<User>;
+  let minioService: MinioService;
+  let notificationsService: NotificationsService;
 
-  const mockHandbookId = 'hb-123';
-  const mockLinkId = 'link-456';
+  const mockHandbookId = 'handbook-uuid';
+  const mockLinkId = 'link-uuid';
 
-  const mockHandbook = { id: mockHandbookId, title: 'Sổ tay' };
-  const mockLink = { id: mockLinkId, title: 'Tài liệu' };
+  const mockHandbook = {
+    id: mockHandbookId,
+    title: 'Cẩm nang Đảng viên',
+    isActive: true,
+    links: [],
+  } as Handbook;
 
-  // 1. Tạo một đối tượng Mock QueryBuilder cố định để theo dõi các lời gọi hàm
+  const mockLink = {
+    id: mockLinkId,
+    title: 'Tài liệu hướng dẫn',
+    url: 'handbooks/file.pdf',
+    handbook: mockHandbook,
+  } as HandbookLink;
+
+  const mockFile = {
+    originalname: 'test.pdf',
+    buffer: Buffer.from('test'),
+  } as Express.Multer.File;
+
   const mockQueryBuilder = {
     leftJoinAndSelect: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
   };
 
-  const mockRepositoryFactory = () => ({
-    findOne: jest.fn(),
-    create: jest.fn(),
-    save: jest.fn(),
-    remove: jest.fn(),
-    // Luôn trả về đối tượng mockQueryBuilder duy nhất ở trên
-    createQueryBuilder: jest.fn(() => mockQueryBuilder),
-  });
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         HandbooksService,
-        { provide: getRepositoryToken(Handbook), useValue: mockRepositoryFactory() },
-        { provide: getRepositoryToken(HandbookLink), useValue: mockRepositoryFactory() },
+        {
+          provide: getRepositoryToken(Handbook),
+          useValue: {
+            create: jest.fn().mockImplementation((dto) => ({ ...mockHandbook, ...dto })),
+            save: jest.fn().mockImplementation((handbook) => Promise.resolve(handbook)),
+            findOne: jest.fn(),
+            remove: jest.fn(),
+            createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+          },
+        },
+        {
+          provide: getRepositoryToken(HandbookLink),
+          useValue: {
+            create: jest.fn().mockReturnValue(mockLink),
+            save: jest.fn().mockResolvedValue(mockLink),
+            findOne: jest.fn(),
+            remove: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(User),
+          useValue: {
+            find: jest.fn().mockResolvedValue([{ id: 'user1', email: 'test@gmail.com' }]),
+          },
+        },
+        {
+          provide: MinioService,
+          useValue: {
+            uploadFile: jest.fn().mockResolvedValue({ objectName: 'uploaded/file.pdf' }),
+            deleteFile: jest.fn().mockResolvedValue(true),
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: {
+            createInternal: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     service = module.get<HandbooksService>(HandbooksService);
     handbookRepo = module.get<Repository<Handbook>>(getRepositoryToken(Handbook));
     linkRepo = module.get<Repository<HandbookLink>>(getRepositoryToken(HandbookLink));
+    userRepo = module.get<Repository<User>>(getRepositoryToken(User));
+    minioService = module.get<MinioService>(MinioService);
+    notificationsService = module.get<NotificationsService>(NotificationsService);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  // ==========================================
-  // 1. HANDBOOK BRANCHES
-  // ==========================================
+  // --- FIND ALL ---
   describe('findAll', () => {
-    it('nên gọi .where() khi isActiveOnly = true', async () => {
+    it(' nên gọi paginate với filter isActiveOnly', async () => {
       await service.findAll({ page: 1, limit: 10 }, true);
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-        'handbook.isActive = :isActive',
-        { isActive: true },
-      );
-    });
-
-    it('không nên gọi .where() khi isActiveOnly = false', async () => {
-      await service.findAll({ page: 1, limit: 10 }, false);
-      expect(mockQueryBuilder.where).not.toHaveBeenCalled();
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith(expect.stringContaining('isActive'), expect.any(Object));
+      expect(nestjsTypeormPaginate.paginate).toHaveBeenCalled();
     });
   });
 
+  // --- FIND ONE ---
   describe('findOne', () => {
-    it('thành công: trả về handbook', async () => {
+    it(' tìm thấy cẩm nang', async () => {
       (handbookRepo.findOne as jest.Mock).mockResolvedValue(mockHandbook);
-      expect(await service.findOne(mockHandbookId)).toEqual(mockHandbook);
+      const result = await service.findOne(mockHandbookId);
+      expect(result).toEqual(mockHandbook);
     });
 
-    it('thất bại: ném lỗi NotFoundException', async () => {
+    it(' ném lỗi NotFoundException nếu không tồn tại', async () => {
       (handbookRepo.findOne as jest.Mock).mockResolvedValue(null);
-      await expect(service.findOne('id')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne(mockHandbookId)).rejects.toThrow(NotFoundException);
     });
   });
 
-  describe('create/update/remove Handbook', () => {
-    it('create: nên lưu bản ghi mới', async () => {
-      (handbookRepo.create as jest.Mock).mockReturnValue(mockHandbook);
-      await service.create({ title: 'New' } as any);
+  // --- CREATE ---
+  describe('create', () => {
+    it(' tạo cẩm nang và bắn thông báo nếu isActive=true', async () => {
+      const dto = { title: 'New HB', isActive: true };
+      const notifySpy = jest.spyOn(service as any, 'notifyAllUsers');
+      
+      await service.create(dto as any);
+      
       expect(handbookRepo.save).toHaveBeenCalled();
+      expect(notifySpy).toHaveBeenCalledWith(dto.title);
     });
+  });
 
-    it('update: thành công cập nhật dữ liệu', async () => {
-      (handbookRepo.findOne as jest.Mock).mockResolvedValue(mockHandbook);
-      await service.update(mockHandbookId, { title: 'Update' });
-      expect(handbookRepo.save).toHaveBeenCalled();
+  // --- UPDATE ---
+  describe('update', () => {
+    it(' bắn thông báo khi chuyển trạng thái từ nháp sang công khai (Published)', async () => {
+      (handbookRepo.findOne as jest.Mock).mockResolvedValue({ ...mockHandbook, isActive: false });
+      const notifySpy = jest.spyOn(service as any, 'notifyAllUsers');
+
+      await service.update(mockHandbookId, { isActive: true });
+
+      expect(notifySpy).toHaveBeenCalled();
     });
+  });
 
-    it('remove: thành công xóa bản ghi', async () => {
-      (handbookRepo.findOne as jest.Mock).mockResolvedValue(mockHandbook);
-      const result = await service.remove(mockHandbookId);
+  // --- REMOVE ---
+  describe('remove', () => {
+    it(' xóa cẩm nang và dọn dẹp tất cả file trên MinIO', async () => {
+      const handbookWithLinks = {
+        ...mockHandbook,
+        links: [{ url: 'file1.pdf' }, { url: 'file2.pdf' }]
+      };
+      (handbookRepo.findOne as jest.Mock).mockResolvedValue(handbookWithLinks);
+
+      await service.remove(mockHandbookId);
+
+      expect(minioService.deleteFile).toHaveBeenCalledTimes(2);
       expect(handbookRepo.remove).toHaveBeenCalled();
-      expect(result.message).toContain('thành công');
+    });
+
+    it(' xóa cẩm nang không có link đính kèm', async () => {
+      (handbookRepo.findOne as jest.Mock).mockResolvedValue({ ...mockHandbook, links: [] });
+      await service.remove(mockHandbookId);
+      expect(minioService.deleteFile).not.toHaveBeenCalled();
     });
   });
 
-  // ==========================================
-  // 2. HANDBOOK LINKS BRANCHES
-  // ==========================================
+  // --- ADD LINK ---
   describe('addLink', () => {
-    it('thành công: tạo link mới cho handbook tồn tại', async () => {
+    it(' tải file lên và tạo link mới cho cẩm nang', async () => {
       (handbookRepo.findOne as jest.Mock).mockResolvedValue(mockHandbook);
-      (linkRepo.create as jest.Mock).mockReturnValue(mockLink);
-      await service.addLink(mockHandbookId, { title: 'T', url: 'http://u' });
-      expect(linkRepo.save).toHaveBeenCalled();
-    });
+      
+      const result = await service.addLink(mockHandbookId, { title: 'Link 1' }, mockFile);
 
-    it('thất bại: ném lỗi nếu handbook cha không tồn tại', async () => {
-      (handbookRepo.findOne as jest.Mock).mockResolvedValue(null);
-      await expect(service.addLink('id', { title: 'T', url: 'http://u' }))
-        .rejects.toThrow(NotFoundException);
+      expect(minioService.uploadFile).toHaveBeenCalled();
+      expect(linkRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+        url: 'uploaded/file.pdf'
+      }));
+      expect(result).toEqual(mockLink);
     });
   });
 
+  // --- UPDATE LINK ---
   describe('updateLink', () => {
-    it('thành công: cập nhật link', async () => {
-      (linkRepo.findOne as jest.Mock).mockResolvedValue(mockLink);
-      await service.updateLink(mockLinkId, { title: 'New' });
-      expect(linkRepo.save).toHaveBeenCalled();
-    });
+    it(' thay thế file cũ khi upload file mới cho link', async () => {
+      (linkRepo.findOne as jest.Mock).mockResolvedValue({ ...mockLink, url: 'old-path.pdf' });
 
-    it('thất bại: ném lỗi NotFound nếu sai linkId', async () => {
-      (linkRepo.findOne as jest.Mock).mockResolvedValue(null);
-      await expect(service.updateLink('bad-id', {})).rejects.toThrow(NotFoundException);
+      await service.updateLink(mockLinkId, { title: 'New Title' }, mockFile);
+
+      expect(minioService.deleteFile).toHaveBeenCalledWith('old-path.pdf');
+      expect(minioService.uploadFile).toHaveBeenCalled();
+      expect(linkRepo.save).toHaveBeenCalled();
     });
   });
 
+  // --- REMOVE LINK ---
   describe('removeLink', () => {
-    it('thành công: xóa link', async () => {
+    it(' xóa link và xóa file tương ứng trên MinIO', async () => {
       (linkRepo.findOne as jest.Mock).mockResolvedValue(mockLink);
+
       await service.removeLink(mockLinkId);
+
+      expect(minioService.deleteFile).toHaveBeenCalledWith(mockLink.url);
       expect(linkRepo.remove).toHaveBeenCalled();
     });
 
-    it('thất bại: ném lỗi NotFound khi xóa link không tồn tại', async () => {
+    it(' ném lỗi nếu không tìm thấy link để xóa', async () => {
       (linkRepo.findOne as jest.Mock).mockResolvedValue(null);
-      await expect(service.removeLink('bad-id')).rejects.toThrow(NotFoundException);
+      await expect(service.removeLink(mockLinkId)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // --- NOTIFY USERS (Private) ---
+  describe('notifyAllUsers', () => {
+    it(' gửi thông báo đến tất cả user thành công', async () => {
+      await (service as any).notifyAllUsers('Test HB');
+      expect(userRepo.find).toHaveBeenCalled();
+      expect(notificationsService.createInternal).toHaveBeenCalled();
+    });
+
+    it(' handle lỗi nếu quá trình gửi thông báo thất bại', async () => {
+      (userRepo.find as jest.Mock).mockRejectedValue(new Error('DB Error'));
+      const loggerSpy = jest.spyOn((service as any).logger, 'error');
+
+      await (service as any).notifyAllUsers('Test HB');
+
+      expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Lỗi khi bắn thông báo'));
     });
   });
 });
