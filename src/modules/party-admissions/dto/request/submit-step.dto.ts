@@ -1,23 +1,19 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsObject, IsOptional, IsString } from 'class-validator';
+import { IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class SubmitStepDto {
   @ApiPropertyOptional({
     type: Object,
     example: {
-      fullName: 'Nguyen Van A',
-      studentCode: 'HE170001',
-      className: 'SE1701',
+      DON_XIN_VAO_DANG: 'url-1',
+      LY_LICH_NGUOI_XIN_VAO_DANG: 'url-2',
+      GIAY_GIOI_THIEU_DANG_VIEN_1: 'url-3',
+      GIAY_GIOI_THIEU_DANG_VIEN_2: 'url-4',
     },
   })
   @IsOptional()
   @IsObject()
   formData?: Record<string, any>;
 
-  @ApiPropertyOptional({
-    example: 'Em đã hoàn thiện hồ sơ và gửi lên để review',
-  })
-  @IsOptional()
-  @IsString()
-  note?: string;
+
 }

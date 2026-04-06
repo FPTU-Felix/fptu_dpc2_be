@@ -14,6 +14,8 @@ import { PartyAdmissionStepSubmissionEntity } from './entities/party-admission-s
 import { PartyAdmissionDocumentEntity } from './entities/party-admission-document.entity';
 import { PartyAdmissionWorkflowLogEntity } from './entities/party-admission-workflow-log.entity';
 import { PartyAdmissionStepReviewEntity } from './entities/party-admission-step-review.entity';
+import { User } from '../users/entities/user.entity';
+import { Role } from '../roles/entities/role.entity';
 console.log({
   PartyAdmission,
   PartyMember,
@@ -31,7 +33,8 @@ console.log({
       PartyAdmissionDocumentEntity,
       PartyAdmissionWorkflowLogEntity,
       PartyAdmissionStepReviewEntity,
-
+      User,
+      Role
     ]),
   ],
   controllers: [PartyAdmissionsController, AdmissionApplicationController],

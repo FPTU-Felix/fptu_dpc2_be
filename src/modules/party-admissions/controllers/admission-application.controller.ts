@@ -2,102 +2,161 @@ import {
   Body,
   Controller,
   Get,
-
   Param,
-
   Post,
-
+  Query,
   Req,
-  UseGuards,
-
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 
-  ApiForbiddenResponse,
-
-  ApiNotFoundResponse,
-
-  ApiOkResponse,
-
-  ApiOperation,
-  ApiTags,
-  ApiUnauthorizedResponse,
-} from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
-
-import { AdmissionApplicationService } from '../services/admission-application.service';
+import { ApproveStepDto } from '../dto/approve-step.dto';
+import { ReturnStepDto } from '../dto/return-step.dto';
+import { RejectStepDto } from '../dto/reject-step.dto';
+import { SaveStepDraftDto } from '../dto/request/save-step-draft.dto';
+import { SubmitStepDto } from '../dto/request/submit-step.dto';
+import { GetAdmissionApplicationListQueryDto } from '../dto/response/get-admission-application-list-query.dto';
+import { AdmissionApplicationListResponseDto } from '../dto/response/admission-application-list-item.dto';
+import { AdmissionApplicationDetailDto } from '../dto/admission-detail-step.dto';
 import { MyAdmissionCurrentStatusResponseDto } from '../dto/response/my-admission-current-status.response.dto';
-import { AdmissionWorkflowStep } from '../enum/admission-workflow-step.enum';
+import { AdmissionApplicationService } from '../services/admission-application.service';
+import { AuthGuard } from '@nestjs/passport';
+import { UseGuards } from '@nestjs/common';
 
-@ApiTags('Party Admission - Application')
+@ApiTags('Admission Applications')
+@Controller('admission-applications')
+@UseGuards(AuthGuard('jwt'))
 @ApiBearerAuth('access-token')
-@Controller('party-admissions/applications')
+
 export class AdmissionApplicationController {
   constructor(
     private readonly admissionApplicationService: AdmissionApplicationService,
   ) { }
 
-  @UseGuards(AuthGuard('jwt'))
   @Get('my-current-status')
-  @ApiOperation({
-    summary: 'Lấy toàn bộ trạng thái hồ sơ kết nạp hiện tại của chính tôi',
-  })
-  @ApiOkResponse({
-    description: 'Lấy trạng thái hồ sơ hiện tại thành công',
-    type: MyAdmissionCurrentStatusResponseDto,
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Chưa đăng nhập hoặc token không hợp lệ',
-  })
-  @ApiForbiddenResponse({
-    description: 'Không có quyền truy cập API này',
-  })
-  @ApiNotFoundResponse({
-    description: 'Không tìm thấy hồ sơ kết nạp của người dùng hiện tại',
-  })
-  async getMyCurrentStatus(
-    @Req() req: any,
-  ): Promise<MyAdmissionCurrentStatusResponseDto> {
+  @ApiOperation({ summary: 'Xem trạng thái hồ sơ hiện tại của QCUT' })
+  @ApiResponse({ status: 200, type: MyAdmissionCurrentStatusResponseDto })
+  async getMyCurrentStatus(@Req() req: Request) {
+    const user = req.user as {
+      id: string;
+      role?: { name?: string } | string;
+      roleName?: string;
+    };
+
     return this.admissionApplicationService.getMyCurrentStatusWithRoleCheck(
-      req.user,
+      user,
     );
   }
 
-  // luu draft
-  @UseGuards(AuthGuard('jwt'))
-  @Post('my-steps/:stepCode/draft')
-  @ApiOperation({
-    summary: 'Lưu draft cho bước hiện tại',
-  })
+  @Get()
+  @ApiOperation({ summary: 'Xem danh sách tất cả hồ sơ kết nạp' })
+  @ApiResponse({ status: 200, type: AdmissionApplicationListResponseDto })
+  async getApplicationList(
+    @Query() query: GetAdmissionApplicationListQueryDto,
+  ) {
+    return this.admissionApplicationService.getApplicationList(query);
+  }
+
+  @Get(':id/detail')
+  @ApiOperation({ summary: 'Xem chi tiết hồ sơ kết nạp' })
+  @ApiResponse({ status: 200, type: AdmissionApplicationDetailDto })
+  async getApplicationDetail(@Param('id') id: string) {
+    return this.admissionApplicationService.getApplicationDetail(id);
+  }
+
+
+
+  @Post(':stepCode/save-draft')
+  @ApiOperation({ summary: 'Lưu nháp dữ liệu của step hiện tại' })
   async saveDraftStep(
-    @Req() req: any,
-    @Param('stepCode') stepCode: AdmissionWorkflowStep,
+    @Param('stepCode') stepCode: string,
     @Body() dto: SaveStepDraftDto,
+    @Req() req: Request,
   ) {
+    const user = req.user as {
+      id: string;
+      role?: { name?: string } | string;
+      roleName?: string;
+    };
+
     return this.admissionApplicationService.saveDraftStep(
-      req.user,
-      stepCode,
+      user,
+      stepCode as any,
       dto,
     );
   }
 
-  // submit 
-  @UseGuards(AuthGuard('jwt'))
-  @Post('my-steps/:stepCode/submit')
-  @ApiOperation({
-    summary: 'Submit bước hiện tại để chờ review',
-  })
+  @Post(':stepCode/submit')
+  @ApiOperation({ summary: 'Submit step hiện tại' })
   async submitStep(
-    @Req() req: any,
-    @Param('stepCode') stepCode: AdmissionWorkflowStep,
+    @Param('stepCode') stepCode: string,
     @Body() dto: SubmitStepDto,
+    @Req() req: Request,
   ) {
+    const user = req.user as {
+      id: string;
+      role?: { name?: string } | string;
+      roleName?: string;
+    };
+
     return this.admissionApplicationService.submitStep(
-      req.user,
-      stepCode,
+      user,
+      stepCode as any,
       dto,
     );
   }
 
+  @Post(':id/approve')
+  @ApiOperation({ summary: 'Duyệt bước hiện tại' })
+  async approve(
+    @Param('id') id: string,
+    @Body() dto: ApproveStepDto,
+    @Req() req: Request,
+  ) {
+    const user = req.user as { id: string };
+
+    return this.admissionApplicationService.approveStep(id, user.id, dto);
+  }
+
+  @Post(':id/return')
+  @ApiOperation({ summary: 'Trả lại hồ sơ' })
+  async returnStep(
+    @Param('id') id: string,
+    @Body() dto: ReturnStepDto,
+    @Req() req: Request,
+  ) {
+    const user = req.user as { id: string };
+
+    return this.admissionApplicationService.returnStep(id, user.id, dto);
+  }
+
+  @Post(':id/reject')
+  @ApiOperation({ summary: 'Từ chối hồ sơ' })
+  async reject(
+    @Param('id') id: string,
+    @Body() dto: RejectStepDto,
+    @Req() req: Request,
+  ) {
+    const user = req.user as { id: string };
+
+    return this.admissionApplicationService.rejectStep(id, user.id, dto);
+  }
+
+  @Get('my-pending')
+  @ApiOperation({ summary: 'Danh sách hồ sơ đang chờ cần xử lý (PBT, Chi uỷ, Bí thư)' })
+  async getMyPending(
+    @Query() query: GetAdmissionApplicationListQueryDto,
+    @Req() req: Request,
+  ) {
+    const user = req.user as {
+      id: string;
+      role?: { name?: string } | string;
+      roleName?: string;
+    };
+
+    return this.admissionApplicationService.getMyPendingApplications(
+      user,
+      query,
+    );
+  }
 }
