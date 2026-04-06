@@ -120,16 +120,12 @@ async update(id: string, dto: UpdateDocumentDto, file?: Express.Multer.File) {
       document.category = null; // Quan trọng: Xóa object relation đã load từ findOne
     }
 
+    // 4. Cập nhật các trường khác
     Object.assign(document, dto);
 
     try {
-      // Thực hiện lưu xuống DB
-      await this.documentRepo.save(document);
-
-      // QUAN TRỌNG: Gọi lại findOne để lấy object hoàn chỉnh nhất 
-      // (kèm theo relation category mới nhất) để trả về cho API
-      return await this.findOne(id); 
-
+      // Lưu ý: Nếu dùng .save() trên một object đã tồn tại, TypeORM sẽ thực hiện UPDATE
+      return await this.documentRepo.save(document);
     } catch (error) {
       if (error.code === '23505') throw new ConflictException('Slug đã tồn tại');
       throw new InternalServerErrorException('Lỗi khi cập nhật tài liệu database');
