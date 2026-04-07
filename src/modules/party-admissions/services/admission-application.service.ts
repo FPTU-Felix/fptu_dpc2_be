@@ -75,7 +75,7 @@ export class AdmissionApplicationService {
   }
 
   private getRoleName(user: {
-    id: string;
+    sub: string;
     role?: { name?: string } | string;
     roleName?: string;
   }): string | undefined {
@@ -86,7 +86,7 @@ export class AdmissionApplicationService {
   }
 
   private validateQcutRole(user: {
-    id: string;
+    sub: string;
     role?: { name?: string } | string;
     roleName?: string;
   }) {
@@ -198,22 +198,6 @@ export class AdmissionApplicationService {
     }
 
     return step;
-  }
-
-  private async getLatestSubmission(
-    applicationId: string,
-    stepId: string,
-  ): Promise<PartyAdmissionStepSubmissionEntity | null> {
-    return this.submissionRepo.findOne({
-      where: {
-        applicationId,
-        stepId,
-        isLatest: true,
-      },
-      order: {
-        version: 'DESC',
-      },
-    });
   }
 
   private async getMaxVersion(
@@ -471,13 +455,6 @@ export class AdmissionApplicationService {
         return bTime - aTime;
       });
 
-    const latestSubmission =
-      stepSubmissions.find((submission) => submission.isLatest) ??
-      stepSubmissions[0] ??
-      null;
-
-    const latestReview = stepReviews[0] ?? null;
-
     return {
       id: step.id,
       applicationId: step.applicationId,
@@ -498,12 +475,6 @@ export class AdmissionApplicationService {
       note: step.note,
       createdAt: (step as any).createdAt,
       updatedAt: (step as any).updatedAt,
-      latestSubmission: latestSubmission
-        ? this.mapSubmissionToResponse(latestSubmission, stepReviews)
-        : null,
-      latestReview: latestReview
-        ? this.mapReviewToResponse(latestReview)
-        : null,
       submissions: stepSubmissions.map((submission) =>
         this.mapSubmissionToResponse(submission, stepReviews),
       ),
@@ -582,28 +553,28 @@ export class AdmissionApplicationService {
   }
 
   async getMyCurrentStatusWithRoleCheck(user: {
-    id: string;
-    role?: { name?: string } | string;
-    roleName?: string;
+    sub: string; // ID được lấy từ sub
+    roleName: string; // roleName của user
   }): Promise<MyAdmissionCurrentStatusResponseDto> {
-    const roleName = this.getRoleName(user);
+    // Lấy roleName từ user
+    const roleName = user.roleName;
 
-    if (
-      roleName &&
-      roleName !== 'OUTSTANDING_INDIVIDUAL' &&
-      roleName !== 'QCUT'
-    ) {
+    // Kiểm tra quyền truy cập của người dùng
+    const allowedRoles = ['OUTSTANDING_INDIVIDUAL', 'QCUT'];
+
+    if (!roleName || !allowedRoles.includes(roleName)) {
       throw new ForbiddenException(
         'Chỉ QCUT / OUTSTANDING_INDIVIDUAL mới được truy cập API này',
       );
     }
 
-    return this.getMyCurrentStatus(user.id);
+    // Nếu role hợp lệ, gọi phương thức để lấy trạng thái của user
+    return this.getMyCurrentStatus(user.sub);  // Sử dụng sub làm ID
   }
 
   async saveDraftStep(
     user: {
-      id: string;
+      sub: string;
       role?: { name?: string } | string;
       roleName?: string;
     },
@@ -612,7 +583,7 @@ export class AdmissionApplicationService {
   ): Promise<PartyAdmissionStepSubmissionEntity> {
     this.validateQcutRole(user);
 
-    const application = await this.getMyApplicationOrFail(user.id);
+    const application = await this.getMyApplicationOrFail(user.sub);
     this.validateApplicationEditable(application);
 
     const step = await this.getMyStepOrFail(application.id, stepCode);
@@ -651,7 +622,7 @@ export class AdmissionApplicationService {
         };
 
         latestSubmission.formData = mergedFormData;
-        latestSubmission.submittedById = user.id;
+        latestSubmission.submittedById = user.sub;
         draftSubmission = latestSubmission;
       } else {
         if (latestSubmission) {
@@ -673,7 +644,7 @@ export class AdmissionApplicationService {
           stepCode: step.stepCode,
           version: nextVersion,
           formData: mergedFormData,
-          submittedById: user.id,
+          submittedById: user.sub,
           isLatest: true,
         });
       }
@@ -705,30 +676,21 @@ export class AdmissionApplicationService {
 
   async submitStep(
     user: {
-      id: string;
+      sub: string;
       role?: { name?: string } | string;
       roleName?: string;
     },
     stepCode: AdmissionWorkflowStep,
-    dto: SubmitStepDto,
+    dto: SubmitStepDto = {},
   ): Promise<PartyAdmissionStepSubmissionEntity> {
-    // 1. Chỉ QCUT được dùng API này
     this.validateQcutRole(user);
-
-    // 2. QCUT chỉ được submit ở 2 bước này
     this.validateQcutSubmittableStep(stepCode);
 
-    const application = await this.getMyApplicationOrFail(user.id);
-
-    // 3. Hồ sơ phải còn chỉnh sửa được
+    const application = await this.getMyApplicationOrFail(user.sub);
     this.validateApplicationEditable(application);
-
-    // 4. Hồ sơ phải đang đứng đúng ở step được submit
     this.validateApplicationCurrentStep(application, stepCode);
 
     const step = await this.getMyStepOrFail(application.id, stepCode);
-
-    // 5. Step phải hợp lệ để submit
     this.validateStepEditableForSubmit(step);
 
     return this.dataSource.transaction(async (manager) => {
@@ -751,32 +713,25 @@ export class AdmissionApplicationService {
         },
       });
 
-      let finalFormData: Record<string, any> = {};
-
-      if (latestSubmission?.formData) {
-        finalFormData = {
-          ...latestSubmission.formData,
-        };
-      }
-
-      if (dto.formData) {
-        finalFormData = {
-          ...finalFormData,
-          ...dto.formData,
-        };
-      }
+      // Ưu tiên dữ liệu cũ trước, rồi merge dữ liệu mới nếu có
+      const finalFormData: Record<string, any> = {
+        ...(latestSubmission?.formData ?? {}),
+        ...(dto?.formData ?? {}),
+      };
 
       if (Object.keys(finalFormData).length === 0) {
-        throw new BadRequestException('Không có dữ liệu để submit');
+        throw new BadRequestException(
+          'Không có dữ liệu để submit. Vui lòng lưu nháp hoặc gửi formData lên khi submit.',
+        );
       }
 
-      // 6. Validate giấy tờ bắt buộc theo từng step
+      // validate giấy tờ bắt buộc theo step
       this.validateRequiredDocumentsFromFormData(
         step.stepCode,
         finalFormData,
       );
 
-      // 7. Đóng bản latest cũ nếu có
+      // đóng latest cũ nếu có
       if (latestSubmission) {
         latestSubmission.isLatest = false;
         await submissionRepo.save(latestSubmission);
@@ -792,7 +747,7 @@ export class AdmissionApplicationService {
         stepCode: step.stepCode,
         version: nextVersion,
         formData: finalFormData,
-        submittedById: user.id,
+        submittedById: user.sub,
         submittedAt: new Date(),
         isLatest: true,
       });
@@ -803,7 +758,6 @@ export class AdmissionApplicationService {
         step.startedAt = new Date();
       }
 
-      // 8. Complete step hiện tại
       step.status = AdmissionWorkflowStepStatus.COMPLETED;
       step.submittedAt = new Date();
       step.isLocked = true;
@@ -812,7 +766,6 @@ export class AdmissionApplicationService {
 
       await stepRepo.save(step);
 
-      // 9. Mở step tiếp theo theo workflow
       const nextStep = await this.getNextStep(
         manager,
         application.id,
@@ -1297,7 +1250,7 @@ export class AdmissionApplicationService {
 
   async getMyPendingApplications(
     user: {
-      id: string;
+      sub: string;
       role?: { name?: string } | string;
       roleName?: string;
     },
@@ -1310,6 +1263,8 @@ export class AdmissionApplicationService {
     }
 
     const processableSteps = this.getProcessableStepsByRole(roleName);
+    console.log('roleName', roleName);
+    console.log('processableSteps', processableSteps);
 
     if (!processableSteps.length) {
       return {
@@ -1351,14 +1306,18 @@ export class AdmissionApplicationService {
         new Brackets((subQb) => {
           subQb
             .where('application.code ILIKE :keyword', { keyword })
-            .orWhere('application.outstandingIndividualId::text ILIKE :keyword', {
-              keyword,
-            });
+            .orWhere(
+              'CAST("application"."outstandingIndividualId" AS TEXT) ILIKE :keyword',
+              { keyword },
+            );
         }),
       );
     }
 
     qb.orderBy('application.createdAt', 'DESC').skip(skip).take(limit);
+
+    console.log(qb.getQuery());
+    console.log(qb.getParameters());
 
     const [applications, total] = await qb.getManyAndCount();
 
@@ -1403,40 +1362,20 @@ export class AdmissionApplicationService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
-  } private validateReviewerCanProcessStep(
-    user: {
-      id: string;
-      role?: { name?: string } | string;
-      roleName?: string;
-    },
-    stepCode: AdmissionWorkflowStep,
-  ) {
-    const roleName = this.getRoleName(user);
-
-    if (!roleName) {
-      throw new ForbiddenException('Không xác định được vai trò người dùng');
-    }
-
-    const allowedSteps = this.getProcessableStepsByRole(roleName);
-
-    if (!allowedSteps.includes(stepCode)) {
-      throw new ForbiddenException(
-        `Vai trò ${roleName} không có quyền xử lý bước ${stepCode}`,
-      );
-    }
   }
+
 
   private getProcessableStepsByRole(roleName: string): AdmissionWorkflowStep[] {
     const map: Record<string, AdmissionWorkflowStep[]> = {
-      CHI_UY: [
+      COMMITTEE_MEMBER: [
         AdmissionWorkflowStep.CHI_UY_REVIEW,
         AdmissionWorkflowStep.RESOLUTION_DRAFTING,
       ],
-      PHO_BI_THU: [
+      DEPUTY_SECRETARY: [
         AdmissionWorkflowStep.PBT_CONTENT_REVIEW,
         AdmissionWorkflowStep.RED_SEAL_CHECK,
       ],
-      BI_THU: [
+      SECRETARY: [
         AdmissionWorkflowStep.SECRETARY_RESOLUTION_REVIEW,
       ],
     };
@@ -1503,5 +1442,174 @@ export class AdmissionApplicationService {
         `Hồ sơ hiện đang ở bước ${application.currentStepCode}, không phải ${stepCode}`,
       );
     }
+  }
+
+  async submitResolutionDraft(
+    applicationId: string,
+    user: {
+      sub: string;
+      role?: { name?: string } | string;
+      roleName?: string;
+    },
+    dto: SubmitStepDto = {},
+  ): Promise<PartyAdmissionStepSubmissionEntity> {
+    const roleName = this.getRoleName(user);
+
+    if (roleName !== 'COMMITTEE_MEMBER') {
+      throw new ForbiddenException('Chỉ Chi uỷ mới được gửi nghị quyết');
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const appRepo = manager.getRepository(PartyAdmissionApplicationEntity);
+      const stepRepo = manager.getRepository(PartyAdmissionStepEntity);
+      const submissionRepo = manager.getRepository(
+        PartyAdmissionStepSubmissionEntity,
+      );
+
+      // 1. Lấy application
+      const application = await appRepo.findOne({
+        where: { id: applicationId },
+      });
+
+      if (!application) {
+        throw new NotFoundException('Không tìm thấy hồ sơ');
+      }
+
+      if (
+        ![
+          AdmissionOverallStatus.IN_PROGRESS,
+          AdmissionOverallStatus.RETURNED,
+        ].includes(application.overallStatus)
+      ) {
+        throw new BadRequestException(
+          `Hồ sơ đang ở trạng thái ${application.overallStatus}, không thể thao tác`,
+        );
+      }
+
+      if (
+        application.currentStepCode !==
+        AdmissionWorkflowStep.RESOLUTION_DRAFTING
+      ) {
+        throw new BadRequestException(
+          'Hồ sơ không ở bước soạn nghị quyết',
+        );
+      }
+
+      // 2. Lấy step
+      const step = await stepRepo.findOne({
+        where: {
+          applicationId,
+          stepCode: AdmissionWorkflowStep.RESOLUTION_DRAFTING,
+        },
+      });
+
+      if (!step) {
+        throw new NotFoundException('Không tìm thấy bước soạn nghị quyết');
+      }
+
+      if (!step.isCurrent) {
+        throw new BadRequestException('Đây không phải bước hiện tại');
+      }
+
+      // 3. Lấy submission cũ
+      const latestSubmission = await submissionRepo.findOne({
+        where: {
+          applicationId,
+          stepId: step.id,
+          isLatest: true,
+        },
+        order: {
+          version: 'DESC',
+        },
+      });
+
+      // 4. Merge formData
+      const finalFormData: Record<string, any> = {
+        ...(latestSubmission?.formData ?? {}),
+        ...(dto?.formData ?? {}),
+      };
+
+      // 5. Validate có nghị quyết
+      const resolutionFile =
+        finalFormData[
+        AdmissionDocumentType.NGHI_QUYET_KET_NAP_DU_THAO
+        ];
+
+      if (!resolutionFile) {
+        throw new BadRequestException(
+          'Thiếu file nghị quyết dự thảo',
+        );
+      }
+
+      // 6. Đóng bản cũ
+      if (latestSubmission) {
+        latestSubmission.isLatest = false;
+        await submissionRepo.save(latestSubmission);
+      }
+
+      const nextVersion = latestSubmission
+        ? latestSubmission.version + 1
+        : (await this.getMaxVersion(applicationId, step.id)) + 1;
+
+      // 7. Tạo submission mới
+      const newSubmission = submissionRepo.create({
+        applicationId,
+        stepId: step.id,
+        stepCode: step.stepCode,
+        version: nextVersion,
+        formData: finalFormData,
+        submittedById: user.sub,
+        submittedAt: new Date(),
+        isLatest: true,
+      });
+
+      const savedSubmission = await submissionRepo.save(newSubmission);
+
+      // 8. Complete step hiện tại
+      step.status = AdmissionWorkflowStepStatus.COMPLETED;
+      step.isCurrent = false;
+      step.isCompleted = true;
+      step.isLocked = true;
+      step.submittedAt = new Date();
+
+      if (!step.startedAt) {
+        step.startedAt = new Date();
+      }
+
+      await stepRepo.save(step);
+
+      // 9. Mở step tiếp theo (Bí thư duyệt)
+      const nextStep = await this.getNextStep(
+        manager,
+        applicationId,
+        step.stepOrder,
+      );
+
+      if (!nextStep) {
+        throw new BadRequestException(
+          'Không tìm thấy bước tiếp theo sau nghị quyết',
+        );
+      }
+
+      nextStep.status = AdmissionWorkflowStepStatus.IN_PROGRESS;
+      nextStep.isCurrent = true;
+      nextStep.isLocked = false;
+      nextStep.isCompleted = false;
+
+      if (!nextStep.startedAt) {
+        nextStep.startedAt = new Date();
+      }
+
+      await stepRepo.save(nextStep);
+
+      // 10. Update application
+      application.currentStepCode = nextStep.stepCode;
+      application.currentStepStatus = AdmissionWorkflowStepStatus.IN_PROGRESS;
+      application.overallStatus = AdmissionOverallStatus.IN_PROGRESS;
+
+      await appRepo.save(application);
+
+      return savedSubmission;
+    });
   }
 }

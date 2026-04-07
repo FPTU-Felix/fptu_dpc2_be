@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsObject, IsOptional } from 'class-validator';
 
 export class SubmitStepDto {
   @ApiPropertyOptional({
@@ -14,6 +14,4 @@ export class SubmitStepDto {
   @IsOptional()
   @IsObject()
   formData?: Record<string, any>;
-
-
 }

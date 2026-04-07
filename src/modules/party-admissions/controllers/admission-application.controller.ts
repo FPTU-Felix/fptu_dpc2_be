@@ -22,6 +22,7 @@ import { MyAdmissionCurrentStatusResponseDto } from '../dto/response/my-admissio
 import { AdmissionApplicationService } from '../services/admission-application.service';
 import { AuthGuard } from '@nestjs/passport';
 import { UseGuards } from '@nestjs/common';
+import { AdmissionWorkflowStep } from '../enum/admission-workflow-step.enum';
 
 @ApiTags('Admission Applications')
 @Controller('admission-applications')
@@ -38,14 +39,14 @@ export class AdmissionApplicationController {
   @ApiResponse({ status: 200, type: MyAdmissionCurrentStatusResponseDto })
   async getMyCurrentStatus(@Req() req: Request) {
     const user = req.user as {
-      id: string;
-      role?: { name?: string } | string;
-      roleName?: string;
+      sub: string;
+      username: string;
+      roleName: string;
+      iat: number;
+      exp: number;
     };
 
-    return this.admissionApplicationService.getMyCurrentStatusWithRoleCheck(
-      user,
-    );
+    return this.admissionApplicationService.getMyCurrentStatusWithRoleCheck(user);
   }
 
   @Get()
@@ -74,7 +75,7 @@ export class AdmissionApplicationController {
     @Req() req: Request,
   ) {
     const user = req.user as {
-      id: string;
+      sub: string;
       role?: { name?: string } | string;
       roleName?: string;
     };
@@ -86,22 +87,27 @@ export class AdmissionApplicationController {
     );
   }
 
+
+
   @Post(':stepCode/submit')
-  @ApiOperation({ summary: 'Submit step hiện tại' })
+  @ApiOperation({
+    summary:
+      'Submit step hiện tại (dành cho QCUT, có 2 bước: gửi đơn lần đầu và xin xác nhận địa phương)',
+  })
   async submitStep(
     @Param('stepCode') stepCode: string,
-    @Body() dto: SubmitStepDto,
+    @Body() dto: SubmitStepDto = {},
     @Req() req: Request,
   ) {
     const user = req.user as {
-      id: string;
+      sub: string;
       role?: { name?: string } | string;
       roleName?: string;
     };
 
     return this.admissionApplicationService.submitStep(
       user,
-      stepCode as any,
+      stepCode as AdmissionWorkflowStep,
       dto,
     );
   }
@@ -118,6 +124,25 @@ export class AdmissionApplicationController {
     return this.admissionApplicationService.approveStep(id, user.id, dto);
   }
 
+  @Post(':id/resolution-drafting/submit')
+  @ApiOperation({ summary: 'Chi uỷ soạn và gửi nghị quyết kết nạp' })
+  async submitResolutionDraft(
+    @Param('id') applicationId: string,
+    @Body() dto: SubmitStepDto,
+    @Req() req: Request,
+  ) {
+    const user = req.user as {
+      sub: string;
+      role?: { name?: string } | string;
+      roleName?: string;
+    };
+
+    return this.admissionApplicationService.submitResolutionDraft(
+      applicationId,
+      user,
+      dto,
+    );
+  }
   @Post(':id/return')
   @ApiOperation({ summary: 'Trả lại hồ sơ' })
   async returnStep(
@@ -125,9 +150,9 @@ export class AdmissionApplicationController {
     @Body() dto: ReturnStepDto,
     @Req() req: Request,
   ) {
-    const user = req.user as { id: string };
+    const user = req.user as { sub: string };
 
-    return this.admissionApplicationService.returnStep(id, user.id, dto);
+    return this.admissionApplicationService.returnStep(id, user.sub, dto);
   }
 
   @Post(':id/reject')
@@ -149,11 +174,10 @@ export class AdmissionApplicationController {
     @Req() req: Request,
   ) {
     const user = req.user as {
-      id: string;
+      sub: string;
       role?: { name?: string } | string;
       roleName?: string;
     };
-
     return this.admissionApplicationService.getMyPendingApplications(
       user,
       query,

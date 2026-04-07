@@ -270,17 +270,6 @@ export class MyAdmissionStepResponseDto {
   })
   updatedAt?: Date;
 
-  @ApiPropertyOptional({
-    type: () => MyAdmissionStepSubmissionResponseDto,
-    nullable: true,
-  })
-  latestSubmission?: MyAdmissionStepSubmissionResponseDto | null;
-
-  @ApiPropertyOptional({
-    type: () => MyAdmissionStepReviewResponseDto,
-    nullable: true,
-  })
-  latestReview?: MyAdmissionStepReviewResponseDto | null;
 
   @ApiProperty({
     type: () => [MyAdmissionStepSubmissionResponseDto],
