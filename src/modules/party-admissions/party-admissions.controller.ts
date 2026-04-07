@@ -17,7 +17,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { GetCurrentUser } from '../../modules/auth/decorators/get-user.decorator';
 import { UserRole, AdmissionStatusEnum } from 'src/common/enums';
 
-@ApiTags('Party Admissions - Quản lý kết nạp Đảng')
+// @ApiTags('Party Admissions - Quản lý kết nạp Đảng')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('party-admissions')
