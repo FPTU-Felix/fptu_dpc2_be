@@ -186,4 +186,16 @@ export class AnnualAssessmentsController {
   ) {
     return await this.assessmentsService.getMyAssessmentByYear(userId, year);
   }
+
+  @Get('statistics/:partyCellId/:year')
+  @ApiOperation({ summary: 'Thống kê phần trăm xếp loại Đánh giá (Biểu đồ)' })
+  async getAssessmentStats(
+    @Param('partyCellId') partyCellId: string,
+    @Param('year', ParseIntPipe) year: number,
+  ) {
+    return await this.assessmentsService.getAssessmentStatistics(
+      partyCellId,
+      year,
+    );
+  }
 }

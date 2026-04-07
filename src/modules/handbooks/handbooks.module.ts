@@ -1,18 +1,19 @@
 import { Module } from '@nestjs/common';
 import { HandbooksService } from './handbooks.service';
 import { HandbooksController } from './handbooks.controller';
-import { HandbookLink } from './entities/handbook-link.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Handbook } from './entities/handbook.entity';
 import { User } from '../users/entities/user.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { HandbookArticle } from './entities/handbook-article.entity';
+import { HandbookCategory } from './entities/handbook-category.entity';
+import { HandbooksManageController } from './handbooks.manage.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Handbook, HandbookLink, User]),
+    TypeOrmModule.forFeature([HandbookArticle, HandbookCategory, User]),
     NotificationsModule,
   ],
-  controllers: [HandbooksController],
+  controllers: [HandbooksController, HandbooksManageController],
   providers: [HandbooksService],
 })
 export class HandbooksModule {}

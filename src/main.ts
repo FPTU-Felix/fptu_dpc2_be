@@ -29,11 +29,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
-  app.enableCors({
-    origin: ['https://dpc-client-fe.vercel.app', 'http://localhost:3000'],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true,
-  });
+  app.enableCors({});
   await app.listen(3000);
 }
 bootstrap();
