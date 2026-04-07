@@ -26,8 +26,12 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { DocumentsModule } from './modules/documents/documents.module';
 import { DocumentCategoriesModule } from './modules/document-categories/document-categories.module';
 import minioConfig from './config/minio.config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 @Module({
   imports: [
+    EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     // 1. Cấu hình biến môi trường
     ConfigModule.forRoot({
@@ -80,6 +84,12 @@ import minioConfig from './config/minio.config';
     DocumentCategoriesModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
+    },
+  ],
 })
 export class AppModule {}
