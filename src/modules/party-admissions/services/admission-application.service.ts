@@ -61,8 +61,7 @@ export class AdmissionApplicationService {
     private readonly roleRepo: Repository<Role>,
 
     private readonly dataSource: DataSource,
-
-  ) { }
+  ) {}
 
   private generateApplicationCode(): string {
     const now = new Date();
@@ -145,9 +144,7 @@ export class AdmissionApplicationService {
 
   private validateStepEditableForSubmit(step: PartyAdmissionStepEntity) {
     if (!step.isCurrent) {
-      throw new BadRequestException(
-        'Chỉ được submit bước hiện tại của hồ sơ',
-      );
+      throw new BadRequestException('Chỉ được submit bước hiện tại của hồ sơ');
     }
 
     if (step.isCompleted) {
@@ -215,6 +212,43 @@ export class AdmissionApplicationService {
     });
 
     return latest?.version ?? 0;
+  }
+
+  private async getUsersMap(userIds: string[]): Promise<Map<string, User>> {
+    const uniqueIds = [...new Set(userIds.filter(Boolean))];
+
+    if (!uniqueIds.length) {
+      return new Map<string, User>();
+    }
+
+    const users = await this.userRepo.find({
+      where: { id: In(uniqueIds) },
+      relations: ['role'],
+    });
+
+    return new Map(users.map((user) => [user.id, user]));
+  }
+
+  private mapUserSummary(user?: User | null) {
+    if (!user) {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      isActive: user.isActive,
+      roleId: user.roleId,
+      role: user.role
+        ? {
+            id: user.role.id,
+            name: user.role.name,
+          }
+        : null,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   }
 
   async initAdmissionForQCUT(userId: string) {
@@ -343,9 +377,7 @@ export class AdmissionApplicationService {
         },
       ];
 
-      const savedSteps = await stepRepo.save(
-        stepRepo.create(stepsPayload),
-      );
+      const savedSteps = await stepRepo.save(stepRepo.create(stepsPayload));
 
       return {
         application: savedApplication,
@@ -533,9 +565,7 @@ export class AdmissionApplicationService {
 
     const currentStep =
       mappedSteps.find((step) => step.isCurrent) ||
-      mappedSteps.find(
-        (step) => step.stepCode === application.currentStepCode,
-      ) ||
+      mappedSteps.find((step) => step.stepCode === application.currentStepCode) ||
       null;
 
     return {
@@ -553,13 +583,10 @@ export class AdmissionApplicationService {
   }
 
   async getMyCurrentStatusWithRoleCheck(user: {
-    sub: string; // ID được lấy từ sub
-    roleName: string; // roleName của user
+    sub: string;
+    roleName: string;
   }): Promise<MyAdmissionCurrentStatusResponseDto> {
-    // Lấy roleName từ user
     const roleName = user.roleName;
-
-    // Kiểm tra quyền truy cập của người dùng
     const allowedRoles = ['OUTSTANDING_INDIVIDUAL', 'QCUT'];
 
     if (!roleName || !allowedRoles.includes(roleName)) {
@@ -568,8 +595,16 @@ export class AdmissionApplicationService {
       );
     }
 
-    // Nếu role hợp lệ, gọi phương thức để lấy trạng thái của user
-    return this.getMyCurrentStatus(user.sub);  // Sử dụng sub làm ID
+    const result = await this.getMyCurrentStatus(user.sub);
+    const currentUser = await this.userRepo.findOne({
+      where: { id: user.sub },
+      relations: ['role'],
+    });
+
+    return {
+      ...(result as any),
+      outstandingIndividual: this.mapUserSummary(currentUser),
+    } as MyAdmissionCurrentStatusResponseDto;
   }
 
   async saveDraftStep(
@@ -713,7 +748,6 @@ export class AdmissionApplicationService {
         },
       });
 
-      // Ưu tiên dữ liệu cũ trước, rồi merge dữ liệu mới nếu có
       const finalFormData: Record<string, any> = {
         ...(latestSubmission?.formData ?? {}),
         ...(dto?.formData ?? {}),
@@ -725,13 +759,8 @@ export class AdmissionApplicationService {
         );
       }
 
-      // validate giấy tờ bắt buộc theo step
-      this.validateRequiredDocumentsFromFormData(
-        step.stepCode,
-        finalFormData,
-      );
+      this.validateRequiredDocumentsFromFormData(step.stepCode, finalFormData);
 
-      // đóng latest cũ nếu có
       if (latestSubmission) {
         latestSubmission.isLatest = false;
         await submissionRepo.save(latestSubmission);
@@ -789,8 +818,7 @@ export class AdmissionApplicationService {
         application.overallStatus = AdmissionOverallStatus.IN_PROGRESS;
       } else {
         application.currentStepCode = AdmissionWorkflowStep.COMPLETED;
-        application.currentStepStatus =
-          AdmissionWorkflowStepStatus.COMPLETED;
+        application.currentStepStatus = AdmissionWorkflowStepStatus.COMPLETED;
         application.overallStatus = AdmissionOverallStatus.APPROVED;
         (application as any).approvedAt = new Date();
       }
@@ -815,6 +843,11 @@ export class AdmissionApplicationService {
         'currentStep',
         'currentStep.applicationId = application.id AND currentStep.stepCode = application.currentStepCode',
       )
+      .leftJoin(
+        User,
+        'outstandingUser',
+        'outstandingUser.id = application.outstandingIndividualId',
+      )
       .where('application.overallStatus <> :draftStatus', {
         draftStatus: AdmissionOverallStatus.DRAFT,
       });
@@ -828,7 +861,9 @@ export class AdmissionApplicationService {
             .orWhere(
               'CAST(application."outstandingIndividualId" AS TEXT) ILIKE :keyword',
               { keyword },
-            );
+            )
+            .orWhere('outstandingUser.username ILIKE :keyword', { keyword })
+            .orWhere('outstandingUser.email ILIKE :keyword', { keyword });
         }),
       );
     }
@@ -857,26 +892,32 @@ export class AdmissionApplicationService {
 
     const currentSteps = applications.length
       ? await this.stepRepo.find({
-        where: applications.map((application) => ({
-          applicationId: application.id,
-          stepCode: application.currentStepCode,
-        })),
-      })
+          where: applications.map((application) => ({
+            applicationId: application.id,
+            stepCode: application.currentStepCode,
+          })),
+        })
       : [];
 
     const currentStepMap = new Map(
       currentSteps.map((step) => [`${step.applicationId}_${step.stepCode}`, step]),
     );
 
+    const usersMap = await this.getUsersMap(
+      applications.map((application) => application.outstandingIndividualId),
+    );
+
     const items = applications.map((application) => {
       const currentStep = currentStepMap.get(
         `${application.id}_${application.currentStepCode}`,
       );
+      const outstandingUser = usersMap.get(application.outstandingIndividualId);
 
       return {
         id: application.id,
         code: application.code,
         outstandingIndividualId: application.outstandingIndividualId,
+        outstandingIndividual: this.mapUserSummary(outstandingUser),
         overallStatus: application.overallStatus,
         currentStepCode: application.currentStepCode,
         currentStepStatus: application.currentStepStatus,
@@ -895,7 +936,7 @@ export class AdmissionApplicationService {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
-    };
+    } as AdmissionApplicationListResponseDto;
   }
 
   async getApplicationDetail(
@@ -909,7 +950,7 @@ export class AdmissionApplicationService {
       throw new NotFoundException('Không tìm thấy hồ sơ');
     }
 
-    const [steps, submissions, reviews] = await Promise.all([
+    const [steps, submissions, reviews, outstandingUser] = await Promise.all([
       this.stepRepo.find({
         where: { applicationId },
         order: { stepOrder: 'ASC' },
@@ -922,12 +963,17 @@ export class AdmissionApplicationService {
         where: { applicationId },
         order: { processedAt: 'DESC' },
       }),
+      this.userRepo.findOne({
+        where: { id: application.outstandingIndividualId },
+        relations: ['role'],
+      }),
     ]);
 
     return {
       id: application.id,
       code: application.code,
       outstandingIndividualId: application.outstandingIndividualId,
+      outstandingIndividual: this.mapUserSummary(outstandingUser),
       overallStatus: application.overallStatus,
       currentStepCode: application.currentStepCode,
       currentStepStatus: application.currentStepStatus,
@@ -960,11 +1006,7 @@ export class AdmissionApplicationService {
     } as AdmissionApplicationDetailDto;
   }
 
-  async approveStep(
-    applicationId: string,
-    userId: string,
-    dto: ApproveStepDto,
-  ) {
+  async approveStep(applicationId: string, userId: string, dto: ApproveStepDto) {
     return this.dataSource.transaction(async (manager) => {
       const appRepo = manager.getRepository(PartyAdmissionApplicationEntity);
       const stepRepo = manager.getRepository(PartyAdmissionStepEntity);
@@ -988,7 +1030,6 @@ export class AdmissionApplicationService {
         throw new NotFoundException('Không tìm thấy bước hiện tại');
       }
 
-      // log review
       await reviewRepo.save(
         reviewRepo.create({
           applicationId,
@@ -1002,7 +1043,6 @@ export class AdmissionApplicationService {
         }),
       );
 
-      // complete step hiện tại
       step.status = AdmissionWorkflowStepStatus.COMPLETED;
       step.isCurrent = false;
       step.isCompleted = true;
@@ -1013,11 +1053,7 @@ export class AdmissionApplicationService {
 
       await stepRepo.save(step);
 
-      const next = await this.getNextStep(
-        manager,
-        applicationId,
-        step.stepOrder,
-      );
+      const next = await this.getNextStep(manager, applicationId, step.stepOrder);
 
       if (!next) {
         app.overallStatus = AdmissionOverallStatus.APPROVED;
@@ -1027,9 +1063,7 @@ export class AdmissionApplicationService {
 
         await appRepo.save(app);
 
-        await this.promoteToPartyMember(
-          app.outstandingIndividualId,
-        );
+        await this.promoteToPartyMember(app.outstandingIndividualId);
 
         return { success: true, done: true };
       }
@@ -1055,11 +1089,7 @@ export class AdmissionApplicationService {
     });
   }
 
-  async returnStep(
-    applicationId: string,
-    userId: string,
-    dto: ReturnStepDto,
-  ) {
+  async returnStep(applicationId: string, userId: string, dto: ReturnStepDto) {
     return this.dataSource.transaction(async (manager) => {
       const appRepo = manager.getRepository(PartyAdmissionApplicationEntity);
       const stepRepo = manager.getRepository(PartyAdmissionStepEntity);
@@ -1129,11 +1159,7 @@ export class AdmissionApplicationService {
     });
   }
 
-  async rejectStep(
-    applicationId: string,
-    userId: string,
-    dto: RejectStepDto,
-  ) {
+  async rejectStep(applicationId: string, userId: string, dto: RejectStepDto) {
     return this.dataSource.transaction(async (manager) => {
       const appRepo = manager.getRepository(PartyAdmissionApplicationEntity);
       const stepRepo = manager.getRepository(PartyAdmissionStepEntity);
@@ -1263,8 +1289,6 @@ export class AdmissionApplicationService {
     }
 
     const processableSteps = this.getProcessableStepsByRole(roleName);
-    console.log('roleName', roleName);
-    console.log('processableSteps', processableSteps);
 
     if (!processableSteps.length) {
       return {
@@ -1286,6 +1310,11 @@ export class AdmissionApplicationService {
         PartyAdmissionStepEntity,
         'currentStep',
         'currentStep.applicationId = application.id AND currentStep.stepCode = application.currentStepCode',
+      )
+      .leftJoin(
+        User,
+        'outstandingUser',
+        'outstandingUser.id = application.outstandingIndividualId',
       )
       .where('application.overallStatus IN (:...overallStatuses)', {
         overallStatuses: [
@@ -1309,40 +1338,45 @@ export class AdmissionApplicationService {
             .orWhere(
               'CAST("application"."outstandingIndividualId" AS TEXT) ILIKE :keyword',
               { keyword },
-            );
+            )
+            .orWhere('outstandingUser.username ILIKE :keyword', { keyword })
+            .orWhere('outstandingUser.email ILIKE :keyword', { keyword });
         }),
       );
     }
 
     qb.orderBy('application.createdAt', 'DESC').skip(skip).take(limit);
 
-    console.log(qb.getQuery());
-    console.log(qb.getParameters());
-
     const [applications, total] = await qb.getManyAndCount();
 
     const currentSteps = applications.length
       ? await this.stepRepo.find({
-        where: applications.map((application) => ({
-          applicationId: application.id,
-          stepCode: application.currentStepCode,
-        })),
-      })
+          where: applications.map((application) => ({
+            applicationId: application.id,
+            stepCode: application.currentStepCode,
+          })),
+        })
       : [];
 
     const currentStepMap = new Map(
       currentSteps.map((step) => [`${step.applicationId}_${step.stepCode}`, step]),
     );
 
+    const usersMap = await this.getUsersMap(
+      applications.map((application) => application.outstandingIndividualId),
+    );
+
     const items = applications.map((application) => {
       const currentStep = currentStepMap.get(
         `${application.id}_${application.currentStepCode}`,
       );
+      const outstandingUser = usersMap.get(application.outstandingIndividualId);
 
       return {
         id: application.id,
         code: application.code,
         outstandingIndividualId: application.outstandingIndividualId,
+        outstandingIndividual: this.mapUserSummary(outstandingUser),
         overallStatus: application.overallStatus,
         currentStepCode: application.currentStepCode,
         currentStepStatus: application.currentStepStatus,
@@ -1361,9 +1395,8 @@ export class AdmissionApplicationService {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
-    };
+    } as AdmissionApplicationListResponseDto;
   }
-
 
   private getProcessableStepsByRole(roleName: string): AdmissionWorkflowStep[] {
     const map: Record<string, AdmissionWorkflowStep[]> = {
@@ -1375,13 +1408,12 @@ export class AdmissionApplicationService {
         AdmissionWorkflowStep.PBT_CONTENT_REVIEW,
         AdmissionWorkflowStep.RED_SEAL_CHECK,
       ],
-      SECRETARY: [
-        AdmissionWorkflowStep.SECRETARY_RESOLUTION_REVIEW,
-      ],
+      SECRETARY: [AdmissionWorkflowStep.SECRETARY_RESOLUTION_REVIEW],
     };
 
     return map[roleName] ?? [];
   }
+
   private canProcessStep(
     roleName: string,
     stepCode: AdmissionWorkflowStep,
@@ -1389,13 +1421,8 @@ export class AdmissionApplicationService {
     return this.getProcessableStepsByRole(roleName).includes(stepCode);
   }
 
-  private async promoteToPartyMember(
-    userId: string,
-  ) {
-    const userRepo = this.userRepo;
-    const roleRepo = this.roleRepo;
-
-    const user = await userRepo.findOne({
+  private async promoteToPartyMember(userId: string) {
+    const user = await this.userRepo.findOne({
       where: { id: userId },
     });
 
@@ -1403,7 +1430,7 @@ export class AdmissionApplicationService {
       throw new NotFoundException('Không tìm thấy user');
     }
 
-    const partyMemberRole = await roleRepo.findOne({
+    const partyMemberRole = await this.roleRepo.findOne({
       where: { name: 'PARTY_MEMBER' },
     });
 
@@ -1415,7 +1442,7 @@ export class AdmissionApplicationService {
 
     user.roleId = partyMemberRole.id;
 
-    await userRepo.save(user);
+    await this.userRepo.save(user);
 
     return user;
   }
@@ -1466,7 +1493,6 @@ export class AdmissionApplicationService {
         PartyAdmissionStepSubmissionEntity,
       );
 
-      // 1. Lấy application
       const application = await appRepo.findOne({
         where: { id: applicationId },
       });
@@ -1487,15 +1513,11 @@ export class AdmissionApplicationService {
       }
 
       if (
-        application.currentStepCode !==
-        AdmissionWorkflowStep.RESOLUTION_DRAFTING
+        application.currentStepCode !== AdmissionWorkflowStep.RESOLUTION_DRAFTING
       ) {
-        throw new BadRequestException(
-          'Hồ sơ không ở bước soạn nghị quyết',
-        );
+        throw new BadRequestException('Hồ sơ không ở bước soạn nghị quyết');
       }
 
-      // 2. Lấy step
       const step = await stepRepo.findOne({
         where: {
           applicationId,
@@ -1511,7 +1533,6 @@ export class AdmissionApplicationService {
         throw new BadRequestException('Đây không phải bước hiện tại');
       }
 
-      // 3. Lấy submission cũ
       const latestSubmission = await submissionRepo.findOne({
         where: {
           applicationId,
@@ -1523,25 +1544,18 @@ export class AdmissionApplicationService {
         },
       });
 
-      // 4. Merge formData
       const finalFormData: Record<string, any> = {
         ...(latestSubmission?.formData ?? {}),
         ...(dto?.formData ?? {}),
       };
 
-      // 5. Validate có nghị quyết
       const resolutionFile =
-        finalFormData[
-        AdmissionDocumentType.NGHI_QUYET_KET_NAP_DU_THAO
-        ];
+        finalFormData[AdmissionDocumentType.NGHI_QUYET_KET_NAP_DU_THAO];
 
       if (!resolutionFile) {
-        throw new BadRequestException(
-          'Thiếu file nghị quyết dự thảo',
-        );
+        throw new BadRequestException('Thiếu file nghị quyết dự thảo');
       }
 
-      // 6. Đóng bản cũ
       if (latestSubmission) {
         latestSubmission.isLatest = false;
         await submissionRepo.save(latestSubmission);
@@ -1551,7 +1565,6 @@ export class AdmissionApplicationService {
         ? latestSubmission.version + 1
         : (await this.getMaxVersion(applicationId, step.id)) + 1;
 
-      // 7. Tạo submission mới
       const newSubmission = submissionRepo.create({
         applicationId,
         stepId: step.id,
@@ -1565,7 +1578,6 @@ export class AdmissionApplicationService {
 
       const savedSubmission = await submissionRepo.save(newSubmission);
 
-      // 8. Complete step hiện tại
       step.status = AdmissionWorkflowStepStatus.COMPLETED;
       step.isCurrent = false;
       step.isCompleted = true;
@@ -1578,7 +1590,6 @@ export class AdmissionApplicationService {
 
       await stepRepo.save(step);
 
-      // 9. Mở step tiếp theo (Bí thư duyệt)
       const nextStep = await this.getNextStep(
         manager,
         applicationId,
@@ -1602,7 +1613,6 @@ export class AdmissionApplicationService {
 
       await stepRepo.save(nextStep);
 
-      // 10. Update application
       application.currentStepCode = nextStep.stepCode;
       application.currentStepStatus = AdmissionWorkflowStepStatus.IN_PROGRESS;
       application.overallStatus = AdmissionOverallStatus.IN_PROGRESS;
