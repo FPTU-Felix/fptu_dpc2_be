@@ -25,6 +25,7 @@ import { MinioModule } from './modules/minio/minio.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { DocumentCategoriesModule } from './modules/document-categories/document-categories.module';
+import { FileModule } from './modules/file/file.module';
 import minioConfig from './config/minio.config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -82,6 +83,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     NotificationsModule,
     DocumentsModule,
     DocumentCategoriesModule,
+    FileModule,
   ],
   controllers: [AppController],
   providers: [

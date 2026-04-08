@@ -36,6 +36,7 @@ export class AuthController {
   @Post('signin')
   @HttpCode(HttpStatus.OK)
   signin(@Body() dto: SigninDto) {
+    console.log('dto', dto);  
     return this.authService.signin(dto);
   }
   @ApiBearerAuth()

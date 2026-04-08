@@ -1,154 +1,188 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HandbooksService } from './handbooks.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Handbook } from './entities/handbook.entity';
-import { HandbookLink } from './entities/handbook-link.entity';
+import { HandbookCategory } from './entities/handbook-category.entity';
+import { HandbookArticle, ArticleStatus } from './entities/handbook-article.entity';
+import { User } from '../users/entities/user.entity';
 import { Repository } from 'typeorm';
-import { NotFoundException } from '@nestjs/common';
-import { paginate } from 'nestjs-typeorm-paginate';
+import { MinioService } from '../minio/minio.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
+import * as nestjsTypeormPaginate from 'nestjs-typeorm-paginate';
 
-// Mock thư viện phân trang
 jest.mock('nestjs-typeorm-paginate', () => ({
   paginate: jest.fn(),
 }));
 
-describe('HandbooksService', () => {
+describe('HandbooksService - Full Coverage Suite', () => {
   let service: HandbooksService;
-  let handbookRepo: Repository<Handbook>;
-  let linkRepo: Repository<HandbookLink>;
+  let categoryRepo: Repository<HandbookCategory>;
+  let articleRepo: Repository<HandbookArticle>;
+  let userRepo: Repository<User>;
+  let minioService: MinioService;
+  let notificationsService: NotificationsService;
 
-  const mockHandbookId = 'hb-123';
-  const mockLinkId = 'link-456';
-
-  const mockHandbook = { id: mockHandbookId, title: 'Sổ tay' };
-  const mockLink = { id: mockLinkId, title: 'Tài liệu' };
-
-  // 1. Tạo một đối tượng Mock QueryBuilder cố định để theo dõi các lời gọi hàm
-  const mockQueryBuilder = {
-    leftJoinAndSelect: jest.fn().mockReturnThis(),
-    orderBy: jest.fn().mockReturnThis(),
-    where: jest.fn().mockReturnThis(),
+  const mockCategory = { id: 'cat-1', name: 'Hướng dẫn', slug: 'huong-dan' };
+  const mockArticle = { 
+    id: 'art-1', title: 'Bài viết 1', slug: 'bai-viet-1', 
+    status: ArticleStatus.PUBLISHED, viewCount: 0, thumbnailUrl: 'old.jpg',
+    categoryId: 'cat-1'
   };
 
-  const mockRepositoryFactory = () => ({
-    findOne: jest.fn(),
-    create: jest.fn(),
-    save: jest.fn(),
-    remove: jest.fn(),
-    // Luôn trả về đối tượng mockQueryBuilder duy nhất ở trên
-    createQueryBuilder: jest.fn(() => mockQueryBuilder),
-  });
+  const mockQueryBuilder: any = {
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    loadRelationCountAndMap: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    getMany: jest.fn(),
+    getOne: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         HandbooksService,
-        { provide: getRepositoryToken(Handbook), useValue: mockRepositoryFactory() },
-        { provide: getRepositoryToken(HandbookLink), useValue: mockRepositoryFactory() },
+        {
+          provide: getRepositoryToken(HandbookCategory),
+          useValue: {
+            create: jest.fn().mockImplementation(dto => dto),
+            save: jest.fn().mockImplementation(c => Promise.resolve({ id: 'new-cat', ...c })),
+            findOne: jest.fn(),
+            remove: jest.fn(),
+            createQueryBuilder: jest.fn(() => mockQueryBuilder),
+          },
+        },
+        {
+          provide: getRepositoryToken(HandbookArticle),
+          useValue: {
+            create: jest.fn().mockImplementation(dto => ({ ...mockArticle, ...dto })),
+            save: jest.fn().mockImplementation(a => Promise.resolve(a)),
+            findOne: jest.fn(),
+            remove: jest.fn(),
+            count: jest.fn(),
+            createQueryBuilder: jest.fn(() => mockQueryBuilder),
+          },
+        },
+        {
+          provide: getRepositoryToken(User),
+          useValue: { find: jest.fn().mockResolvedValue([{ id: 'u1', email: 'u@t.com' }]) },
+        },
+        {
+          provide: MinioService,
+          useValue: { uploadFile: jest.fn().mockResolvedValue({ objectName: 'new.jpg' }), deleteFile: jest.fn() },
+        },
+        {
+          provide: NotificationsService,
+          useValue: { createInternal: jest.fn().mockResolvedValue({}) },
+        },
       ],
     }).compile();
 
     service = module.get<HandbooksService>(HandbooksService);
-    handbookRepo = module.get<Repository<Handbook>>(getRepositoryToken(Handbook));
-    linkRepo = module.get<Repository<HandbookLink>>(getRepositoryToken(HandbookLink));
+    categoryRepo = module.get(getRepositoryToken(HandbookCategory));
+    articleRepo = module.get(getRepositoryToken(HandbookArticle));
+    userRepo = module.get(getRepositoryToken(User));
+    minioService = module.get(MinioService);
+    notificationsService = module.get(NotificationsService);
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
+  // =========================================================================
+  // 🟢 ROLE 1: ĐẢNG VIÊN (READ ONLY)
+  // =========================================================================
 
-  // ==========================================
-  // 1. HANDBOOK BRANCHES
-  // ==========================================
-  describe('findAll', () => {
-    it('nên gọi .where() khi isActiveOnly = true', async () => {
-      await service.findAll({ page: 1, limit: 10 }, true);
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-        'handbook.isActive = :isActive',
-        { isActive: true },
-      );
+  describe('Đảng viên - Xem nội dung', () => {
+    it(' getCategoriesForUser - trả về chuyên mục kèm đếm bài viết', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([mockCategory]);
+      await service.getCategoriesForUser();
+      expect(mockQueryBuilder.loadRelationCountAndMap).toHaveBeenCalled();
     });
 
-    it('không nên gọi .where() khi isActiveOnly = false', async () => {
-      await service.findAll({ page: 1, limit: 10 }, false);
-      expect(mockQueryBuilder.where).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('findOne', () => {
-    it('thành công: trả về handbook', async () => {
-      (handbookRepo.findOne as jest.Mock).mockResolvedValue(mockHandbook);
-      expect(await service.findOne(mockHandbookId)).toEqual(mockHandbook);
+    it(' getPublishedArticles - gọi paginate với các filter đúng', async () => {
+      const filters = { search: 'Đảng', categoryId: 'cat-1' };
+      await service.getPublishedArticles({ page: 1, limit: 10 }, filters);
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(expect.stringContaining('ILIKE'), { search: '%Đảng%' });
+      expect(nestjsTypeormPaginate.paginate).toHaveBeenCalled();
     });
 
-    it('thất bại: ném lỗi NotFoundException', async () => {
-      (handbookRepo.findOne as jest.Mock).mockResolvedValue(null);
-      await expect(service.findOne('id')).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('create/update/remove Handbook', () => {
-    it('create: nên lưu bản ghi mới', async () => {
-      (handbookRepo.create as jest.Mock).mockReturnValue(mockHandbook);
-      await service.create({ title: 'New' } as any);
-      expect(handbookRepo.save).toHaveBeenCalled();
+    it(' getArticleBySlug - tìm thấy bài viết và tăng lượt xem', async () => {
+      (articleRepo.findOne as jest.Mock).mockResolvedValue({ ...mockArticle });
+      const result = await service.getArticleBySlug('bai-viet-1');
+      expect(result.viewCount).toBe(1);
+      expect(articleRepo.save).toHaveBeenCalled();
     });
 
-    it('update: thành công cập nhật dữ liệu', async () => {
-      (handbookRepo.findOne as jest.Mock).mockResolvedValue(mockHandbook);
-      await service.update(mockHandbookId, { title: 'Update' });
-      expect(handbookRepo.save).toHaveBeenCalled();
+    it(' getArticleBySlug - ném lỗi nếu bài viết không tồn tại/bị ẩn', async () => {
+      (articleRepo.findOne as jest.Mock).mockResolvedValue(null);
+      await expect(service.getArticleBySlug('unknown')).rejects.toThrow(NotFoundException);
     });
 
-    it('remove: thành công xóa bản ghi', async () => {
-      (handbookRepo.findOne as jest.Mock).mockResolvedValue(mockHandbook);
-      const result = await service.remove(mockHandbookId);
-      expect(handbookRepo.remove).toHaveBeenCalled();
-      expect(result.message).toContain('thành công');
+    it(' getRelatedArticles - lấy đúng 3 bài cùng chuyên mục (trừ bài hiện tại)', async () => {
+      (articleRepo.findOne as jest.Mock).mockResolvedValue(mockArticle);
+      mockQueryBuilder.getMany.mockResolvedValue([{}, {}, {}]);
+      const result = await service.getRelatedArticles('bai-viet-1');
+      expect(mockQueryBuilder.limit).toHaveBeenCalledWith(3);
+      expect(result.length).toBe(3);
     });
   });
 
-  // ==========================================
-  // 2. HANDBOOK LINKS BRANCHES
-  // ==========================================
-  describe('addLink', () => {
-    it('thành công: tạo link mới cho handbook tồn tại', async () => {
-      (handbookRepo.findOne as jest.Mock).mockResolvedValue(mockHandbook);
-      (linkRepo.create as jest.Mock).mockReturnValue(mockLink);
-      await service.addLink(mockHandbookId, { title: 'T', url: 'http://u' });
-      expect(linkRepo.save).toHaveBeenCalled();
+  // =========================================================================
+  // 🔴 ROLE 2: ADMIN (CMS CRUD)
+  // =========================================================================
+
+  describe('Admin - Quản lý Chuyên mục', () => {
+    it(' createCategory - tạo mới thành công', async () => {
+      (categoryRepo.findOne as jest.Mock).mockResolvedValue(null);
+      const result = await service.createCategory({ name: 'Tin mới' });
+      expect(result.slug).toBe('tin-moi');
     });
 
-    it('thất bại: ném lỗi nếu handbook cha không tồn tại', async () => {
-      (handbookRepo.findOne as jest.Mock).mockResolvedValue(null);
-      await expect(service.addLink('id', { title: 'T', url: 'http://u' }))
-        .rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('updateLink', () => {
-    it('thành công: cập nhật link', async () => {
-      (linkRepo.findOne as jest.Mock).mockResolvedValue(mockLink);
-      await service.updateLink(mockLinkId, { title: 'New' });
-      expect(linkRepo.save).toHaveBeenCalled();
+    it(' createCategory - lỗi nếu tên đã tồn tại', async () => {
+      (categoryRepo.findOne as jest.Mock).mockResolvedValue(mockCategory);
+      await expect(service.createCategory({ name: 'Hướng dẫn' })).rejects.toThrow(BadRequestException);
     });
 
-    it('thất bại: ném lỗi NotFound nếu sai linkId', async () => {
-      (linkRepo.findOne as jest.Mock).mockResolvedValue(null);
-      await expect(service.updateLink('bad-id', {})).rejects.toThrow(NotFoundException);
+    it(' deleteCategory - xóa thành công', async () => {
+      (categoryRepo.findOne as jest.Mock).mockResolvedValue(mockCategory);
+      await service.deleteCategory('cat-1');
+      expect(categoryRepo.remove).toHaveBeenCalled();
     });
   });
 
-  describe('removeLink', () => {
-    it('thành công: xóa link', async () => {
-      (linkRepo.findOne as jest.Mock).mockResolvedValue(mockLink);
-      await service.removeLink(mockLinkId);
-      expect(linkRepo.remove).toHaveBeenCalled();
+  describe('Admin - Quản lý Bài viết', () => {
+    it(' getAdminArticles - trả về bài viết kèm thống kê stats', async () => {
+      (articleRepo.count as jest.Mock).mockResolvedValueOnce(10).mockResolvedValueOnce(7);
+      const result = await service.getAdminArticles({ page: 1, limit: 10 });
+      expect(result.dashboardStats).toEqual({ total: 10, published: 7, draft: 3 });
     });
 
-    it('thất bại: ném lỗi NotFound khi xóa link không tồn tại', async () => {
-      (linkRepo.findOne as jest.Mock).mockResolvedValue(null);
-      await expect(service.removeLink('bad-id')).rejects.toThrow(NotFoundException);
+    it(' createArticle - xử lý va chạm Slug (thêm timestamp)', async () => {
+      (articleRepo.findOne as jest.Mock).mockResolvedValue(mockArticle); // Giả lập trùng slug
+      const result = await service.createArticle({ title: 'Bài viết 1', status: ArticleStatus.DRAFT });
+      expect(result.slug).toMatch(/^bai-viet-1-\d{4}$/);
+    });
+
+    it(' createArticle - upload ảnh lên MinIO nếu có file', async () => {
+      await service.createArticle({ title: 'A', status: ArticleStatus.DRAFT }, { filename: 'a.jpg' } as any);
+      expect(minioService.uploadFile).toHaveBeenCalled();
+    });
+
+    it(' updateArticle - bắn thông báo khi chuyển từ DRAFT sang PUBLISHED', async () => {
+      (articleRepo.findOne as jest.Mock).mockResolvedValue({ ...mockArticle, status: ArticleStatus.DRAFT });
+      await service.updateArticle('art-1', { status: ArticleStatus.PUBLISHED });
+      expect(userRepo.find).toHaveBeenCalled();
+    });
+
+    it(' deleteArticle - log lỗi nếu xóa ảnh MinIO thất bại nhưng vẫn xóa DB', async () => {
+      (articleRepo.findOne as jest.Mock).mockResolvedValue(mockArticle);
+      (minioService.deleteFile as jest.Mock).mockRejectedValue(new Error('MinIO Error'));
+      const loggerSpy = jest.spyOn(service['logger'], 'warn');
+      
+      await service.deleteArticle('art-1');
+      expect(loggerSpy).toHaveBeenCalled();
+      expect(articleRepo.remove).toHaveBeenCalled();
     });
   });
 });
