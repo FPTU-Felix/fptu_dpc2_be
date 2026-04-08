@@ -29,6 +29,7 @@ import { GetCurrentUser } from '../../modules/auth/decorators/get-user.decorator
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateDisciplineDto } from './dto/update-discipline.dto';
 import { Role } from '../roles/entities/role.entity';
+import { GetClientIp } from '../auth/decorators/get-client-ip.decorator';
 
 @ApiTags('Disciplines (Kỷ luật Đảng viên)')
 @Controller('disciplines')
@@ -57,10 +58,12 @@ export class DisciplinesController {
   @UseInterceptors(FileInterceptor('file'))
   async update(
     @Param('id') id: string,
+    @GetCurrentUser('sub') actorId: string,
+    @GetClientIp() ip: string,
     @Body() dto: UpdateDisciplineDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return await this.disciplinesService.update(id, dto, file);
+    return await this.disciplinesService.update(id, actorId, ip, dto, file);
   }
 
   @Get('member/:memberId')

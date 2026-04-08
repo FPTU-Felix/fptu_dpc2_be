@@ -29,6 +29,9 @@ import {
 import { EvaluationConfig } from './entities/evaluation-config.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { User } from '../users/entities/user.entity';
+import { getObjectDiff } from 'src/common/utils/diff.util';
+import { EventEmitter2 } from 'eventemitter2';
+import { AuditLogEvent } from '../system/events/audit-log.event';
 
 @Injectable()
 export class AnnualAssessmentsService {
@@ -46,10 +49,13 @@ export class AnnualAssessmentsService {
     private readonly notiService: NotificationsService,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async upsertEvaluationConfig(
     partyCellId: string,
+    actorId: string,
+    ip: string,
     year: number,
     criteriaTemplate: string[],
   ) {
@@ -65,6 +71,7 @@ export class AnnualAssessmentsService {
       where: { partyCellId, year },
     });
 
+    const oldData = config ? { ...config } : null;
     if (config) {
       config.criteriaTemplate = criteriaTemplate;
     } else {
@@ -74,7 +81,20 @@ export class AnnualAssessmentsService {
         criteriaTemplate,
       });
     }
-
+    const changes = getObjectDiff(oldData, config);
+    if (changes) {
+      this.eventEmitter.emit(
+        'audit.log',
+        new AuditLogEvent(
+          actorId,
+          'UPDATE_EVALUATION_CONFIG' + year,
+          'evaluation_configs',
+          config.id,
+          changes,
+          ip,
+        ),
+      );
+    }
     return await this.configRepo.save(config);
   }
   async getEvaluationConfig(partyCellId: string, year: number) {
@@ -180,6 +200,7 @@ export class AnnualAssessmentsService {
   async reviewAssessment(
     assessmentId: string,
     reviewerId: string,
+    ip: string,
     dto: ReviewAnnualAssessmentDto,
   ) {
     const { status, finalRank, score, criteriaChecklist } = dto;
@@ -211,6 +232,7 @@ export class AnnualAssessmentsService {
         );
       }
     }
+    const oldData = { ...assessment };
 
     assessment.status = status;
     assessment.finalRank = finalRank;
@@ -234,7 +256,13 @@ export class AnnualAssessmentsService {
         member.user.email,
       );
     }
-    return await this.assessmentRepo.save(assessment);
+    const result = await this.assessmentRepo.save(assessment);
+    this.eventEmitter.emit('UPDATE_ANNUAL_ASSESSMENT', {
+      id: assessment.id,
+      ip,
+      changes: getObjectDiff(oldData, assessment),
+    });
+    return result;
   }
 
   async findAll(

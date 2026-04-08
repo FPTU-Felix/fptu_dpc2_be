@@ -11,6 +11,9 @@ import {
   paginate,
   Pagination,
 } from 'nestjs-typeorm-paginate';
+import { AuditLogEvent } from '../system/events/audit-log.event';
+import { getObjectDiff } from 'src/common/utils/diff.util';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class CommendationsService {
@@ -20,6 +23,7 @@ export class CommendationsService {
     @InjectRepository(PartyMember)
     private readonly partyMemberRepo: Repository<PartyMember>,
     private readonly minioService: MinioService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(
@@ -55,6 +59,8 @@ export class CommendationsService {
   }
   async update(
     id: string,
+    actorId: string,
+    ip: string,
     dto: UpdateCommendationDto,
     file?: Express.Multer.File,
   ) {
@@ -65,6 +71,8 @@ export class CommendationsService {
     if (!commendation) {
       throw new NotFoundException('Không tìm thấy quyết định khen thưởng này!');
     }
+
+    const oldData = { ...commendation };
 
     let uploadedUrl = commendation.decisionFileUrl;
     if (file) {
@@ -79,7 +87,25 @@ export class CommendationsService {
       decisionFileUrl: uploadedUrl,
     });
 
-    return await this.commendationRepo.save(commendation);
+    const result = await this.commendationRepo.save(commendation);
+
+    const changes = getObjectDiff(oldData, result);
+
+    if (changes) {
+      this.eventEmitter.emit(
+        'audit.log',
+        new AuditLogEvent(
+          actorId,
+          'UPDATE_COMMENDATION',
+          'commendations',
+          id,
+          changes,
+          ip,
+        ),
+      );
+    }
+
+    return result;
   }
   async findByMember(memberId: string) {
     return await this.commendationRepo.find({

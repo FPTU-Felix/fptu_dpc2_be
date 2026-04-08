@@ -1,26 +1,21 @@
 import { Injectable } from '@nestjs/common';
-import { CreateSystemDto } from './dto/create-system.dto';
-import { UpdateSystemDto } from './dto/update-system.dto';
+import { Repository } from 'typeorm';
+import { SystemLog } from './entities/system-log.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { OnEvent } from '@nestjs/event-emitter';
+import { AuditLogEvent } from './events/audit-log.event';
 
 @Injectable()
 export class SystemService {
-  create(createSystemDto: CreateSystemDto) {
-    return 'This action adds a new system';
-  }
+  constructor(
+    @InjectRepository(SystemLog)
+    private logRepo: Repository<SystemLog>,
+  ) {}
 
-  findAll() {
-    return `This action returns all system`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} system`;
-  }
-
-  update(id: number, updateSystemDto: UpdateSystemDto) {
-    return `This action updates a #${id} system`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} system`;
+  @OnEvent('audit.log', { async: true })
+  async handleAuditLogEvent(payload: AuditLogEvent) {
+    if (!payload.details) return;
+    const log = this.logRepo.create(payload);
+    await this.logRepo.save(log);
   }
 }

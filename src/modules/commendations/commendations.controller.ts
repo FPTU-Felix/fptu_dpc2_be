@@ -28,6 +28,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateCommendationDto } from './dto/update-commendation.dto';
+import { GetClientIp } from '../auth/decorators/get-client-ip.decorator';
 
 @ApiTags('Commendations (Khen thưởng Đảng viên)')
 @Controller('commendations')
@@ -81,10 +82,12 @@ export class CommendationsController {
   @UseInterceptors(FileInterceptor('file'))
   async update(
     @Param('id') id: string,
+    @GetCurrentUser('sub') actorId: string,
+    @GetClientIp() ip: string,
     @Body() dto: UpdateCommendationDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return await this.commendationsService.update(id, dto, file);
+    return await this.commendationsService.update(id, actorId, ip, dto, file);
   }
 
   @Get('member/:memberId')

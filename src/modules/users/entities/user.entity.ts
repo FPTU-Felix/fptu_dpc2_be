@@ -11,7 +11,7 @@ import {
 } from 'typeorm';
 import { Role } from '../../roles/entities/role.entity';
 import { PartyMember } from '../../party-members/entities/party-member.entity';
-import { SystemAuditLog } from 'src/modules/system/entities/system-audit-log.entity';
+import { SystemLog } from 'src/modules/system/entities/system-log.entity';
 
 @Entity('users')
 export class User {
@@ -59,8 +59,8 @@ export class User {
   @OneToOne(() => PartyMember, (member) => member.user)
   member: PartyMember;
 
-  @OneToMany(() => SystemAuditLog, (log) => log.user)
-  auditLogs: SystemAuditLog[];
+  @OneToMany(() => SystemLog, (log) => log.actor)
+  systemLogs: SystemLog[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
