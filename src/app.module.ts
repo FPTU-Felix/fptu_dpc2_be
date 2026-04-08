@@ -25,6 +25,7 @@ import { MinioModule } from './modules/minio/minio.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { DocumentCategoriesModule } from './modules/document-categories/document-categories.module';
+import { FileModule } from './modules/file/file.module';
 import minioConfig from './config/minio.config';
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import minioConfig from './config/minio.config';
     NotificationsModule,
     DocumentsModule,
     DocumentCategoriesModule,
+    FileModule,
   ],
   controllers: [AppController],
   providers: [AppService],
