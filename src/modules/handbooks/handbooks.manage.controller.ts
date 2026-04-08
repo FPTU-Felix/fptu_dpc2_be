@@ -8,8 +8,6 @@ import {
   Delete,
   Query,
   UseGuards,
-  DefaultValuePipe,
-  ParseIntPipe,
   UseInterceptors,
   UploadedFile,
   ParseUUIDPipe,
@@ -35,6 +33,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from 'src/common/enums';
 import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
+import { GetClientIp } from '../auth/decorators/get-client-ip.decorator';
 
 @ApiTags('Handbooks Management (Quản lý sổ tay Đảng viên)')
 @ApiBearerAuth()
@@ -67,11 +66,12 @@ export class HandbooksManageController {
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
   async createArticle(
+    @GetClientIp() ip: string,
     @Body() dto: CreateArticleDto,
     @GetCurrentUser('sub') userId: string,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return await this.handbooksService.createArticle(dto, file, userId);
+    return await this.handbooksService.createArticle(dto, file, userId, ip);
   }
 
   @Patch(':id')
@@ -85,10 +85,12 @@ export class HandbooksManageController {
   @UseInterceptors(FileInterceptor('file'))
   async updateArticle(
     @Param('id', ParseUUIDPipe) id: string,
+    @GetCurrentUser('sub') userId: string,
+    @GetClientIp() ip: string,
     @Body() dto: UpdateArticleDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return await this.handbooksService.updateArticle(id, dto, file);
+    return await this.handbooksService.updateArticle(id, userId, ip, dto, file);
   }
 
   @Delete(':id')
@@ -98,8 +100,12 @@ export class HandbooksManageController {
     UserRole.COMMITTEE_MEMBER,
   )
   @ApiOperation({ summary: 'CMS: Xóa bài viết' })
-  async deleteArticle(@Param('id', ParseUUIDPipe) id: string) {
-    return await this.handbooksService.deleteArticle(id);
+  async deleteArticle(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetCurrentUser('sub') userId: string,
+    @GetClientIp() ip: string,
+  ) {
+    return await this.handbooksService.deleteArticle(id, userId, ip);
   }
 
   // --- CMS CHUYÊN MỤC ---
@@ -111,8 +117,12 @@ export class HandbooksManageController {
     UserRole.COMMITTEE_MEMBER,
   )
   @ApiOperation({ summary: 'CMS: Tạo chuyên mục mới' })
-  async createCategory(@Body() dto: CreateCategoryDto) {
-    return await this.handbooksService.createCategory(dto);
+  async createCategory(
+    @GetCurrentUser('sub') userId: string,
+    @GetClientIp() ip: string,
+    @Body() dto: CreateCategoryDto,
+  ) {
+    return await this.handbooksService.createCategory(dto, userId, ip);
   }
 
   @Patch('categories/:id')
@@ -124,9 +134,11 @@ export class HandbooksManageController {
   @ApiOperation({ summary: 'CMS: Sửa chuyên mục' })
   async updateCategory(
     @Param('id', ParseUUIDPipe) id: string,
+    @GetCurrentUser('sub') userId: string,
+    @GetClientIp() ip: string,
     @Body() dto: UpdateCategoryDto,
   ) {
-    return await this.handbooksService.updateCategory(id, dto);
+    return await this.handbooksService.updateCategory(id, dto, userId, ip);
   }
 
   @Delete('categories/:id')
@@ -136,7 +148,11 @@ export class HandbooksManageController {
     UserRole.COMMITTEE_MEMBER,
   )
   @ApiOperation({ summary: 'CMS: Xóa chuyên mục' })
-  async deleteCategory(@Param('id', ParseUUIDPipe) id: string) {
-    return await this.handbooksService.deleteCategory(id);
+  async deleteCategory(
+    @GetCurrentUser('sub') userId: string,
+    @GetClientIp() ip: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return await this.handbooksService.deleteCategory(id, userId, ip);
   }
 }

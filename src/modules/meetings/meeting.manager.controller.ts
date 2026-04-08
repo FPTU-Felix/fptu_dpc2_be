@@ -34,6 +34,7 @@ import { ReviewLeaveRequestDto } from './dto/leave-request.dto';
 import { ManualAttendanceDto } from './dto/manual-attendance.dto';
 import { UploadMeetingDocumentsDto } from './dto/upload-meeting-documents.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { GetClientIp } from '../auth/decorators/get-client-ip.decorator';
 
 @ApiTags('Meetings - Api Quản lý Cuộc họp của Chi ủy')
 @ApiBearerAuth()
@@ -75,8 +76,12 @@ export class MeetingsManagerController {
     UserRole.DEPUTY_SECRETARY,
   )
   @ApiOperation({ summary: 'Tạo cuộc họp mới (Tự động sinh mã điểm danh)' })
-  create(@GetCurrentUser('sub') userId: string, @Body() dto: CreateMeetingDto) {
-    return this.meetingsService.create(userId, dto);
+  create(
+    @GetCurrentUser('sub') userId: string,
+    @GetClientIp() ip: string,
+    @Body() dto: CreateMeetingDto,
+  ) {
+    return this.meetingsService.create(userId, ip, dto);
   }
 
   @Get(':id/pin')
@@ -100,6 +105,7 @@ export class MeetingsManagerController {
   toggleCheckIn(@Param('id', ParseUUIDPipe) id: string) {
     return this.meetingsService.toggleCheckIn(id);
   }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Sửa nội dung cuộc họp' })
   @Roles(
@@ -108,10 +114,12 @@ export class MeetingsManagerController {
     UserRole.DEPUTY_SECRETARY,
   )
   update(
+    @GetCurrentUser('sub') actorId: string,
+    @GetClientIp() ip: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateMeetingDto: UpdateMeetingDto,
   ) {
-    return this.meetingsService.update(id, updateMeetingDto);
+    return this.meetingsService.update(id, actorId, ip, updateMeetingDto);
   }
 
   @Delete(':id')
@@ -121,8 +129,12 @@ export class MeetingsManagerController {
     UserRole.COMMITTEE_MEMBER,
     UserRole.DEPUTY_SECRETARY,
   )
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.meetingsService.remove(id);
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetCurrentUser('sub') actorId: string,
+    @GetClientIp() ip: string,
+  ) {
+    return this.meetingsService.remove(id, actorId, ip);
   }
 
   @Get(':id/attendees')
@@ -145,9 +157,16 @@ export class MeetingsManagerController {
   )
   async reviewLeaveRequest(
     @Param('attendeeId', ParseUUIDPipe) attendeeId: string,
+    @GetCurrentUser('sub') actorId: string,
+    @GetClientIp() ip: string,
     @Body() dto: ReviewLeaveRequestDto,
   ) {
-    return this.meetingsService.reviewLeaveRequest(attendeeId, dto);
+    return this.meetingsService.reviewLeaveRequest(
+      attendeeId,
+      actorId,
+      ip,
+      dto,
+    );
   }
 
   @Patch(':id/end')
@@ -171,12 +190,14 @@ export class MeetingsManagerController {
   async manualAttendance(
     @Param('id', ParseUUIDPipe) meetingId: string,
     @Body() dto: ManualAttendanceDto,
-    // @Req() req: any,
+    @GetCurrentUser('sub') actorId: string,
+    @GetClientIp() ip: string,
   ) {
     return await this.meetingsService.updateManualAttendance(
       meetingId,
+      actorId,
+      ip,
       dto,
-      // userId,
     );
   }
 
@@ -191,9 +212,16 @@ export class MeetingsManagerController {
   )
   async uploadDocuments(
     @Param('id', ParseUUIDPipe) meetingId: string,
+    @GetCurrentUser('sub') actorId: string,
+    @GetClientIp() ip: string,
     @Body() dto: UploadMeetingDocumentsDto,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return this.meetingsService.uploadMeetingDocuments(meetingId, files);
+    return this.meetingsService.uploadMeetingDocuments(
+      meetingId,
+      actorId,
+      ip,
+      files,
+    );
   }
 }

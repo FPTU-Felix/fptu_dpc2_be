@@ -31,6 +31,7 @@ import { GetCurrentUser } from '../../modules/auth/decorators/get-user.decorator
 import { ReviewAnnualAssessmentDto } from './dto/review-annual-assessment.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateAnnualAssessmentDto } from './dto/update-annual-assessment.dto';
+import { GetClientIp } from '../auth/decorators/get-client-ip.decorator';
 
 @ApiTags('Annual Assessments (Tự đánh giá & Chấm điểm)')
 @Controller('annual-assessments')
@@ -57,12 +58,16 @@ export class AnnualAssessmentsController {
     },
   })
   async upsertConfig(
+    @GetCurrentUser('sub') actorId: string,
+    @GetClientIp() ip: string,
     @Body('partyCellId', ParseUUIDPipe) partyCellId: string,
     @Body('year', ParseIntPipe) year: number,
     @Body('criteriaTemplate') criteriaTemplate: string[],
   ) {
     return await this.assessmentsService.upsertEvaluationConfig(
       partyCellId,
+      actorId,
+      ip,
       year,
       criteriaTemplate,
     );
@@ -139,11 +144,13 @@ export class AnnualAssessmentsController {
   async reviewAssessment(
     @Param('id', ParseUUIDPipe) assessmentId: string,
     @GetCurrentUser('sub') userId: string,
+    @GetClientIp() ip: string,
     @Body() dto: ReviewAnnualAssessmentDto,
   ) {
     return await this.assessmentsService.reviewAssessment(
       assessmentId,
       userId,
+      ip,
       dto,
     );
   }

@@ -39,6 +39,9 @@ import {
   Pagination,
 } from 'nestjs-typeorm-paginate';
 import { NotificationsService } from '../notifications/notifications.service';
+import { getObjectDiff } from 'src/common/utils/diff.util';
+import { AuditLogEvent } from '../system/events/audit-log.event';
+import { EventEmitter2 } from 'eventemitter2';
 
 @Injectable()
 export class MeetingsService {
@@ -56,9 +59,10 @@ export class MeetingsService {
     @InjectRepository(MeetingDocument)
     private readonly meetingDocRepo: Repository<MeetingDocument>,
     private readonly notificationsService: NotificationsService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async create(userId: string, createMeetingDto: CreateMeetingDto) {
+  async create(userId: string, ip: string, createMeetingDto: CreateMeetingDto) {
     const {
       format,
       onlineLink,
@@ -188,6 +192,17 @@ export class MeetingsService {
         }
       }
     }
+    this.eventEmitter.emit(
+      'audit.log',
+      new AuditLogEvent(
+        userId,
+        'CREATE_MEETING',
+        'meetings',
+        meeting.id,
+        meeting,
+        ip,
+      ),
+    );
 
     return {
       ...savedMeeting,
@@ -318,11 +333,18 @@ export class MeetingsService {
     });
   }
 
-  async update(id: string, updateMeetingDto: UpdateMeetingDto) {
+  async update(
+    id: string,
+    actorId: string,
+    ip: string,
+    updateMeetingDto: UpdateMeetingDto,
+  ) {
     const meeting = await this.meetingRepo.findOne({
       where: { id },
     });
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+
+    const oldData = { ...meeting };
 
     const { participantIds, participantType, ...updateData } = updateMeetingDto;
     Object.assign(meeting, updateData);
@@ -418,21 +440,46 @@ export class MeetingsService {
         await this.attendeeRepo.delete({
           meetingId: id,
           memberId: In(membersToRemove),
-          status: AttendeeStatus.PENDING, // Chỉ xóa những người chưa điểm danh
+          status: AttendeeStatus.PENDING,
         });
       }
     }
 
-    return await this.meetingRepo.findOne({
+    const result = await this.meetingRepo.findOne({
       where: { id },
     });
+    const changes = getObjectDiff(oldData, result);
+    if (changes) {
+      this.eventEmitter.emit(
+        'audit.log',
+        new AuditLogEvent(
+          actorId,
+          'UPDATE_MEETING',
+          'meetings',
+          meeting.id,
+          changes,
+          ip,
+        ),
+      );
+    }
+    return result;
   }
 
-  async remove(id: string) {
+  async remove(id: string, actorId: string, ip: string) {
     const meeting = await this.meetingRepo.findOne({ where: { id } });
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+    this.eventEmitter.emit(
+      'audit.log',
+      new AuditLogEvent(
+        actorId,
+        'DELETE_MEETING',
+        'meetings',
+        meeting.id,
+        null,
+        ip,
+      ),
+    );
     await this.attendeeRepo.delete({ meetingId: id });
-
     return await this.meetingRepo.remove(meeting);
   }
 
@@ -589,7 +636,12 @@ export class MeetingsService {
     };
   }
 
-  async reviewLeaveRequest(attendeeId: string, dto: ReviewLeaveRequestDto) {
+  async reviewLeaveRequest(
+    attendeeId: string,
+    actorId: string,
+    ip: string,
+    dto: ReviewLeaveRequestDto,
+  ) {
     const attendee = await this.attendeeRepo.findOne({
       where: { id: attendeeId },
       relations: ['member', 'member.user', 'meeting'],
@@ -603,6 +655,7 @@ export class MeetingsService {
         'Chỉ có thể duyệt các đơn đang ở trạng thái chờ (PENDING_EXCUSE).',
       );
     }
+    const oldData = { ...attendee };
     attendee.status = dto.status;
     await this.attendeeRepo.save(attendee);
 
@@ -622,7 +675,20 @@ export class MeetingsService {
         user.email, // Bắn mail luôn
       );
     }
-
+    const changes = getObjectDiff(oldData, attendee);
+    if (changes) {
+      this.eventEmitter.emit(
+        'audit.log',
+        new AuditLogEvent(
+          actorId,
+          'REVIEW_LEAVE_REQUEST',
+          'meeting_attendees',
+          attendee.id,
+          changes,
+          ip,
+        ),
+      );
+    }
     return {
       success: true,
       message: `Đã ${statusText} đơn xin vắng mặt!`,
@@ -803,8 +869,9 @@ export class MeetingsService {
 
   async updateManualAttendance(
     meetingId: string,
+    actorId: string,
+    ip: string,
     dto: ManualAttendanceDto,
-    // userId: string,
   ) {
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
@@ -813,6 +880,8 @@ export class MeetingsService {
     const existingAttendees = await this.attendeeRepo.find({
       where: { meetingId },
     });
+
+    const oldData = existingAttendees.map((a) => ({ ...a }));
 
     const attendeesToSave: MeetingAttendee[] = [];
 
@@ -837,7 +906,22 @@ export class MeetingsService {
       }
       attendeesToSave.push(attendee);
     }
-    await this.attendeeRepo.save(attendeesToSave);
+    const savedAttendees = await this.attendeeRepo.save(attendeesToSave);
+    const changes = getObjectDiff(oldData, savedAttendees);
+
+    if (changes) {
+      this.eventEmitter.emit(
+        'audit.log',
+        new AuditLogEvent(
+          actorId,
+          'MANUAL_ATTENDANCE_UPDATE',
+          'meeting_attendees',
+          meetingId,
+          changes,
+          ip,
+        ),
+      );
+    }
 
     return {
       success: true,
@@ -847,6 +931,8 @@ export class MeetingsService {
   }
   async uploadMeetingDocuments(
     meetingId: string,
+    actorId: string,
+    ip: string,
     files: Express.Multer.File[],
   ) {
     const meeting = await this.meetingRepo.findOne({
@@ -872,6 +958,17 @@ export class MeetingsService {
 
       const savedDoc = await this.meetingDocRepo.save(newDoc);
       savedDocuments.push(savedDoc);
+      this.eventEmitter.emit(
+        'audit.log',
+        new AuditLogEvent(
+          actorId,
+          'Upload_Meeting_Document',
+          'meeting_documents',
+          meetingId,
+          savedDocuments,
+          ip,
+        ),
+      );
     }
 
     return {

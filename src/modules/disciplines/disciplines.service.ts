@@ -11,6 +11,9 @@ import {
   paginate,
   Pagination,
 } from 'nestjs-typeorm-paginate';
+import { getObjectDiff } from 'src/common/utils/diff.util';
+import { AuditLogEvent } from '../system/events/audit-log.event';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class DisciplinesService {
@@ -20,6 +23,7 @@ export class DisciplinesService {
     @InjectRepository(PartyMember)
     private readonly partyMemberRepo: Repository<PartyMember>,
     private readonly minioService: MinioService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(
@@ -53,6 +57,8 @@ export class DisciplinesService {
 
   async update(
     id: string,
+    actorId: string,
+    ip: string,
     dto: UpdateDisciplineDto,
     file?: Express.Multer.File,
   ) {
@@ -61,6 +67,7 @@ export class DisciplinesService {
       throw new NotFoundException('Không tìm thấy bản ghi kỷ luật này!');
     }
 
+    const oldData = { ...discipline };
     let uploadedUrl = discipline.decisionFileUrl;
     if (file) {
       const uploadResult = await this.minioService.uploadFile({
@@ -75,7 +82,25 @@ export class DisciplinesService {
       decisionFileUrl: uploadedUrl,
     });
 
-    return await this.disciplineRepo.save(discipline);
+    const updatedDiscipline = await this.disciplineRepo.save(discipline);
+
+    const changes = getObjectDiff(oldData, updatedDiscipline);
+
+    if (changes) {
+      this.eventEmitter.emit(
+        'audit.log',
+        new AuditLogEvent(
+          actorId,
+          'UPDATE_DISCIPLINE',
+          'disciplines',
+          id,
+          changes,
+          ip,
+        ),
+      );
+    }
+
+    return updatedDiscipline;
   }
 
   async findByMember(memberId: string) {

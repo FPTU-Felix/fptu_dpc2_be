@@ -24,6 +24,9 @@ import {
   UpdateArticleDto,
   ArticleFilterDto,
 } from './dto/handbook.dto';
+import { EventEmitter2 } from 'eventemitter2';
+import { AuditLogEvent } from '../system/events/audit-log.event';
+import { getObjectDiff } from 'src/common/utils/diff.util';
 
 @Injectable()
 export class HandbooksService {
@@ -38,11 +41,8 @@ export class HandbooksService {
     private readonly userRepo: Repository<User>,
     private readonly minioService: MinioService,
     private readonly notificationsService: NotificationsService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
-
-  // =========================================================================
-  // 🟢 ROLE 1: ĐẢNG VIÊN (CHỈ XEM - READ ONLY)
-  // =========================================================================
 
   /**
    * Lấy danh sách chuyên mục (Kèm số lượng bài viết đã PUBLISHED)
@@ -90,8 +90,6 @@ export class HandbooksService {
     if (filters.isPinned) {
       queryBuilder.andWhere('article.isPinned = :isPinned', { isPinned: true });
     }
-
-    // Ưu tiên ghim lên đầu, sau đó mới đến ngày đăng
     queryBuilder
       .orderBy('article.isPinned', 'DESC')
       .addOrderBy('article.createdAt', 'DESC');
@@ -142,40 +140,75 @@ export class HandbooksService {
       .getMany();
   }
 
-  // =========================================================================
-  // 🔴 ROLE 2: CHI ỦY / BÍ THƯ (CMS ADMIN - CRUD)
-  // =========================================================================
-
-  // --- QUẢN LÝ CHUYÊN MỤC ---
-
-  async createCategory(dto: CreateCategoryDto) {
-    console.log('DTO nhận vào:', dto);
+  async createCategory(dto: CreateCategoryDto, userId: string, ip: string) {
     const slug = this.generateSlug(dto.name);
-    console.log('Slug được tạo:', slug);
     const existing = await this.categoryRepo.findOne({ where: { slug } });
-    console.log('Kiểm tra chuyên mục tồn tại:', existing);
     if (existing) throw new BadRequestException('Chuyên mục này đã tồn tại');
 
     const newCategory = this.categoryRepo.create({ ...dto, slug });
-    return await this.categoryRepo.save(newCategory);
+    const saved = await this.categoryRepo.save(newCategory);
+    this.eventEmitter.emit(
+      'audit.log',
+      new AuditLogEvent(
+        userId,
+        'CREATE_CATEGORY',
+        'handbooks',
+        saved.id,
+        saved,
+        ip,
+      ),
+    );
+    return saved;
   }
 
-  async updateCategory(id: string, dto: UpdateCategoryDto) {
+  async updateCategory(
+    id: string,
+    dto: UpdateCategoryDto,
+    userId: string,
+    ip: string,
+  ) {
     const category = await this.categoryRepo.findOne({ where: { id } });
     if (!category) throw new NotFoundException('Không tìm thấy chuyên mục');
 
+    const oldData = { ...category };
     if (dto.name) {
       category.name = dto.name;
       category.slug = this.generateSlug(dto.name);
     }
 
-    return await this.categoryRepo.save(category);
+    const updatedCategory = await this.categoryRepo.save(category);
+    const change = getObjectDiff(oldData, updatedCategory);
+    if (change) {
+      this.eventEmitter.emit(
+        'audit.log',
+        new AuditLogEvent(
+          userId,
+          'UPDATE_CATEGORY',
+          'handbooks',
+          updatedCategory.id,
+          change,
+          ip,
+        ),
+      );
+    }
+    return updatedCategory;
   }
 
-  async deleteCategory(id: string) {
+  async deleteCategory(id: string, userId: string, ip: string) {
     const category = await this.categoryRepo.findOne({ where: { id } });
     if (!category) throw new NotFoundException('Không tìm thấy chuyên mục');
     await this.categoryRepo.remove(category);
+    this.eventEmitter.emit(
+      'audit.log',
+      new AuditLogEvent(
+        userId,
+        'DELETE_CATEGORY',
+        'handbooks',
+        category.id,
+        category,
+        ip,
+      ),
+    );
     return { message: 'Đã xóa chuyên mục thành công' };
   }
 
@@ -215,10 +248,9 @@ export class HandbooksService {
     dto: CreateArticleDto,
     file?: Express.Multer.File,
     userId?: string,
+    ip?: string,
   ) {
     let slug = this.generateSlug(dto.title);
-
-    // Xử lý trùng Slug (Thêm timestamp cho chắc cốp)
     const existingSlug = await this.articleRepo.findOne({ where: { slug } });
     if (existingSlug) slug = `${slug}-${Date.now().toString().slice(-4)}`;
 
@@ -239,12 +271,20 @@ export class HandbooksService {
     });
 
     const savedArticle = await this.articleRepo.save(newArticle);
-
-    // Bắn thông báo nếu đăng luôn
     if (savedArticle.status === ArticleStatus.PUBLISHED) {
       this.notifyAllUsers(savedArticle.title);
     }
-
+    this.eventEmitter.emit(
+      'audit.log',
+      new AuditLogEvent(
+        userId || 'unknown',
+        'CREATE_ARTICLE',
+        'handbooks',
+        savedArticle.id,
+        savedArticle,
+        ip,
+      ),
+    );
     return savedArticle;
   }
 
@@ -253,18 +293,17 @@ export class HandbooksService {
    */
   async updateArticle(
     id: string,
+    userId: string,
+    ip: string,
     dto: UpdateArticleDto,
     file?: Express.Multer.File,
   ) {
     const article = await this.articleRepo.findOne({ where: { id } });
     if (!article) throw new NotFoundException('Không tìm thấy bài viết');
-
-    // Theo dõi xem có phải vừa chuyển từ NHÁP sang XUẤT BẢN không
+    const oldData = { ...article };
     const isJustPublished =
       article.status === ArticleStatus.DRAFT &&
       dto.status === ArticleStatus.PUBLISHED;
-
-    // Cập nhật Slug nếu đổi Title
     if (dto.title && dto.title !== article.title) {
       let slug = this.generateSlug(dto.title);
       const existingSlug = await this.articleRepo.findOne({ where: { slug } });
@@ -272,8 +311,6 @@ export class HandbooksService {
         slug = `${slug}-${Date.now().toString().slice(-4)}`;
       article.slug = slug;
     }
-
-    // Xử lý file ảnh mới
     if (file) {
       if (article.thumbnailUrl) {
         await this.minioService
@@ -289,6 +326,20 @@ export class HandbooksService {
 
     Object.assign(article, dto);
     const updatedArticle = await this.articleRepo.save(article);
+    const changes = getObjectDiff(oldData, updatedArticle);
+    if (changes) {
+      this.eventEmitter.emit(
+        'audit.log',
+        new AuditLogEvent(
+          userId,
+          'UPDATE_MEETING',
+          'meetings',
+          article.id,
+          changes,
+          ip,
+        ),
+      );
+    }
 
     if (isJustPublished) {
       this.notifyAllUsers(updatedArticle.title);
@@ -300,7 +351,7 @@ export class HandbooksService {
   /**
    * Xóa bài viết
    */
-  async deleteArticle(id: string) {
+  async deleteArticle(id: string, userId: string, ip: string) {
     const article = await this.articleRepo.findOne({ where: { id } });
     if (!article) throw new NotFoundException('Không tìm thấy bài viết');
 
@@ -311,6 +362,17 @@ export class HandbooksService {
     }
 
     await this.articleRepo.remove(article);
+    this.eventEmitter.emit(
+      'audit.log',
+      new AuditLogEvent(
+        userId,
+        'DELETE_ARTICLE',
+        'handbooks',
+        article.id,
+        null,
+        ip,
+      ),
+    );
     return { message: 'Đã xóa bài viết thành công' };
   }
 
@@ -322,7 +384,7 @@ export class HandbooksService {
     return slugify(text, {
       lower: true,
       strict: true,
-      locale: 'vi', // Chuẩn hóa tiếng Việt
+      locale: 'vi',
     });
   }
 
@@ -330,7 +392,6 @@ export class HandbooksService {
     try {
       const allUsers = await this.userRepo.find({ select: ['id', 'email'] });
       for (const user of allUsers) {
-        // Tắt await để hệ thống chạy ngầm, FE không bị đơ chờ gửi mail
         this.notificationsService
           .createInternal(
             user.id,
