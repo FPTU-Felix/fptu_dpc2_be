@@ -34,7 +34,7 @@ import { GetClientIp } from '../auth/decorators/get-client-ip.decorator';
 @ApiTags('Disciplines (Kỷ luật Đảng viên)')
 @Controller('disciplines')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 export class DisciplinesController {
   constructor(private readonly disciplinesService: DisciplinesService) {}
 

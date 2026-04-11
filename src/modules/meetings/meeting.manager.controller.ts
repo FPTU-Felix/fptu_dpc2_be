@@ -37,7 +37,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { GetClientIp } from '../auth/decorators/get-client-ip.decorator';
 
 @ApiTags('Meetings - Api Quản lý Cuộc họp của Chi ủy')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('meetings')
 export class MeetingsManagerController {

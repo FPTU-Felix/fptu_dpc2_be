@@ -1,9 +1,7 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm'; // Thêm dòng này
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { PartyAdmissionsService } from './party-admissions.service';
 import { PartyAdmissionsController } from './party-admissions.controller';
-
-// Import 2 Entity này nữa
 import { PartyAdmission } from './entities/party-admission.entity';
 import { PartyMember } from '../party-members/entities/party-member.entity';
 import { AdmissionApplicationController } from './controllers/admission-application.controller';
@@ -16,12 +14,6 @@ import { PartyAdmissionWorkflowLogEntity } from './entities/party-admission-work
 import { PartyAdmissionStepReviewEntity } from './entities/party-admission-step-review.entity';
 import { User } from '../users/entities/user.entity';
 import { Role } from '../roles/entities/role.entity';
-console.log({
-  PartyAdmission,
-  PartyMember,
-  PartyAdmissionDocumentEntity,
-  PartyAdmissionWorkflowLogEntity,
-});
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -34,14 +26,11 @@ console.log({
       PartyAdmissionWorkflowLogEntity,
       PartyAdmissionStepReviewEntity,
       User,
-      Role
+      Role,
     ]),
   ],
   controllers: [PartyAdmissionsController, AdmissionApplicationController],
-  providers: [
-    PartyAdmissionsService,
-    AdmissionApplicationService,
-  ],
+  providers: [PartyAdmissionsService, AdmissionApplicationService],
   exports: [AdmissionApplicationService],
 })
-export class PartyAdmissionsModule { }
+export class PartyAdmissionsModule {}

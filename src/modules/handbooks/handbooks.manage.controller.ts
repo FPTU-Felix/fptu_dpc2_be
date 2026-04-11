@@ -36,7 +36,7 @@ import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
 import { GetClientIp } from '../auth/decorators/get-client-ip.decorator';
 
 @ApiTags('Handbooks Management (Quản lý sổ tay Đảng viên)')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('handbooks')
 export class HandbooksManageController {

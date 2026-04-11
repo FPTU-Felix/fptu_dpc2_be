@@ -1,11 +1,11 @@
-import { 
-  Controller, 
-  Get, 
-  Body, 
-  Patch, 
-  Param, 
-  Delete, 
-  UseGuards 
+import {
+  Controller,
+  Get,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { PartyAdmissionsService } from './party-admissions.service';
@@ -17,17 +17,19 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { GetCurrentUser } from '../../modules/auth/decorators/get-user.decorator';
 import { UserRole, AdmissionStatusEnum } from 'src/common/enums';
 
-// @ApiTags('Party Admissions - Quản lý kết nạp Đảng')
-@ApiBearerAuth()
+@ApiTags('Party Admissions - Quản lý kết nạp Đảng')
+@ApiBearerAuth('access-token')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('party-admissions')
 export class PartyAdmissionsController {
-  constructor(private readonly partyAdmissionsService: PartyAdmissionsService) {}
+  constructor(
+    private readonly partyAdmissionsService: PartyAdmissionsService,
+  ) {}
 
   // =========================================================
   // 1. DÀNH CHO NGƯỜI DÙNG (QCUT / ĐẢNG VIÊN)
   // =========================================================
-  
+
   @Get('my-progress')
   @ApiOperation({ summary: 'Cá nhân tự theo dõi tiến độ hồ sơ của mình' })
   @Roles(UserRole.OUTSTANDING_INDIVIDUAL, UserRole.PARTY_MEMBER, UserRole.ADMIN)
@@ -50,26 +52,37 @@ export class PartyAdmissionsController {
   // =========================================================
 
   @Patch(':id/manage-status')
-  @ApiOperation({ 
-    summary: 'Cập nhật trạng thái theo thẩm quyền (Chi ủy: CHECKED | Bí thư/PBT: VERIFIED/REJECTED)' 
+  @ApiOperation({
+    summary:
+      'Cập nhật trạng thái theo thẩm quyền (Chi ủy: CHECKED | Bí thư/PBT: VERIFIED/REJECTED)',
   })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
         status: { type: 'string', enum: Object.values(AdmissionStatusEnum) },
-        remark: { type: 'string' }
-      }
-    }
+        remark: { type: 'string' },
+      },
+    },
   })
-  @Roles(UserRole.SECRETARY, UserRole.DEPUTY_SECRETARY, UserRole.COMMITTEE_MEMBER, UserRole.ADMIN)
+  @Roles(
+    UserRole.SECRETARY,
+    UserRole.DEPUTY_SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.ADMIN,
+  )
   manageProgress(
     @Param('id') id: string,
     @Body('status') nextStatus: AdmissionStatusEnum,
     @Body('remark') remark: string,
     @GetCurrentUser('roleName') roleName: string,
   ) {
-    return this.partyAdmissionsService.manageProgress(id, nextStatus, roleName, remark);
+    return this.partyAdmissionsService.manageProgress(
+      id,
+      nextStatus,
+      roleName,
+      remark,
+    );
   }
 
   @Get()
@@ -85,6 +98,4 @@ export class PartyAdmissionsController {
   findOne(@Param('id') id: string) {
     return this.partyAdmissionsService.findOne(id);
   }
-
-
 }

@@ -13,7 +13,7 @@ import { GetPartyFeesDto } from './dto/party-fee.dto';
 import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
 
 @ApiTags('Party Fees - Quản lý Đảng phí')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @UseGuards(AuthGuard('jwt'))
 @Controller('party-fees')
 export class PartyFeesController {

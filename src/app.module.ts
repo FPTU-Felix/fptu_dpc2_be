@@ -30,6 +30,7 @@ import minioConfig from './config/minio.config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { APP_INTERCEPTOR } from '@nestjs/core';
+import { StatisticsModule } from './modules/statistics/statistics.module';
 @Module({
   imports: [
     EventEmitterModule.forRoot(),
@@ -84,6 +85,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     DocumentsModule,
     DocumentCategoriesModule,
     FileModule,
+    StatisticsModule,
   ],
   controllers: [AppController],
   providers: [

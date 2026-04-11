@@ -3,7 +3,7 @@ import { PartyCellsService } from './party-cells.service';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @ApiTags('Party Cells - API Cho Chi bộ')
 @Controller('party-cells')
 export class PartyCellsController {

@@ -17,7 +17,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { ApproveAiDataDto } from './dto/approve-ai-data.dto';
 
 @ApiTags('AI Knowledge Management - API Quản lý Kiến thức AI')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @Controller('ai-knowledge')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class AiKnowledgeController {

@@ -36,7 +36,7 @@ import { GetClientIp } from '../auth/decorators/get-client-ip.decorator';
 @ApiTags('Annual Assessments (Tự đánh giá & Chấm điểm)')
 @Controller('annual-assessments')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 export class AnnualAssessmentsController {
   constructor(private readonly assessmentsService: AnnualAssessmentsService) {}
 
