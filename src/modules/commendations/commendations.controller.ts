@@ -33,7 +33,7 @@ import { GetClientIp } from '../auth/decorators/get-client-ip.decorator';
 @ApiTags('Commendations (Khen thưởng Đảng viên)')
 @Controller('commendations')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 export class CommendationsController {
   constructor(private readonly commendationsService: CommendationsService) {}
 

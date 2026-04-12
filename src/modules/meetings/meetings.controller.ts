@@ -31,7 +31,7 @@ import { OnlineAttendanceDto } from './dto/online-attendance.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Meetings - API Cuộc họp của Đảng viên')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('meetings')
 export class MeetingsController {

@@ -9,7 +9,7 @@ import { UserRole } from 'src/common/enums';
 import { GetCurrentUser } from '../../modules/auth/decorators/get-user.decorator';
 
 @ApiTags('Party Members - Quản lý Đảng viên')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('party-members')
 export class PartyMembersController {

@@ -18,7 +18,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
 
 @ApiTags('Notifications - Thông báo')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @UseGuards(AuthGuard('jwt'))
 @Controller('notifications')
 export class NotificationsController {

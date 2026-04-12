@@ -9,7 +9,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @ApiTags('Users - API Cho User')
 @Controller('users')
 export class UsersController {

@@ -12,7 +12,7 @@ import {
 } from '@nestjs/swagger';
 import { GetCurrentUser } from '../../modules/auth/decorators/get-user.decorator';
 import { DefaultValuePipe, ParseIntPipe } from '@nestjs/common/pipes';
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @ApiTags('Users - Api cho Chi ủy liên quan đến Users')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('committee/members')

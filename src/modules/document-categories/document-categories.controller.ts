@@ -12,7 +12,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from 'src/common/enums';
 
 @ApiTags('Document Categories - Quản lý loại tài liệu')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('document-categories')
 export class DocumentCategoriesController {

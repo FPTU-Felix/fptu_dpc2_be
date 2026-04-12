@@ -12,7 +12,7 @@ import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 
 @ApiTags('Documents - Quản lý tài liệu')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @UseGuards(AuthGuard('jwt'))
 @Controller('documents')
 export class DocumentsController {
