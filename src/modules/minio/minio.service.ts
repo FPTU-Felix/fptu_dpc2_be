@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import * as Minio from "minio";
 import { randomUUID } from "crypto";
 import * as path from "path";
+import { generateSafeFileName } from "src/common/utils/file.util";
 
 @Injectable()
 export class MinioService implements OnModuleInit {
@@ -40,8 +41,7 @@ export class MinioService implements OnModuleInit {
     try {
       const { file, folder, fileName, metadata } = params;
 
-      const ext = path.extname(file.originalname);
-      const safeFileName = fileName || `${randomUUID()}${ext}`;
+      const safeFileName = fileName || generateSafeFileName(file.originalname);
       const objectName = folder ? `${folder}/${safeFileName}` : safeFileName;
 
       await this.client.putObject(
@@ -59,6 +59,7 @@ export class MinioService implements OnModuleInit {
         bucket: this.bucket,
         objectName,
         fileName: file.originalname,
+        safeFileName,
         mimeType: file.mimetype,
         size: file.size,
         url: `${this.publicUrl}/${this.bucket}/${objectName}`,

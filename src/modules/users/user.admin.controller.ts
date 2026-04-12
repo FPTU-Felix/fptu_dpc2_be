@@ -19,7 +19,7 @@ import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { UserRole } from 'src/common/enums';
 
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @ApiTags('Users - Quản lý người dùng (Admin)')
 @Controller('admin/users')
 export class UsersAdminController {

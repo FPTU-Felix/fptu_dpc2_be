@@ -34,7 +34,6 @@ export class AuthService {
       role: user.role?.name,
     };
   }
-
   // --- 2. ĐĂNG XUẤT ---
   async logout(userId: string) {
     await this.usersService.updateRefreshToken(userId, null);
