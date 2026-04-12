@@ -1,6 +1,8 @@
 import {
   Controller, Get, Post, Body, Patch, Param, Delete,
-  UseGuards, UseInterceptors, UploadedFile, ParseUUIDPipe, Res
+  UseGuards, UseInterceptors, UploadedFile, ParseUUIDPipe, Res,ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
@@ -24,7 +26,17 @@ export class DocumentsController {
   @UseInterceptors(FileInterceptor('file'))
   create(
     @Body() createDocumentDto: CreateDocumentDto,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          // 10MB = 10 * 1024 * 1024 bytes
+          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024, message: 'File không được vượt quá 10MB' }),
+          // Kiểm tra định dạng file (Regex)
+          new FileTypeValidator({ fileType: /(pdf|doc|docx|xls|xlsx|png|jpg|jpeg)$/ }),
+        ],
+        fileIsRequired: true, // Bắt buộc phải có file khi tạo mới
+      }),
+    ) file: Express.Multer.File,
     @GetCurrentUser('sub') userId: string,
   ) {
     return this.documentsService.create(createDocumentDto, file, userId);
@@ -49,7 +61,15 @@ export class DocumentsController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateDocumentDto: UpdateDocumentDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024, message: 'File không được vượt quá 10MB' }),
+          new FileTypeValidator({ fileType: /(pdf|doc|docx|xls|xlsx|png|jpg|jpeg)$/ }),
+        ],
+        fileIsRequired: false, // Cho phép không gửi file nếu chỉ update text
+      }),
+    ) file?: Express.Multer.File,
   ) {
     return this.documentsService.update(id, updateDocumentDto, file);
   }

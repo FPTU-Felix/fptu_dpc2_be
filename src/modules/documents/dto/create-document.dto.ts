@@ -24,11 +24,15 @@ export class CreateDocumentDto {
   @IsNotEmpty()
   categoryId: string;
 
-  @ApiProperty({ example: true, default: false, required: false })
-  @Transform(({ value }) => value === 'true' || value === true)
-  @IsBoolean()
+  @ApiProperty({ example: false, default: false, required: false }) 
   @IsOptional()
-  isFeatured?: boolean;
+  @Transform(({ value }) => {
+  if (value === 'true' || value === true) return true;
+  if (value === 'false' || value === false) return false;
+  return false; 
+  })
+  @IsBoolean()
+  isFeatured?: boolean = false; // Gán giá trị mặc định ngay tại đây
 
   @ApiProperty({ type: 'string', format: 'binary' })
   @IsOptional() 
