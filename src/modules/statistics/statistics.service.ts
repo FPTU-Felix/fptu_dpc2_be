@@ -17,6 +17,8 @@ import {
   RawStatusStat,
   RawGenderStat,
   RawMonthlyFee,
+  GetLogsQueryDto,
+  GetUsersQueryDto,
 } from './dto/export-audit-logs.dto';
 import { PartyMember } from '../party-members/entities/party-member.entity';
 import {
@@ -566,6 +568,91 @@ export class StatisticsService {
         year,
       },
       feeAnalysis: feeChartData,
+    };
+  }
+
+  async getUsers(query: GetUsersQueryDto) {
+    const page = parseInt(query.page ?? '1') || 1;
+    const limit = parseInt(query.limit ?? '10') || 10;
+    const skip = (page - 1) * limit;
+
+    const { userName, email, role, isActive } = query;
+    const queryBuilder = this.memberRepo.manager.createQueryBuilder(
+      'User',
+      'user',
+    );
+
+    if (userName)
+      queryBuilder.andWhere('user.username ILIKE :userName', {
+        userName: `%${userName}%`,
+      });
+    if (email)
+      queryBuilder.andWhere('user.email ILIKE :email', { email: `%${email}%` });
+    if (role) queryBuilder.andWhere('user.role = :role', { role });
+    if (isActive !== undefined) {
+      const activeBool = isActive === 'true';
+      queryBuilder.andWhere('user.isActive = :activeBool', { activeBool });
+    }
+
+    // Lấy dữ liệu phân trang
+    const [items, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .orderBy('user.createdAt', 'DESC')
+      .getManyAndCount();
+
+    // Lấy 3 trường đếm tổng quát (Dùng Promise.all để chạy song song)
+    const [totalCount, bannedCount, activeCount] = await Promise.all([
+      this.memberRepo.manager.count('User'),
+      this.memberRepo.manager.count('User', { where: { isActive: false } }),
+      this.memberRepo.manager.count('User', { where: { isActive: true } }),
+    ]);
+
+    return {
+      data: items,
+      pagination: {
+        totalItems: total,
+        itemCount: items.length,
+        itemsPerPage: limit,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+      },
+      stats: {
+        totalAccounts: totalCount,
+        bannedAccounts: bannedCount,
+        activeAccounts: activeCount,
+      },
+    };
+  }
+
+  async getAuditLogsPagination(query: GetLogsQueryDto) {
+    const page = parseInt(query.page ?? '1') || 1;
+    const limit = parseInt(query.limit ?? '10') || 10;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.logRepo
+      .createQueryBuilder('log')
+      .leftJoinAndSelect('log.actor', 'actor')
+      .orderBy('log.createdAt', 'DESC');
+
+    if (query.userName) {
+      queryBuilder.andWhere('actor.username ILIKE :userName', {
+        userName: `%${query.userName}%`,
+      });
+    }
+
+    const [items, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data: items,
+      pagination: {
+        totalItems: total,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+      },
     };
   }
 }

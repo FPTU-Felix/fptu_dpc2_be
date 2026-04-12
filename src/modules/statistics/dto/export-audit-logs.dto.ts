@@ -71,7 +71,7 @@ export class ExportAssessmentQueryDto {
 export class ExportFeeQueryDto {
   @ApiPropertyOptional({ example: 2026 })
   @IsOptional()
-  year?: string; // Dùng string để nhận từ query rồi parse sau cho an toàn
+  year?: string;
 }
 
 export class ExportFluctuationQueryDto {
@@ -84,7 +84,6 @@ export class ExportFluctuationQueryDto {
   endDate?: string;
 }
 
-// Mấy cái Raw này dùng nội bộ trong Service nên ĐỂ NGUYÊN INTERFACE CŨNG ĐƯỢC
 export interface RawMeetingAttendance {
   id: string;
   fullname: string;
@@ -106,4 +105,59 @@ export interface RawGenderStat {
 export interface RawMonthlyFee {
   month: string | number;
   total: string | number;
+}
+
+export class GetUsersQueryDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  page?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  limit?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  userName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  isActive?: string;
+}
+
+export class GetLogsQueryDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  page?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  limit?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  userName?: string; // Tìm theo tên actor
+}
+
+export class DashboardQueryDto {
+  @ApiPropertyOptional({ description: 'Năm báo cáo', example: '2026' })
+  @IsOptional()
+  @IsNumberString()
+  year?: string;
 }

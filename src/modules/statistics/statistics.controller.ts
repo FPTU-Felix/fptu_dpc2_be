@@ -6,6 +6,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import {
+  DashboardQueryDto,
   ExportAssessmentQueryDto,
   ExportAuditLogQueryDto,
   ExportFeeQueryDto,
@@ -13,6 +14,8 @@ import {
   ExportMeetingQueryDto,
   ExportPartyMemberQueryDto,
   ExportReportQueryDto,
+  GetLogsQueryDto,
+  GetUsersQueryDto,
 } from './dto/export-audit-logs.dto';
 import { UserRole } from 'src/common/enums';
 
@@ -103,7 +106,8 @@ export class StatisticsController {
   @ApiOperation({ summary: 'Lấy dữ liệu tổng quan cho Dashboard' })
   @Get('dashboard/overview')
   @Roles(UserRole.ADMIN, UserRole.SECRETARY)
-  async getDashboardOverview(@Query('year') year?: string) {
+  async getDashboardOverview(@Query() query: DashboardQueryDto) {
+    const year = query.year;
     const parsedYear = year ? parseInt(year) : NaN;
     const targetYear =
       !isNaN(parsedYear) && parsedYear > 0
@@ -111,5 +115,21 @@ export class StatisticsController {
         : new Date().getFullYear();
 
     return await this.statsService.getDashboardStats(targetYear);
+  }
+
+  @ApiOperation({ summary: 'Lấy danh sách người dùng (Phân trang + Search)' })
+  @Get('users')
+  @Roles(UserRole.ADMIN, UserRole.SECRETARY)
+  async getUsers(@Query() query: GetUsersQueryDto) {
+    return await this.statsService.getUsers(query);
+  }
+
+  @ApiOperation({
+    summary: 'Lấy danh sách Logs hệ thống (Phân trang + Search Actor)',
+  })
+  @Get('audit-logs')
+  @Roles(UserRole.ADMIN, UserRole.SECRETARY)
+  async getLogs(@Query() query: GetLogsQueryDto) {
+    return await this.statsService.getAuditLogsPagination(query);
   }
 }
