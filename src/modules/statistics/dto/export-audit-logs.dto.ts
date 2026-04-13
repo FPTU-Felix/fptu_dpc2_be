@@ -47,15 +47,22 @@ export class ExportReportQueryDto {
 }
 
 export class ExportMeetingQueryDto {
-  @ApiPropertyOptional()
-  @IsString()
-  startDate?: string;
+  @ApiPropertyOptional({ description: 'Tháng bắt đầu (1-12)', example: '1' })
+  @IsOptional()
+  @IsNumberString()
+  startMonth?: string;
 
-  @ApiPropertyOptional()
-  @IsString()
-  endDate?: string;
+  @ApiPropertyOptional({ description: 'Tháng kết thúc (1-12)', example: '12' })
+  @IsOptional()
+  @IsNumberString()
+  endMonth?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Năm báo cáo', example: '2026' })
+  @IsOptional()
+  @IsNumberString()
+  year?: string;
+
+  @ApiPropertyOptional({ description: 'Lọc theo chi bộ' })
   @IsOptional()
   @IsString()
   partyCellId?: string;
@@ -102,9 +109,9 @@ export interface RawGenderStat {
   value: string | number;
 }
 
-export interface RawMonthlyFee {
+export interface RawMonthlyPaidCount {
   month: string | number;
-  total: string | number;
+  paidCount: string | number;
 }
 
 export class GetUsersQueryDto {

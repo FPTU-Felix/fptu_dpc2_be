@@ -18,6 +18,7 @@ import { Commendation } from 'src/modules/commendations/entities/commendation.en
 import { Discipline } from 'src/modules/disciplines/entities/discipline.entity';
 import { PartyMemberPosition } from 'src/modules/party-positions/entities/party-member-position.entity';
 import { GenderEnum, MemberStatusEnum } from 'src/common/enums';
+import { MeetingAttendee } from 'src/modules/meetings/entities/meeting-attendee.entity';
 
 @Entity('party_members')
 export class PartyMember {
@@ -125,4 +126,7 @@ export class PartyMember {
 
   @OneToMany(() => PartyMemberPosition, (pos) => pos.member)
   positions: PartyMemberPosition[];
+
+  @OneToMany(() => MeetingAttendee, (attendee) => attendee.member)
+  attendees: MeetingAttendee[];
 }

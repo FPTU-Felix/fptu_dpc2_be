@@ -16,9 +16,9 @@ import {
   RawMeetingAttendance,
   RawStatusStat,
   RawGenderStat,
-  RawMonthlyFee,
   GetLogsQueryDto,
   GetUsersQueryDto,
+  RawMonthlyPaidCount,
 } from './dto/export-audit-logs.dto';
 import { PartyMember } from '../party-members/entities/party-member.entity';
 import {
@@ -263,41 +263,54 @@ export class StatisticsService {
 
     const members: PartyMember[] = await this.memberRepo.find({
       relations: ['partyFees', 'partyCell'],
+      order: { fullName: 'ASC' },
     });
+
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet(`Đảng phí ${targetYear}`);
+
     const columns = [
       { header: 'STT', key: 'no', width: 8 },
       { header: 'Họ Tên', key: 'name', width: 25 },
+      { header: 'Chi bộ', key: 'cell', width: 20 },
     ];
     for (let i = 1; i <= 12; i++)
-      columns.push({ header: `T${i}`, key: `m${i}`, width: 10 });
-    columns.push({ header: 'Tổng', key: 'total', width: 15 });
+      columns.push({ header: `T${i}`, key: `m${i}`, width: 6 });
     sheet.columns = columns;
+
+    // Format Header
     sheet.getRow(1).fill = {
       type: 'pattern',
       pattern: 'solid',
       fgColor: { argb: 'FFD99694' },
     };
+    sheet.getRow(1).font = { bold: true };
 
-    members.forEach((member: PartyMember, index) => {
+    members.forEach((member, index) => {
       const feeRow: Record<string, string | number> = {
         no: index + 1,
         name: member.fullName,
+        cell: member.partyCell?.name || '',
       };
-      let rowTotal = 0;
+
       for (let i = 1; i <= 12; i++) {
         const fee = member.partyFees.find(
           (f) => f.year === targetYear && f.month === i,
         );
-        const amount = Number(fee?.amount) || 0;
-        feeRow[`m${i}`] = amount > 0 ? amount.toLocaleString() : '-';
-        rowTotal += amount;
+        feeRow[`m${i}`] = fee && Number(fee.amount) > 0 ? 'V' : '';
       }
-      feeRow.total = rowTotal.toLocaleString();
       sheet.addRow(feeRow);
     });
-    await this.sendExcelResponse(res, workbook, `Dang_Phi_${targetYear}`);
+
+    sheet.columns.forEach((col, i) => {
+      if (i > 2) col.alignment = { horizontal: 'center' };
+    });
+
+    await this.sendExcelResponse(
+      res,
+      workbook,
+      `Bang_Theo_Doi_Dong_Phi_${targetYear}`,
+    );
   }
 
   async exportCommendations(res: Response, query: ExportReportQueryDto) {
@@ -389,7 +402,13 @@ export class StatisticsService {
   }
 
   async exportMeetingAttendance(res: Response, query: ExportMeetingQueryDto) {
-    const { startDate, endDate, partyCellId } = query;
+    const targetYear = query.year
+      ? parseInt(query.year)
+      : new Date().getFullYear();
+    const startMonth = query.startMonth ? parseInt(query.startMonth) : 1;
+    const endMonth = query.endMonth ? parseInt(query.endMonth) : 12;
+    const startFinal = new Date(targetYear, startMonth - 1, 1);
+    const endFinal = new Date(targetYear, endMonth, 0, 23, 59, 59);
     const queryBuilder = this.memberRepo
       .createQueryBuilder('member')
       .leftJoin('member.partyCell', 'partyCell')
@@ -397,36 +416,42 @@ export class StatisticsService {
       .leftJoin(
         'attendee.meeting',
         'meeting',
-        'meeting.date BETWEEN :start AND :end',
-        { start: startDate ?? '', end: endDate ?? '' },
+        'meeting.startTime BETWEEN :start AND :end',
+        {
+          start: startFinal.toISOString(),
+          end: endFinal.toISOString(),
+        },
       )
       .select([
         'member.id AS id',
-        'member.fullName AS fullName',
-        'partyCell.name AS cellName',
-        'COUNT(meeting.id) AS totalMeetings',
-        `SUM(CASE WHEN attendee.status = '${AttendeeStatus.PRESENT}' THEN 1 ELSE 0 END) AS presentCount`,
+        'member.fullName AS fullname',
+        'partyCell.name AS cellname',
+        'COUNT(meeting.id) AS totalmeetings',
+        `SUM(CASE WHEN attendee.status = '${AttendeeStatus.PRESENT}' THEN 1 ELSE 0 END) AS presentcount`,
       ])
       .groupBy('member.id')
       .addGroupBy('member.fullName')
       .addGroupBy('partyCell.name');
 
-    if (partyCellId)
+    if (query.partyCellId) {
       queryBuilder.andWhere('member.partyCellId = :partyCellId', {
-        partyCellId,
+        partyCellId: query.partyCellId,
       });
-
+    }
     const results = await queryBuilder.getRawMany<RawMeetingAttendance>();
 
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Chuyên cần');
+    const sheet = workbook.addWorksheet(
+      `Chuyên cần T${startMonth}-T${endMonth}`,
+    );
+
     sheet.columns = [
       { header: 'STT', key: 'no', width: 8 },
       { header: 'Họ và Tên', key: 'name', width: 25 },
       { header: 'Chi bộ', key: 'cell', width: 20 },
-      { header: 'Tổng buổi', key: 'total', width: 15 },
-      { header: 'Có mặt', key: 'present', width: 15 },
-      { header: 'Tỷ lệ', key: 'rate', width: 15 },
+      { header: 'Tổng buổi họp', key: 'total', width: 15 },
+      { header: 'Số buổi có mặt', key: 'present', width: 15 },
+      { header: 'Tỷ lệ chuyên cần', key: 'rate', width: 15 },
     ];
     sheet.getRow(1).fill = {
       type: 'pattern',
@@ -435,6 +460,7 @@ export class StatisticsService {
     };
     sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
 
+    // 5. Fill dữ liệu vào sheet
     results.forEach((item: RawMeetingAttendance, index) => {
       const total = Number(item.totalmeetings) || 0;
       const present = Number(item.presentcount) || 0;
@@ -449,7 +475,15 @@ export class StatisticsService {
         rate: `${rate.toFixed(1)}%`,
       });
     });
-    await this.sendExcelResponse(res, workbook, 'Chuyen_Can');
+    sheet.columns.forEach((col, i) => {
+      if (i > 2) col.alignment = { horizontal: 'center' };
+    });
+
+    await this.sendExcelResponse(
+      res,
+      workbook,
+      `Bao_cao_Chuyen_can_T${startMonth}_T${endMonth}_${targetYear}`,
+    );
   }
 
   async exportFluctuations(res: Response, query: ExportFluctuationQueryDto) {
@@ -507,20 +541,24 @@ export class StatisticsService {
   }
 
   async getDashboardStats(year: number) {
-    const statusStats = await this.memberRepo
-      .createQueryBuilder('member')
-      .select('member.status', 'status')
-      .addSelect('COUNT(member.id)', 'value')
-      .groupBy('member.status')
-      .getRawMany<RawStatusStat>();
+    // Thống kê Trạng thái & Giới tính
+    const [statusStats, genderStats, totalMembers] = await Promise.all([
+      this.memberRepo
+        .createQueryBuilder('member')
+        .select('member.status', 'status')
+        .addSelect('COUNT(member.id)', 'value')
+        .groupBy('member.status')
+        .getRawMany<RawStatusStat>(),
+      this.memberRepo
+        .createQueryBuilder('member')
+        .select('member.gender', 'gender')
+        .addSelect('COUNT(member.id)', 'value')
+        .groupBy('member.gender')
+        .getRawMany<RawGenderStat>(),
+      this.memberRepo.count(),
+    ]);
 
-    const genderStats = await this.memberRepo
-      .createQueryBuilder('member')
-      .select('member.gender', 'gender')
-      .addSelect('COUNT(member.id)', 'value')
-      .groupBy('member.gender')
-      .getRawMany<RawGenderStat>();
-
+    // Thống kê Khen thưởng & Kỷ luật
     const [totalCommendations, totalDisciplines] = await Promise.all([
       this.commendationRepo.count({
         where: { date: Between(`${year}-01-01`, `${year}-12-31`) },
@@ -530,30 +568,36 @@ export class StatisticsService {
       }),
     ]);
 
-    const monthlyFees = await this.feeRepo
+    // Thống kê Đảng phí: Đếm số người đã đóng duy nhất trong mỗi tháng
+    const monthlyPaidCounts = await this.feeRepo
       .createQueryBuilder('fee')
       .select('fee.month', 'month')
-      .addSelect('SUM(fee.amount)', 'total')
+      .addSelect('COUNT(DISTINCT fee.memberId)', 'paidCount')
       .where('fee.year = :year', { year })
       .groupBy('fee.month')
       .orderBy('fee.month', 'ASC')
-      .getRawMany<RawMonthlyFee>();
+      .getRawMany<RawMonthlyPaidCount>();
 
     const feeChartData = Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
-      const found = monthlyFees.find((f) => Number(f.month) === month);
+      const found = monthlyPaidCounts.find((f) => Number(f.month) === month);
+      const paidCount = found ? Number(found.paidCount) : 0;
       return {
         month: `Tháng ${month}`,
-        amount: found ? Number(found.total) : 0,
+        paidCount,
+        totalCount: totalMembers,
+        ratio: `${paidCount}/${totalMembers}`,
+        percentage:
+          totalMembers > 0 ? Math.round((paidCount / totalMembers) * 100) : 0,
       };
     });
 
     return {
-      memberStatus: statusStats.map((s: RawStatusStat) => ({
+      memberStatus: statusStats.map((s) => ({
         type: this.mapMemberStatus(s.status),
         value: Number(s.value),
       })),
-      genderDistribution: genderStats.map((g: RawGenderStat) => ({
+      genderDistribution: genderStats.map((g) => ({
         type:
           g.gender === GenderEnum.MALE
             ? 'Nam'
