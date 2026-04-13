@@ -28,10 +28,6 @@ export class MeetingAttendee {
   @Column({ name: 'member_id' })
   memberId: string;
 
-  @ManyToOne(() => PartyMember)
-  @JoinColumn({ name: 'member_id' })
-  member: PartyMember;
-
   @Column({
     type: 'enum',
     enum: AttendeeStatus,
@@ -63,4 +59,8 @@ export class MeetingAttendee {
 
   @OneToMany(() => MeetingSession, (session) => session.attendee)
   sessions: MeetingSession[];
+
+  @ManyToOne(() => PartyMember, (member) => member.attendees)
+  @JoinColumn({ name: 'member_id' })
+  member: PartyMember;
 }
