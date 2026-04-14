@@ -62,7 +62,6 @@ export enum PartyPosition {
 export enum AssessmentStatus {
   PENDING = 'PENDING', // Chờ duyệt
   APPROVED = 'APPROVED', // Đã duyệt (Chốt sổ)
-  REJECTED = 'REJECTED', // Yêu cầu làm lại (Tùy chọn)
 }
 
 export enum AssessmentRank {

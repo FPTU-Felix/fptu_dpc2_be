@@ -125,7 +125,7 @@ export class CommendationsService {
       .leftJoinAndSelect('member.partyCell', 'cell');
 
     if (year) {
-      queryBuilder.andWhere('YEAR(c.date) = :year', { year });
+      queryBuilder.andWhere('EXTRACT(YEAR FROM c.date) = :year', { year });
     }
 
     if (memberId) {
