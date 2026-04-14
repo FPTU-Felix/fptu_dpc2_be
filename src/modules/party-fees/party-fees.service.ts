@@ -3,13 +3,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { FeeStatusEnum, PartyFee } from './entities/party-fee.entity';
+import { PartyFee } from './entities/party-fee.entity';
 import { Repository } from 'typeorm';
 import { NotificationsService } from '../notifications/notifications.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IPaginationOptions, paginate } from 'nestjs-typeorm-paginate';
 import { GetPartyFeesDto } from './dto/party-fee.dto';
-import { NotificationType } from 'src/common/enums';
+import { NotificationType, FeeStatusEnum } from 'src/common/enums';
 
 @Injectable()
 export class PartyFeesService {

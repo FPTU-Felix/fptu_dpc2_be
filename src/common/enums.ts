@@ -111,3 +111,9 @@ export enum AdmissionStepEnum {
   STEP_5_ADMISSION = 'STEP_5_ADMISSION',
   STEP_6_OFFICIAL = 'STEP_6_OFFICIAL',
 }
+
+export enum FeeStatusEnum {
+  PAID = 'PAID',
+  PENDING = 'PENDING',
+  EXEMPTED = 'EXEMPTED',
+}

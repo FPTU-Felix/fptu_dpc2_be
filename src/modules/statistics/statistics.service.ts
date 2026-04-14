@@ -27,6 +27,7 @@ import {
   GenderEnum,
   MemberStatusEnum,
   AssessmentRank,
+  FeeStatusEnum,
 } from 'src/common/enums';
 import { Commendation } from '../commendations/entities/commendation.entity';
 import { Discipline } from '../disciplines/entities/discipline.entity';
@@ -574,6 +575,7 @@ export class StatisticsService {
       .select('fee.month', 'month')
       .addSelect('COUNT(DISTINCT fee.memberId)', 'paidCount')
       .where('fee.year = :year', { year })
+      .andWhere('fee.status = :status', { status: FeeStatusEnum.PAID })
       .groupBy('fee.month')
       .orderBy('fee.month', 'ASC')
       .getRawMany<RawMonthlyPaidCount>();
