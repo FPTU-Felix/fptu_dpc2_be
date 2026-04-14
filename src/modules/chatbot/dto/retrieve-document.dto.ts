@@ -5,10 +5,12 @@ import {
   IsUUID,
   Max,
   Min,
+  MaxLength,
 } from 'class-validator';
 
 export class RetrieveDocumentDto {
   @IsString()
+  @MaxLength(2000)
   query: string;
 
   @IsOptional()
@@ -20,8 +22,4 @@ export class RetrieveDocumentDto {
   @IsOptional()
   @IsUUID()
   documentId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  documentVersionId?: string;
 }

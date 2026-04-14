@@ -2,16 +2,23 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { DocumentAiKnowledge } from './document-ai-knowledge.entity';
 
 @Entity('document_chunks')
 export class DocumentChunkEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'document_version_id', type: 'uuid' })
-  documentVersionId: string;
+  @Column({ name: 'document_id', type: 'uuid' })
+  documentId: string;
+
+  @ManyToOne(() => DocumentAiKnowledge, { nullable: false, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'document_id' })
+  document?: DocumentAiKnowledge;
 
   @Column({ name: 'chunk_index', type: 'int' })
   chunkIndex: number;
@@ -35,11 +42,12 @@ export class DocumentChunkEntity {
 
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, any>;
-
+  
   @Column({
     type: 'vector',
     name: 'embedding',
     nullable: true,
+    length: 768,
   })
   embedding?: string | null;
 

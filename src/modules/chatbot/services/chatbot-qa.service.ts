@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { ChatbotRetrievalService } from './chatbot-retrieval.service';
-import { OpenAiChatService } from './openai-chat.service';
 import {
   QueryRouterService,
   RouteDecision,
@@ -11,12 +10,12 @@ import {
   PromptDefenseService,
   UserRole,
 } from './prompt-defense.service';
+import { OllamaChatService } from './ollma-chat.service';
 
 type AskParams = {
   query: string;
   topK?: number;
   documentId?: string;
-  documentVersionId?: string;
   userId?: string;
   userRole?: UserRole;
 };
@@ -39,7 +38,7 @@ export class ChatbotQaService {
 
   constructor(
     private readonly retrievalService: ChatbotRetrievalService,
-    private readonly openAiChatService: OpenAiChatService,
+    private readonly ollamaChatService: OllamaChatService,
     private readonly queryRouterService: QueryRouterService,
     private readonly chatbotToolService: ChatbotToolService,
     private readonly promptDefenseService: PromptDefenseService,
@@ -141,7 +140,7 @@ export class ChatbotQaService {
       route,
       answer:
         route.outOfScopeMessage ??
-        'Câu hỏi này ngoài phạm vi hỗ trợ của chatbot. Tôi chuyên hỗ trợ tra cứu nghiệp vụ Đảng viên trong hệ thống.',
+        'Câu hỏi này ngoài phạm vi hỗ trợ của chatbot. Tôi chuyên hỗ trợ tra cứu tài liệu, quy trình, cuộc họp và thông tin tổ chức trong hệ thống.',
       sources: [],
       retrieval: {
         topK: 0,
@@ -189,7 +188,6 @@ export class ChatbotQaService {
       query: params.query,
       topK,
       documentId: params.documentId,
-      documentVersionId: params.documentVersionId,
     });
 
     const bestScore = items.length ? items[0].score : 0;
@@ -234,7 +232,7 @@ export class ChatbotQaService {
       });
     }
 
-    const completion = await this.openAiChatService.answerWithRag({
+    const completion = await this.ollamaChatService.answerWithRag({
       question: params.query,
       chunks: filteredItems,
     });
@@ -250,7 +248,6 @@ export class ChatbotQaService {
       sources: filteredItems.map((item) => ({
         id: item.id,
         documentId: item.documentId,
-        documentVersionId: item.documentVersionId,
         documentTitle: item.documentTitle,
         chunkIndex: item.chunkIndex,
         pageNumber: item.pageNumber,
@@ -270,11 +267,9 @@ export class ChatbotQaService {
     const toolResults = await this.chatbotToolService.executeTools({
       query: params.query,
       tools: route.tools ?? [],
-      userId: params.userId,
-      userRole: params.userRole,
     });
 
-    const completion = await this.openAiChatService.answerWithTools({
+    const completion = await this.ollamaChatService.answerWithTools({
       question: params.query,
       toolResults,
     });
@@ -306,13 +301,10 @@ export class ChatbotQaService {
         query: params.query,
         topK,
         documentId: params.documentId,
-        documentVersionId: params.documentVersionId,
       }),
       this.chatbotToolService.executeTools({
         query: params.query,
         tools: route.tools ?? [],
-        userId: params.userId,
-        userRole: params.userRole,
       }),
     ]);
 
@@ -321,7 +313,7 @@ export class ChatbotQaService {
       (item) => item.score >= this.lowConfidenceThreshold,
     );
 
-    const completion = await this.openAiChatService.answerWithHybrid({
+    const completion = await this.ollamaChatService.answerWithHybrid({
       question: params.query,
       chunks: filteredItems,
       toolResults,
@@ -338,7 +330,6 @@ export class ChatbotQaService {
       sources: filteredItems.map((item) => ({
         id: item.id,
         documentId: item.documentId,
-        documentVersionId: item.documentVersionId,
         documentTitle: item.documentTitle,
         chunkIndex: item.chunkIndex,
         pageNumber: item.pageNumber,

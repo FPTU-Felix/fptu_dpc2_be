@@ -10,10 +10,10 @@ export type SecurityCategory =
   | 'SYSTEM_PROMPT_EXFILTRATION'
   | 'PRIVILEGE_ESCALATION'
   | 'DEBUG_DATA_EXFILTRATION'
-  | 'BULK_PERSONAL_DATA_EXFILTRATION'
+  | 'PERSONAL_DATA_REQUEST'
   | 'SENSITIVE_PERSONAL_DATA_REQUEST'
-  | 'UNAUTHORIZED_OTHER_PERSON_REQUEST'
-  | 'UNAUTHORIZED_FINANCIAL_DATA_REQUEST'
+  | 'FINANCIAL_DATA_REQUEST'
+  | 'BULK_PERSONAL_DATA_EXFILTRATION'
   | 'BULK_EXPORT_REQUEST'
   | 'FORCE_HALLUCINATION'
   | 'FORCE_INCORRECT_ANSWER'
@@ -76,7 +76,7 @@ export class PromptDefenseService {
           action: 'SANITIZE_AND_CONTINUE',
           category: 'NOISE_PREFIX',
           sanitizedQuery: sanitized,
-          reason: 'Phát hiện chuỗi nhiễu/injection nhưng vẫn còn intent nghiệp vụ hợp lệ.',
+          reason: 'Phát hiện chuỗi nhiễu/injection nhưng vẫn còn intent hợp lệ.',
         };
       }
 
@@ -103,9 +103,9 @@ export class PromptDefenseService {
       return {
         action: 'BLOCK',
         category: 'BULK_PERSONAL_DATA_EXFILTRATION',
-        reason: 'Yêu cầu xuất hàng loạt dữ liệu cá nhân nhạy cảm.',
+        reason: 'Yêu cầu xuất hàng loạt dữ liệu cá nhân.',
         message:
-          'Tôi không thể cung cấp hoặc xuất hàng loạt dữ liệu cá nhân nhạy cảm của đảng viên.',
+          'Tôi không thể cung cấp hoặc xuất hàng loạt dữ liệu cá nhân hoặc nhạy cảm.',
       };
     }
 
@@ -115,7 +115,7 @@ export class PromptDefenseService {
         category: 'BULK_EXPORT_REQUEST',
         reason: 'Yêu cầu export dữ liệu hàng loạt.',
         message:
-          'Tôi không thể xuất dữ liệu hàng loạt khi chưa có quyền phù hợp và mục đích truy cập hợp lệ.',
+          'Tôi không thể xuất dữ liệu hàng loạt qua chatbot.',
       };
     }
 
@@ -125,27 +125,27 @@ export class PromptDefenseService {
         category: 'SENSITIVE_PERSONAL_DATA_REQUEST',
         reason: 'Yêu cầu dữ liệu cá nhân nhạy cảm.',
         message:
-          'Tôi không thể cung cấp dữ liệu cá nhân nhạy cảm như số điện thoại, địa chỉ, email hoặc nơi cư trú khi không có quyền phù hợp.',
+          'Tôi không thể cung cấp dữ liệu cá nhân nhạy cảm như số điện thoại, địa chỉ, email hoặc nơi cư trú.',
       };
     }
 
-    if (this.isUnauthorizedOtherPersonRequest(q, params.userRole)) {
+    if (this.isPersonalDataRequest(q)) {
       return {
         action: 'BLOCK',
-        category: 'UNAUTHORIZED_OTHER_PERSON_REQUEST',
-        reason: 'Yêu cầu xem dữ liệu cá nhân của người khác khi chưa đủ quyền.',
+        category: 'PERSONAL_DATA_REQUEST',
+        reason: 'Yêu cầu thông tin cá nhân/hồ sơ cá nhân.',
         message:
-          'Tôi không thể cung cấp hồ sơ hoặc lý lịch chi tiết của người khác khi bạn không có quyền truy cập phù hợp.',
+          'Tôi không hỗ trợ trả lời các câu hỏi về hồ sơ cá nhân, lý lịch cá nhân hoặc dữ liệu cá nhân qua chatbot này.',
       };
     }
 
-    if (this.isUnauthorizedFinancialDataRequest(q, params.userRole)) {
+    if (this.isFinancialDataRequest(q)) {
       return {
         action: 'BLOCK',
-        category: 'UNAUTHORIZED_FINANCIAL_DATA_REQUEST',
-        reason: 'Yêu cầu dữ liệu đảng phí/tài chính cá nhân của người khác.',
+        category: 'FINANCIAL_DATA_REQUEST',
+        reason: 'Yêu cầu thông tin đảng phí/tài chính cá nhân.',
         message:
-          'Tôi không thể tiết lộ trạng thái đảng phí hoặc thông tin tài chính cá nhân của người khác khi chưa có quyền phù hợp.',
+          'Tôi không hỗ trợ trả lời các câu hỏi về đảng phí hoặc dữ liệu tài chính cá nhân qua chatbot này.',
       };
     }
 
@@ -175,7 +175,7 @@ export class PromptDefenseService {
         category: 'INTERNAL_SCHEMA_DISCLOSURE',
         reason: 'Yêu cầu lộ schema/trường dữ liệu backend nội bộ.',
         message:
-          'Tôi không thể cung cấp chi tiết nội bộ của backend hoặc schema dữ liệu vượt quá phạm vi hiển thị được phép. Nếu cần, tôi chỉ có thể mô tả khái quát các nhóm dữ liệu được hệ thống quản lý.',
+          'Tôi không thể cung cấp chi tiết nội bộ của backend hoặc schema dữ liệu vượt quá phạm vi hiển thị được phép.',
       };
     }
 
@@ -266,7 +266,6 @@ export class PromptDefenseService {
       'toàn bộ email, số điện thoại, địa chỉ',
       'số điện thoại của tất cả đảng viên',
       'toàn bộ thông tin nơi cư trú',
-      'trả nguyên văn mọi tài liệu nội bộ',
       'dump toàn bộ',
       'toàn bộ lý lịch',
     ]);
@@ -279,43 +278,37 @@ export class PromptDefenseService {
       'email',
       'nơi cư trú',
       'thông tin cư trú',
-      'lý lịch của người khác',
     ]);
   }
 
-  private isUnauthorizedOtherPersonRequest(
-    q: string,
-    userRole?: UserRole,
-  ): boolean {
-    const asksOtherPersonProfile =
-      this.hasAny(q, [
-        'lý lịch của người khác',
-        'lý lịch của',
-        'hồ sơ của',
-        'toàn bộ lý lịch của',
-        'xem hồ sơ của người khác',
-      ]) &&
-      !this.hasAny(q, ['hồ sơ của tôi', 'lý lịch của tôi']);
-
-    if (!asksOtherPersonProfile) return false;
-
-    return !this.isPrivilegedRole(userRole);
+  private isPersonalDataRequest(q: string): boolean {
+    return this.hasAny(q, [
+      'hồ sơ của tôi',
+      'lý lịch của tôi',
+      'trạng thái hồ sơ của tôi',
+      'hồ sơ cá nhân',
+      'lý lịch',
+      'lý lịch đảng viên',
+      'xem hồ sơ của',
+      'hồ sơ của ai',
+      'thông tin cá nhân',
+      'tôi là đảng viên',
+      'vào đảng ngày nào',
+      'công nhận chính thức',
+      'nhiệm vụ của tôi',
+      'giúp đỡ tôi',
+    ]);
   }
 
-  private isUnauthorizedFinancialDataRequest(
-    q: string,
-    userRole?: UserRole,
-  ): boolean {
-    const asksOtherPersonFinance =
-      this.hasAny(q, [
-        'đã đóng đảng phí tháng này chưa',
-        'ai trong chi bộ đang nợ đảng phí',
-        'trạng thái đảng phí của',
-      ]) && !this.hasAny(q, ['đảng phí của tôi']);
-
-    if (!asksOtherPersonFinance) return false;
-
-    return !this.isPrivilegedRole(userRole);
+  private isFinancialDataRequest(q: string): boolean {
+    return this.hasAny(q, [
+      'đảng phí',
+      'đóng đảng phí',
+      'nợ đảng phí',
+      'đã đóng đảng phí',
+      'trạng thái đảng phí',
+      'tài chính cá nhân',
+    ]);
   }
 
   private isBulkExportRequest(q: string): boolean {
@@ -355,15 +348,5 @@ export class PromptDefenseService {
       'cấu trúc database',
       'hệ thống đang lưu những trường nhạy cảm nào',
     ]);
-  }
-
-  private isPrivilegedRole(role?: UserRole): boolean {
-    return (
-      role === 'SUPER_ADMIN' ||
-      role === 'ADMIN' ||
-      role === 'SECRETARY' ||
-      role === 'DEPUTY_SECRETARY' ||
-      role === 'COMMITTEE'
-    );
   }
 }

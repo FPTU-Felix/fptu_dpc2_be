@@ -1,150 +1,158 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { ConfigService } from '@nestjs/config';
 import { Readable } from 'stream';
 
-import {
-  DocumentVersionEntity,
-  DocumentVersionStatus,
-} from '@/modules/upload-documents/entities/document-version.entity';
 import { DocumentChunkEntity } from '@/modules/upload-documents/entities/document-chunk.entity';
-import { DocumentEntity } from '@/modules/upload-documents/entities/document.entity';
+import { DocumentAiKnowledge } from '@/modules/upload-documents/entities/document-ai-knowledge.entity';
 import { DocumentParserService } from './document-parser.service';
 import { DocumentChunkerService } from './document-chunker.service';
 import { EmbeddingService } from '@/modules/embedding/services/embedding.service';
+import { FileService } from '@/modules/file/file.service';
 
 @Injectable()
 export class DocumentIngestionService {
   private readonly logger = new Logger(DocumentIngestionService.name);
-  private readonly s3: S3Client;
-  private readonly bucket: string;
+  private readonly expectedEmbeddingDim = 768;
 
   constructor(
-    @InjectRepository(DocumentVersionEntity)
-    private readonly documentVersionRepository: Repository<DocumentVersionEntity>,
-
     @InjectRepository(DocumentChunkEntity)
     private readonly documentChunkRepository: Repository<DocumentChunkEntity>,
 
-    @InjectRepository(DocumentEntity)
-    private readonly documentRepository: Repository<DocumentEntity>,
+    @InjectRepository(DocumentAiKnowledge)
+    private readonly documentRepository: Repository<DocumentAiKnowledge>,
 
     private readonly parserService: DocumentParserService,
     private readonly chunkerService: DocumentChunkerService,
     private readonly embeddingService: EmbeddingService,
     private readonly dataSource: DataSource,
-    private readonly configService: ConfigService,
-  ) {
-    this.bucket = this.configService.get<string>('AWS_S3_BUCKET') || '';
-    this.s3 = new S3Client({
-      region: this.configService.get<string>('AWS_REGION') || '',
-      credentials:
-        this.configService.get<string>('AWS_ACCESS_KEY_ID') &&
-        this.configService.get<string>('AWS_SECRET_ACCESS_KEY')
-          ? {
-              accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID')!,
-              secretAccessKey:
-                this.configService.get<string>('AWS_SECRET_ACCESS_KEY')!,
-            }
-          : undefined,
-    });
-  }
+    private readonly fileService: FileService,
+  ) {}
 
-  async ingestDocumentVersion(documentVersionId: string): Promise<void> {
-    const version = await this.documentVersionRepository.findOne({
-      where: { id: documentVersionId },
-    });
+  async ingestDocument(documentAiKnowledgeId: string): Promise<void> {
+    this.logger.log(
+      `ingestDocument called. documentAiKnowledgeId=${documentAiKnowledgeId}`,
+    );
 
-    if (!version) {
-      throw new Error(`Document version not found: ${documentVersionId}`);
+    if (!documentAiKnowledgeId) {
+      throw new BadRequestException('documentAiKnowledgeId is required');
     }
 
-    await this.documentVersionRepository.update(version.id, {
-      ingestionStatus: DocumentVersionStatus.PROCESSING,
-      errorMessage: null,
+    const document = await this.documentRepository.findOne({
+      where: { id: documentAiKnowledgeId },
     });
 
+    if (!document) {
+      throw new NotFoundException(
+        `DocumentAiKnowledge not found: ${documentAiKnowledgeId}`,
+      );
+    }
+
+    if (!document.objectName?.trim()) {
+      throw new BadRequestException(
+        `objectName is missing on DocumentAiKnowledge: ${documentAiKnowledgeId}`,
+      );
+    }
+
     try {
-      if (!version.fileKey) {
-        throw new Error('fileKey is missing on document version');
-      }
+      this.logger.debug(
+        `Downloading file from MinIO. objectName=${document.objectName}`,
+      );
 
-      const document = await this.documentRepository.findOne({
-        where: { id: version.documentId },
-      });
-
-      if (!document) {
-        throw new Error(`Document not found: ${version.documentId}`);
-      }
-
-      const file = await this.downloadS3Object(
-        version.fileKey,
-        version.fileName,
-        version.fileType,
+      const file = await this.downloadMinioObjectFromFileService(
+        document.objectName,
+        document.fileName,
+        document.mimeType,
       );
 
       const parsed = await this.parserService.extractText(file);
 
-      await this.documentChunkRepository.delete({
-        documentVersionId: version.id,
-      });
+      this.logger.debug(
+        `parsed.text.length=${parsed.text?.length ?? 0}, preview=${(parsed.text ?? '').slice(0, 1000)}`,
+      );
+
+      await this.deleteOldChunks(document.id);
 
       const chunks = this.chunkerService.chunkText({
         text: parsed.text,
         pageMap: parsed.pageMap,
         documentTitle: document.title,
-        maxWords: 220,
-        overlapWords: 30,
+        maxWords: 180,
+        overlapWords: 20,
       });
+
+      this.logger.debug(
+        `chunks.length=${chunks.length}, chunks=${JSON.stringify(
+          chunks.map((c) => ({
+            chunkIndex: c.chunkIndex,
+            sectionPath: c.sectionPath,
+            tokenCount: c.tokenCount,
+            content: c.content,
+          })),
+          null,
+          2,
+        )}`,
+      );
 
       const savedChunks = await this.documentChunkRepository.save(
         chunks.map((chunk) =>
           this.documentChunkRepository.create({
-            documentVersionId: version.id,
+            documentId: document.id,
             chunkIndex: chunk.chunkIndex,
             content: chunk.content,
             pageNumber: chunk.pageNumber,
             sectionPath: chunk.sectionPath,
             tokenCount: chunk.tokenCount,
-            metadata: chunk.metadata ?? {},
+            metadata: {
+              ...(chunk.metadata ?? {}),
+              documentAiKnowledgeId: document.id,
+              sourceFileUrl: document.fileUrl,
+              objectName: document.objectName,
+              fileName: document.fileName,
+              mimeType: document.mimeType,
+              bucket: document.bucket,
+            },
           }),
         ),
       );
 
       await this.embedAndUpdateChunks(savedChunks, document.title);
 
-      await this.documentVersionRepository.update(version.id, {
-        extractedText: parsed.text,
-        ingestionStatus: DocumentVersionStatus.COMPLETED,
-        errorMessage: null,
-      });
-
-      await this.documentRepository.update(version.documentId, {
-        contentText: parsed.text,
-      });
-
       this.logger.log(
-        `Ingestion completed. versionId=${version.id}, chunks=${savedChunks.length}`,
+        `Ingestion completed. documentAiKnowledgeId=${document.id}, chunks=${savedChunks.length}`,
       );
     } catch (error: any) {
-      this.logger.error(error);
-
-      await this.documentVersionRepository.update(version.id, {
-        ingestionStatus: DocumentVersionStatus.FAILED,
-        errorMessage: error?.message || 'Ingestion failed',
-      });
-
+      this.logger.error(
+        `Ingestion failed for documentAiKnowledgeId=${documentAiKnowledgeId}: ${error?.message}`,
+      );
+      this.logger.error(error?.stack);
       throw error;
     }
+  }
+
+  private async deleteOldChunks(documentAiKnowledgeId: string): Promise<void> {
+    this.logger.debug(
+      `Deleting old chunks by documentId=${documentAiKnowledgeId}`,
+    );
+
+    await this.documentChunkRepository.delete({
+      documentId: documentAiKnowledgeId,
+    });
   }
 
   private buildEmbeddingInput(
     chunk: Pick<DocumentChunkEntity, 'content' | 'sectionPath' | 'metadata'>,
     documentTitle: string,
   ): string {
-    const kind = chunk.metadata?.kind ? `Loại nội dung: ${chunk.metadata.kind}` : '';
+    const kind = chunk.metadata?.kind
+      ? `Loại nội dung: ${chunk.metadata.kind}`
+      : '';
     const section = chunk.sectionPath ? `Mục: ${chunk.sectionPath}` : '';
 
     return [
@@ -171,6 +179,17 @@ export class DocumentIngestionService {
 
       const vectors = await this.embeddingService.embedTexts(texts);
 
+      const actualDim = vectors[0]?.length ?? 0;
+      this.logger.debug(
+        `Updating embeddings for ${batch.length} chunks, vectorDim=${actualDim}`,
+      );
+
+      if (actualDim !== this.expectedEmbeddingDim) {
+        throw new InternalServerErrorException(
+          `Embedding dimension mismatch: expected ${this.expectedEmbeddingDim}, got ${actualDim}`,
+        );
+      }
+
       await Promise.all(
         batch.map((chunk, index) =>
           this.dataSource.query(
@@ -186,39 +205,56 @@ export class DocumentIngestionService {
     }
   }
 
-  private async downloadS3Object(
-    fileKey: string,
-    fileName: string,
+  private async downloadMinioObjectFromFileService(
+    objectName: string,
+    fileName?: string,
     mimeType?: string,
   ): Promise<Express.Multer.File> {
-    const response = await this.s3.send(
-      new GetObjectCommand({
-        Bucket: this.bucket,
-        Key: fileKey,
-      }),
-    );
-
-    const buffer = await this.streamToBuffer(response.Body as Readable);
+    const stream = await this.fileService.getFileStream(objectName);
+    const buffer = await this.streamToBuffer(stream as Readable);
+    const resolvedFileName =
+      fileName?.trim() || this.guessFileNameFromObjectName(objectName);
 
     return {
       fieldname: 'file',
-      originalname: fileName,
+      originalname: resolvedFileName,
       encoding: '7bit',
-      mimetype: mimeType || 'application/octet-stream',
+      mimetype: mimeType || this.guessMimeType(resolvedFileName),
       size: buffer.length,
       buffer,
       stream: Readable.from(buffer),
       destination: '',
-      filename: fileName,
+      filename: resolvedFileName,
       path: '',
     } as Express.Multer.File;
   }
 
+  private guessFileNameFromObjectName(objectName: string): string {
+    const parts = objectName.split('/');
+    return parts[parts.length - 1] || 'document';
+  }
+
+  private guessMimeType(fileName: string): string {
+    const lower = fileName.toLowerCase();
+
+    if (lower.endsWith('.pdf')) return 'application/pdf';
+    if (lower.endsWith('.doc')) return 'application/msword';
+    if (lower.endsWith('.docx')) {
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+    if (lower.endsWith('.txt')) return 'text/plain';
+    if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'text/html';
+
+    return 'application/octet-stream';
+  }
+
   private async streamToBuffer(stream: Readable): Promise<Buffer> {
     const chunks: Buffer[] = [];
+
     for await (const chunk of stream) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     }
+
     return Buffer.concat(chunks);
   }
 }

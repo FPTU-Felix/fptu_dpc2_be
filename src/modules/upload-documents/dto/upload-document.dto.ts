@@ -1,22 +1,43 @@
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
-import { DocumentCategory } from '../entities/document.entity';
+import {
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  IsInt,
+  Min,
+} from 'class-validator';
 
 export class UploadDocumentDto {
   @IsString()
-  @MaxLength(500)
+  @MaxLength(255)
   title: string;
 
   @IsOptional()
-  @IsEnum(DocumentCategory)
-  category?: DocumentCategory;
+  @IsString()
+  @MaxLength(2000)
+  description?: string;
+
+  @IsString()
+  @MaxLength(2000)
+  fileUrl: string;
+
+  @IsString()
+  @MaxLength(1000)
+  objectName: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  sourceOrigin?: string;
+  bucket?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(100)
-  versionLabel?: string;
+  @MaxLength(255)
+  fileName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  mimeType?: string;
+
 }

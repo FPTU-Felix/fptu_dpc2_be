@@ -10,16 +10,12 @@ export type ChatRouteMode =
 
 export type ToolName =
   | 'meeting_lookup'
-  | 'party_fee_lookup'
-  | 'member_profile_lookup'
   | 'organization_lookup';
 
 export type ClarificationType =
   | 'meeting_target'
   | 'information_type'
   | 'list_target'
-  | 'profile_type'
-  | 'relative_date'
   | 'document_target'
   | 'unknown';
 
@@ -30,8 +26,6 @@ export type RouteDecision = {
     | 'process_lookup'
     | 'document_lookup'
     | 'meeting_lookup'
-    | 'party_fee_lookup'
-    | 'member_profile_lookup'
     | 'organization_lookup'
     | 'hybrid_lookup'
     | 'clarification'
@@ -56,32 +50,6 @@ export class QueryRouterService {
       return outOfScope;
     }
 
-    const clarification = this.detectAmbiguity(q);
-    if (clarification) {
-      return clarification;
-    }
-
-    const hasPersonal =
-      this.hasAny(q, [
-        'tôi',
-        'của tôi',
-        'mình',
-        'em',
-        'tôi đã',
-        'tôi có',
-        'tôi thuộc',
-      ]) || /\btoi\b/.test(q);
-
-    const hasDynamicTime = this.hasAny(q, [
-      'hôm nay',
-      'tuần này',
-      'tháng này',
-      'hiện tại',
-      'gần đây',
-      'sắp tới',
-      'tiếp theo',
-    ]);
-
     const hasMeeting = this.hasAny(q, [
       'meeting',
       'họp',
@@ -93,28 +61,6 @@ export class QueryRouterService {
       'attendance',
     ]);
 
-    const hasPartyFee = this.hasAny(q, [
-      'đảng phí',
-      'đóng phí',
-      'đóng đảng phí',
-      'còn thiếu phí',
-      'nợ đảng phí',
-    ]);
-
-    const hasProfile = this.hasAny(q, [
-      'chi bộ nào',
-      'hồ sơ của tôi',
-      'trạng thái hồ sơ',
-      'tôi là đảng viên',
-      'vào đảng ngày nào',
-      'công nhận chính thức',
-      'nhiệm vụ của tôi',
-      'giúp đỡ tôi',
-      'hồ sơ cá nhân',
-      'lý lịch',
-      'lý lịch đảng viên',
-    ]);
-
     const hasOrganization = this.hasAny(q, [
       'bí thư là ai',
       'phó bí thư là ai',
@@ -122,9 +68,22 @@ export class QueryRouterService {
       'ban chi ủy',
       'chi bộ trực thuộc',
       'đảng bộ nào',
-      'thông tin đảng',
       'thông tin tổ chức đảng',
       'thông tin chi bộ',
+      'thông tin tổ chức',
+    ]);
+
+    const hasCeremonyOrOath = this.hasAny(q, [
+      'tuyên thệ',
+      'lời tuyên thệ',
+      'lời thề',
+      'thề như nào',
+      'thề thế nào',
+      'đọc lời thề',
+      'lễ kết nạp',
+      'kết nạp đảng',
+      'trong lễ kết nạp đảng',
+      'khi kết nạp đảng',
     ]);
 
     const hasPolicy = this.hasAny(q, [
@@ -141,26 +100,37 @@ export class QueryRouterService {
       'nghị quyết',
       'giấy giới thiệu',
       'lời tuyên thệ',
+      'tuyên thệ',
+      'lời thề',
+      'lễ kết nạp',
+      'kết nạp đảng',
       'quyết định',
       'văn bản',
       'thông báo',
       'quy định',
     ]);
 
-    const needsTool =
-      hasMeeting ||
-      hasPartyFee ||
-      hasProfile ||
-      hasOrganization ||
-      (hasPersonal && hasDynamicTime);
+    const needsTool = hasMeeting || hasOrganization;
+    const needsRag = hasPolicy || hasCeremonyOrOath;
 
-    const needsRag = hasPolicy;
+    // Rule mạnh: hỏi về tuyên thệ / kết nạp Đảng => luôn ưu tiên RAG
+    if (hasCeremonyOrOath && !needsTool) {
+      return {
+        mode: 'rag',
+        intent: 'document_lookup',
+        reason:
+          'Câu hỏi liên quan đến nghi thức/lời tuyên thệ/kết nạp Đảng, phù hợp tra cứu tài liệu.',
+      };
+    }
+
+    const clarification = this.detectAmbiguity(q);
+    if (clarification) {
+      return clarification;
+    }
 
     if (needsTool && needsRag) {
       const tools = this.pickTools({
         hasMeeting,
-        hasPartyFee,
-        hasProfile,
         hasOrganization,
       });
 
@@ -169,15 +139,13 @@ export class QueryRouterService {
         intent: 'hybrid_lookup',
         tools,
         reason:
-          'Câu hỏi vừa cần dữ liệu hệ thống vừa cần tra cứu tài liệu/quy định.',
+          'Câu hỏi vừa cần dữ liệu hệ thống công khai vừa cần tra cứu tài liệu/quy định.',
       };
     }
 
     if (needsTool) {
       const tools = this.pickTools({
         hasMeeting,
-        hasPartyFee,
-        hasProfile,
         hasOrganization,
       });
 
@@ -185,12 +153,10 @@ export class QueryRouterService {
         mode: 'tool',
         intent: this.pickIntent({
           hasMeeting,
-          hasPartyFee,
-          hasProfile,
           hasOrganization,
         }),
         tools,
-        reason: 'Câu hỏi thiên về dữ liệu động/cá nhân trong hệ thống.',
+        reason: 'Câu hỏi thiên về dữ liệu công khai trong hệ thống.',
       };
     }
 
@@ -209,7 +175,7 @@ export class QueryRouterService {
       reason: 'Câu hỏi chưa đủ rõ để xác định nghiệp vụ cần hỗ trợ.',
       clarificationType: 'information_type',
       clarificationQuestion:
-        'Bạn muốn tra cứu nội dung nào trong hệ thống: hồ sơ, quy trình, meeting, đảng phí hay thông tin tổ chức?',
+        'Bạn muốn tra cứu nội dung nào trong hệ thống: tài liệu/quy trình, cuộc họp hay thông tin tổ chức?',
     };
   }
 
@@ -217,77 +183,28 @@ export class QueryRouterService {
     if (this.isWeatherQuery(query)) {
       return this.buildOutOfScope(
         'Câu hỏi về thời tiết ngoài phạm vi hỗ trợ của chatbot.',
-        'Tôi chuyên hỗ trợ tra cứu nghiệp vụ Đảng viên trong hệ thống. Bạn hãy hỏi về hồ sơ, quy trình, meeting, đảng phí hoặc thông tin tổ chức.',
+        'Tôi chuyên hỗ trợ tra cứu tài liệu, quy trình, cuộc họp và thông tin tổ chức trong hệ thống.',
       );
     }
 
     if (this.isCryptoOrPriceQuery(query)) {
       return this.buildOutOfScope(
         'Câu hỏi về giá tài sản/thị trường ngoài phạm vi hỗ trợ.',
-        'Tôi không hỗ trợ tra cứu giá thị trường như Bitcoin. Tôi chuyên hỗ trợ nghiệp vụ Đảng viên trong hệ thống.',
+        'Tôi không hỗ trợ tra cứu giá thị trường. Tôi chuyên hỗ trợ nghiệp vụ trong hệ thống.',
       );
     }
 
     if (this.isEssayOrLongWritingQuery(query)) {
       return this.buildOutOfScope(
         'Yêu cầu viết bài ngoài phạm vi chatbot nghiệp vụ.',
-        'Tôi không hỗ trợ viết bài văn hoặc nội dung dài ngoài phạm vi hệ thống. Tôi chuyên hỗ trợ tra cứu nghiệp vụ Đảng viên.',
-      );
-    }
-
-    if (this.isJokeQuery(query)) {
-      return this.buildOutOfScope(
-        'Yêu cầu giải trí ngoài phạm vi chatbot nghiệp vụ.',
-        'Tôi không hỗ trợ kể chuyện cười. Tôi chuyên hỗ trợ tra cứu hồ sơ, quy trình, meeting, đảng phí và thông tin tổ chức trong hệ thống.',
-      );
-    }
-
-    if (this.isTranslationQuery(query)) {
-      return this.buildOutOfScope(
-        'Yêu cầu dịch thuật ngoài phạm vi chatbot nghiệp vụ.',
-        'Tôi không hỗ trợ dịch thuật chung. Tôi chuyên hỗ trợ tra cứu nghiệp vụ Đảng viên trong hệ thống.',
+        'Tôi không hỗ trợ viết bài văn hoặc nội dung dài ngoài phạm vi hệ thống. Tôi chuyên hỗ trợ tra cứu nghiệp vụ.',
       );
     }
 
     if (this.isProgrammingQuery(query)) {
       return this.buildOutOfScope(
         'Yêu cầu lập trình ngoài phạm vi chatbot nghiệp vụ.',
-        'Tôi không hỗ trợ lập trình website hoặc phần mềm ngoài phạm vi hệ thống này. Tôi chuyên hỗ trợ nghiệp vụ Đảng viên.',
-      );
-    }
-
-    if (this.isSportsOpinionQuery(query)) {
-      return this.buildOutOfScope(
-        'Câu hỏi quan điểm cá nhân ngoài phạm vi chatbot nghiệp vụ.',
-        'Tôi không trao đổi về chủ đề giải trí như bóng đá. Tôi chuyên hỗ trợ tra cứu nghiệp vụ Đảng viên trong hệ thống.',
-      );
-    }
-
-    if (this.isFoodOrderQuery(query)) {
-      return this.buildOutOfScope(
-        'Yêu cầu đặt đồ ăn ngoài phạm vi hệ thống.',
-        'Tôi không hỗ trợ đặt đồ ăn. Tôi chuyên hỗ trợ tra cứu hồ sơ, quy trình, meeting, đảng phí và thông tin tổ chức.',
-      );
-    }
-
-    if (this.isFortuneTellingQuery(query)) {
-      return this.buildOutOfScope(
-        'Yêu cầu xem bói ngoài phạm vi hỗ trợ.',
-        'Tôi không hỗ trợ xem bói. Tôi chuyên hỗ trợ các nội dung nghiệp vụ Đảng viên trong hệ thống.',
-      );
-    }
-
-    if (this.isGeneralRecommendationQuery(query)) {
-      return this.buildOutOfScope(
-        'Yêu cầu gợi ý đời sống ngoài phạm vi chatbot nghiệp vụ.',
-        'Tôi không hỗ trợ các gợi ý đời sống như học guitar, xem phim hay hoạt động cá nhân. Tôi chuyên hỗ trợ nghiệp vụ Đảng viên trong hệ thống.',
-      );
-    }
-
-    if (this.isMathHomeworkQuery(query)) {
-      return this.buildOutOfScope(
-        'Yêu cầu giải bài tập ngoài phạm vi chatbot nghiệp vụ.',
-        'Tôi không hỗ trợ giải toán hoặc bài tập ngoài phạm vi hệ thống. Tôi chuyên hỗ trợ tra cứu nghiệp vụ Đảng viên.',
+        'Tôi không hỗ trợ lập trình ngoài phạm vi chatbot nghiệp vụ này.',
       );
     }
 
@@ -314,18 +231,7 @@ export class QueryRouterService {
         reason: 'Người dùng hỏi về meeting nhưng chưa nêu rõ meeting nào.',
         clarificationType: 'meeting_target',
         clarificationQuestion:
-          'Bạn muốn xem meeting nào hoặc trong khoảng thời gian nào? Ví dụ: cuộc họp gần nhất, họp tháng này, hay họp ngày 20/06/2026.',
-      };
-    }
-
-    if (this.isAmbiguousPartyInfo(query)) {
-      return {
-        mode: 'clarify',
-        intent: 'clarification',
-        reason: 'Người dùng hỏi thông tin Đảng nhưng chưa nêu rõ loại thông tin.',
-        clarificationType: 'information_type',
-        clarificationQuestion:
-          'Bạn muốn xem loại thông tin nào: hồ sơ, quy trình, meeting, đảng phí hay thông tin tổ chức?',
+          'Bạn muốn xem cuộc họp nào hoặc trong khoảng thời gian nào? Ví dụ: cuộc họp gần nhất, họp tháng này, hay họp ngày 20/06/2026.',
       };
     }
 
@@ -336,29 +242,7 @@ export class QueryRouterService {
         reason: 'Người dùng yêu cầu xem danh sách nhưng chưa nêu rõ danh sách gì.',
         clarificationType: 'list_target',
         clarificationQuestion:
-          'Bạn muốn xem danh sách gì? Ví dụ: danh sách đảng viên, danh sách cuộc họp, danh sách hồ sơ, hay danh sách đảng phí.',
-      };
-    }
-
-    if (this.isAmbiguousProfile(query)) {
-      return {
-        mode: 'clarify',
-        intent: 'clarification',
-        reason: 'Người dùng hỏi về hồ sơ nhưng chưa nêu rõ loại hồ sơ.',
-        clarificationType: 'profile_type',
-        clarificationQuestion:
-          'Bạn muốn xem hồ sơ nào: hồ sơ kết nạp, hồ sơ chuyển sinh hoạt, hay hồ sơ cá nhân?',
-      };
-    }
-
-    if (this.isAmbiguousRelativeDate(query)) {
-      return {
-        mode: 'clarify',
-        intent: 'clarification',
-        reason: 'Người dùng dùng mốc thời gian tương đối nhưng chưa rõ ngày cụ thể.',
-        clarificationType: 'relative_date',
-        clarificationQuestion:
-          'Bạn đang nói “hôm đó” là ngày nào? Bạn có thể cho tôi ngày cụ thể, ví dụ 20/06/2026.',
+          'Bạn muốn xem danh sách gì? Ví dụ: danh sách cuộc họp, danh sách tài liệu, hay danh sách tổ chức.',
       };
     }
 
@@ -367,10 +251,10 @@ export class QueryRouterService {
         mode: 'clarify',
         intent: 'clarification',
         reason:
-          'Người dùng hỏi về văn bản/tài liệu nhưng chưa nêu rõ văn bản nào.',
+          'Người dùng hỏi về văn bản/tài liệu nhưng chưa nêu rõ tài liệu nào.',
         clarificationType: 'document_target',
         clarificationQuestion:
-          'Bạn muốn hỏi về quyết định/văn bản nào? Bạn có thể cho tôi số văn bản, tên văn bản hoặc nội dung cụ thể cần tra cứu.',
+          'Bạn muốn hỏi về văn bản/tài liệu nào? Bạn có thể cho tôi tên tài liệu hoặc nội dung cụ thể cần tra cứu.',
       };
     }
 
@@ -422,19 +306,6 @@ export class QueryRouterService {
     );
   }
 
-  private isAmbiguousPartyInfo(query: string): boolean {
-    const exactPatterns = [
-      'tôi muốn xem thông tin đảng',
-      'xem thông tin đảng',
-      'cho tôi xem thông tin đảng',
-      'tôi muốn biết thông tin đảng',
-      'xem thông tin đảng viên',
-      'xem thông tin chi bộ',
-    ];
-
-    return exactPatterns.includes(query);
-  }
-
   private isAmbiguousList(query: string): boolean {
     const exactPatterns = [
       'tôi muốn xem danh sách',
@@ -446,38 +317,20 @@ export class QueryRouterService {
     return exactPatterns.includes(query);
   }
 
-  private isAmbiguousProfile(query: string): boolean {
-    const exactPatterns = [
-      'tôi muốn biết về hồ sơ',
-      'cho tôi biết về hồ sơ',
-      'xem hồ sơ',
-      'tôi muốn xem hồ sơ',
-      'hồ sơ là gì',
-      'cho tôi xem hồ sơ',
-    ];
-
-    return exactPatterns.includes(query);
-  }
-
-  private isAmbiguousRelativeDate(query: string): boolean {
-    const hasRelativeWord = this.hasAny(query, [
-      'hôm đó',
-      'bữa đó',
-      'hôm ấy',
-      'ngày đó',
-    ]);
-    const mentionsMeeting = this.hasAny(query, [
-      'họp',
-      'meeting',
-      'cuộc họp',
-      'lịch họp',
-    ]);
-    const hasSpecificDate = this.hasDate(query);
-
-    return hasRelativeWord && mentionsMeeting && !hasSpecificDate;
-  }
-
   private isAmbiguousDocument(query: string): boolean {
+    // Nếu đã có tín hiệu mạnh về tuyên thệ/kết nạp Đảng thì không coi là ambiguous nữa
+    if (
+      this.hasAny(query, [
+        'tuyên thệ',
+        'lời tuyên thệ',
+        'lời thề',
+        'lễ kết nạp',
+        'kết nạp đảng',
+      ])
+    ) {
+      return false;
+    }
+
     const docKeywords = [
       'quyết định',
       'nghị quyết',
@@ -506,9 +359,6 @@ export class QueryRouterService {
 
     const hasSpecificSignals =
       this.hasDate(query) ||
-      /\bsố\b/.test(query) ||
-      /\bso\b/.test(query) ||
-      /\b\d+[-/A-Z0-9]*\b/.test(query) ||
       query.split(' ').length >= 7;
 
     const isVeryShortDocQuery =
@@ -555,25 +405,6 @@ export class QueryRouterService {
     ]);
   }
 
-  private isJokeQuery(query: string): boolean {
-    return this.hasAny(query, [
-      'kể chuyện cười',
-      'kể chuyện vui',
-      'joke',
-      'truyện cười',
-    ]);
-  }
-
-  private isTranslationQuery(query: string): boolean {
-    return this.hasAny(query, [
-      'dịch đoạn văn này',
-      'dịch sang tiếng anh',
-      'translate',
-      'dịch giúp tôi',
-      'dịch đoạn này',
-    ]);
-  }
-
   private isProgrammingQuery(query: string): boolean {
     return this.hasAny(query, [
       'lập trình cho tôi',
@@ -583,59 +414,6 @@ export class QueryRouterService {
       'web bán hàng',
       'viết ứng dụng',
       'code cho tôi',
-    ]);
-  }
-
-  private isSportsOpinionQuery(query: string): boolean {
-    return (
-      this.hasAny(query, [
-        'bạn nghĩ gì về bóng đá',
-        'bóng đá',
-        'cầu thủ',
-        'ngoại hạng anh',
-        'champions league',
-      ]) && this.hasAny(query, ['nghĩ gì', 'quan điểm', 'ý kiến'])
-    );
-  }
-
-  private isFoodOrderQuery(query: string): boolean {
-    return this.hasAny(query, [
-      'đặt đồ ăn',
-      'order đồ ăn',
-      'gọi đồ ăn',
-      'đặt trà sữa',
-      'đặt cơm',
-    ]);
-  }
-
-  private isFortuneTellingQuery(query: string): boolean {
-    return this.hasAny(query, [
-      'xem bói',
-      'bói',
-      'tử vi',
-      'xem mệnh',
-      'coi bói',
-    ]);
-  }
-
-  private isGeneralRecommendationQuery(query: string): boolean {
-    return this.hasAny(query, [
-      'học guitar ở đâu tốt',
-      'xem phim gì tối nay',
-      'nên xem phim gì',
-      'đi đâu chơi',
-      'ăn gì tối nay',
-      'nên học ở đâu',
-    ]);
-  }
-
-  private isMathHomeworkQuery(query: string): boolean {
-    return this.hasAny(query, [
-      'giải bài toán',
-      'giải bài này',
-      'giải giúp tôi bài toán',
-      'toán này giải sao',
-      'giải phương trình',
     ]);
   }
 
@@ -657,19 +435,15 @@ export class QueryRouterService {
 
   private pickTools(flags: {
     hasMeeting: boolean;
-    hasPartyFee: boolean;
-    hasProfile: boolean;
     hasOrganization: boolean;
   }): ToolName[] {
     const tools: ToolName[] = [];
 
     if (flags.hasMeeting) tools.push('meeting_lookup');
-    if (flags.hasPartyFee) tools.push('party_fee_lookup');
-    if (flags.hasProfile) tools.push('member_profile_lookup');
     if (flags.hasOrganization) tools.push('organization_lookup');
 
     if (!tools.length) {
-      tools.push('member_profile_lookup');
+      tools.push('organization_lookup');
     }
 
     return tools;
@@ -677,21 +451,28 @@ export class QueryRouterService {
 
   private pickIntent(flags: {
     hasMeeting: boolean;
-    hasPartyFee: boolean;
-    hasProfile: boolean;
     hasOrganization: boolean;
   }): RouteDecision['intent'] {
     if (flags.hasMeeting) return 'meeting_lookup';
-    if (flags.hasPartyFee) return 'party_fee_lookup';
-    if (flags.hasProfile) return 'member_profile_lookup';
     if (flags.hasOrganization) return 'organization_lookup';
     return 'unknown';
   }
 
   private pickRagIntent(query: string): RouteDecision['intent'] {
+    if (
+      query.includes('tuyên thệ') ||
+      query.includes('lời tuyên thệ') ||
+      query.includes('lời thề') ||
+      query.includes('lễ kết nạp') ||
+      query.includes('kết nạp đảng')
+    ) {
+      return 'document_lookup';
+    }
+
     if (query.includes('quy trình') || query.includes('thủ tục')) {
       return 'process_lookup';
     }
+
     if (
       query.includes('hồ sơ') ||
       query.includes('giấy tờ') ||
@@ -703,6 +484,7 @@ export class QueryRouterService {
     ) {
       return 'document_lookup';
     }
+
     return 'policy_lookup';
   }
 }

@@ -5,21 +5,26 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
+
+type OllamaEmbedResponse = {
+  model: string;
+  embeddings: number[][];
+};
 
 @Injectable()
 export class EmbeddingService {
   private readonly logger = new Logger(EmbeddingService.name);
-  private readonly client: OpenAI;
+  private readonly baseUrl: string;
   private readonly model: string;
 
   constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
+    this.baseUrl =
+      this.configService.get<string>('OLLAMA_BASE_URL') ||
+      'http://localhost:11434';
 
-    this.client = new OpenAI({ apiKey });
     this.model =
-      this.configService.get<string>('EMBEDDING_MODEL') ||
-      'text-embedding-3-small';
+      this.configService.get<string>('OLLAMA_EMBEDDING_MODEL') ||
+      'nomic-embed-text';
   }
 
   async embedTexts(texts: string[]): Promise<number[][]> {
@@ -30,23 +35,45 @@ export class EmbeddingService {
     if (!normalizedTexts.length) return [];
 
     try {
-      const response = await this.client.embeddings.create({
-        model: this.model,
-        input: normalizedTexts,
+      const response = await fetch(`${this.baseUrl}/api/embed`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.model,
+          input: normalizedTexts,
+        }),
       });
 
-      return response.data.map((item) => item.embedding);
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error(`Ollama embed failed: ${response.status} ${errorText}`);
+
+        if (response.status >= 500) {
+          throw new ServiceUnavailableException('Ollama embedding service unavailable');
+        }
+
+        throw new InternalServerErrorException(
+          `Ollama embed failed: ${response.status}`,
+        );
+      }
+
+      const data = (await response.json()) as OllamaEmbedResponse;
+
+      if (!Array.isArray(data.embeddings)) {
+        throw new InternalServerErrorException(
+          'Invalid embeddings response from Ollama',
+        );
+      }
+
+      return data.embeddings;
     } catch (error: any) {
       this.logger.error('Create embeddings failed');
       this.logger.error(`message: ${error?.message}`);
-      this.logger.error(`status: ${error?.status}`);
-      this.logger.error(`code: ${error?.code}`);
-      this.logger.error(`type: ${error?.type}`);
 
-      if (error?.code === 'insufficient_quota') {
-        throw new ServiceUnavailableException(
-          'Embedding provider quota exceeded',
-        );
+      if (error instanceof ServiceUnavailableException) {
+        throw error;
       }
 
       throw new InternalServerErrorException(

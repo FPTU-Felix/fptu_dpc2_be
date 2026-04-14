@@ -1,20 +1,7 @@
-import { IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsString, MaxLength } from 'class-validator';
 
 export class AskChatbotDto {
   @IsString()
+  @MaxLength(2000)
   query: string;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(10)
-  topK?: number;
-
-  @IsOptional()
-  @IsUUID()
-  documentId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  documentVersionId?: string;
 }

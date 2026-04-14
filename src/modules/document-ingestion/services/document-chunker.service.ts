@@ -1,8 +1,18 @@
 import { Injectable } from '@nestjs/common';
 
-type PageMapItem = { pageNumber: number; text: string };
+type ChunkInput = {
+  text: string;
+  pageMap?: Array<{
+    pageNumber: number;
+    text: string;
+  }>;
+  documentTitle?: string;
+  maxWords?: number;
+  overlapWords?: number;
+  minWords?: number;
+};
 
-type ChunkItem = {
+type ChunkOutput = {
   chunkIndex: number;
   content: string;
   pageNumber?: number;
@@ -12,313 +22,384 @@ type ChunkItem = {
 };
 
 type SectionBlock = {
-  heading?: string;
+  headingPath: string[];
   content: string;
+  kind: 'section';
 };
 
 @Injectable()
 export class DocumentChunkerService {
-  chunkText(params: {
-    text: string;
-    pageMap?: PageMapItem[];
-    documentTitle?: string;
-    maxWords?: number;
-    overlapWords?: number;
-  }): ChunkItem[] {
-    const text = this.normalizeText(params.text);
-    const maxWords = params.maxWords ?? 220;
-    const overlapWords = params.overlapWords ?? 30;
-    const documentTitle = params.documentTitle?.trim();
+  chunkText(input: ChunkInput): ChunkOutput[] {
+    const text = this.normalizeText(input.text);
+    const maxWords = input.maxWords ?? 220;
+    const overlapWords = input.overlapWords ?? 30;
+    const minWords = input.minWords ?? 40;
 
-    if (!text) return [];
-
-    // 1) Tách theo section có cấu trúc
-    const sections = this.splitIntoSections(text);
-
-    // 2) Pack section thành chunk vừa phải
-    const chunks: ChunkItem[] = [];
-    let chunkIndex = 0;
-
-    for (const section of sections) {
-      const packed = this.packSection(section, {
-        maxWords,
-        overlapWords,
-        documentTitle,
-      });
-
-      for (const item of packed) {
-        chunks.push({
-          chunkIndex: chunkIndex++,
-          content: item.content,
-          pageNumber: this.findPageNumber(item.content, params.pageMap),
-          sectionPath: item.sectionPath,
-          tokenCount: this.estimateTokenCount(item.content),
-          metadata: item.metadata,
-        });
-      }
+    if (!text) {
+      return [];
     }
+
+    const lines = this.toMeaningfulLines(text);
+    const sections = this.buildSectionBlocks(lines);
+    const chunks = this.sectionsToChunks(sections, {
+      maxWords,
+      overlapWords,
+      minWords,
+      pageMap: input.pageMap,
+      documentTitle: input.documentTitle,
+    });
 
     return chunks;
   }
 
   private normalizeText(text: string): string {
-    return text
-      .replace(/\u0000/g, '')
-      .replace(/[ \t]+\n/g, '\n')
+    return (text ?? '')
+      .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
+      .replace(/[ \t]+\n/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
       .replace(/[ \t]{2,}/g, ' ')
       .trim();
   }
 
-  private splitIntoSections(text: string): SectionBlock[] {
-    const lines = text
+  private toMeaningfulLines(text: string): string[] {
+    return text
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean);
+  }
 
+  private buildSectionBlocks(lines: string[]): SectionBlock[] {
     const sections: SectionBlock[] = [];
-    let currentHeading: string | undefined;
+
+    let headingStack: string[] = [];
     let buffer: string[] = [];
 
     const flush = () => {
-      if (!buffer.length) return;
+      const content = buffer.join('\n').trim();
+      if (!content) {
+        buffer = [];
+        return;
+      }
+
       sections.push({
-        heading: currentHeading,
-        content: buffer.join('\n').trim(),
+        headingPath: [...headingStack],
+        content,
+        kind: 'section',
       });
+
       buffer = [];
     };
 
     for (const line of lines) {
-      if (this.isHeading(line)) {
+      const heading = this.parseHeading(line);
+
+      if (heading) {
         flush();
-        currentHeading = line;
-      } else {
-        buffer.push(line);
+        headingStack = this.updateHeadingStack(headingStack, heading);
+        continue;
       }
+
+      buffer.push(line);
     }
 
     flush();
 
-    // fallback nếu không detect được heading
-    if (!sections.length) {
-      return [{ heading: undefined, content: text }];
+    if (!sections.length && lines.length) {
+      sections.push({
+        headingPath: [],
+        content: lines.join('\n'),
+        kind: 'section',
+      });
     }
 
     return sections;
   }
 
-  private isHeading(line: string): boolean {
-    const normalized = line.trim();
+  private parseHeading(
+    line: string,
+  ): { level: 1 | 2 | 3 | 4; text: string } | null {
+    if (!line) return null;
 
-    if (!normalized) return false;
+    if (/^Phần\s+[IVXLC0-9]+[\s.: -]*/iu.test(line)) {
+      return { level: 1, text: line };
+    }
 
-    return (
-      /^BƯỚC\s+\d+\s*:?/i.test(normalized) ||
-      /^PHẦN\s+[IVXLC\d]+\s*:?/i.test(normalized) ||
-      /^[IVXLC]+\.\s+/.test(normalized) ||
-      /^\d+\.\s+/.test(normalized) ||
-      /^(HƯỚNG DẪN|QUYỀN VÀ TRÁCH NHIỆM|LỜI TUYÊN THỆ|NGHỊ QUYẾT|GIẤY GIỚI THIỆU|ĐƠN XIN VÀO ĐẢNG|SƠ LƯỢC LÝ LỊCH)/i.test(
-        normalized,
-      ) ||
-      // dòng in hoa tương đối ngắn thường là heading
-      (normalized === normalized.toUpperCase() &&
-        normalized.length <= 120 &&
-        normalized.split(/\s+/).length <= 14)
-    );
+    if (/^Chương\s+[IVXLC0-9]+[\s.: -]*/iu.test(line)) {
+      return { level: 2, text: line };
+    }
+
+    if (/^Mục\s+[IVXLC0-9]+[\s.: -]*/iu.test(line)) {
+      return { level: 3, text: line };
+    }
+
+    if (/^Điều\s+\d+[\s.: -]*/iu.test(line)) {
+      return { level: 4, text: line };
+    }
+
+    const clean = line.replace(/[0-9.:]/g, '').trim();
+    const isAllCaps =
+      clean.length >= 3 &&
+      clean === clean.toUpperCase() &&
+      /[A-ZÀ-Ỹ]/u.test(clean) &&
+      clean.length <= 160;
+
+    if (isAllCaps) {
+      return { level: 2, text: line };
+    }
+
+    return null;
   }
 
-  private packSection(
-    section: SectionBlock,
+  private updateHeadingStack(
+    current: string[],
+    heading: { level: 1 | 2 | 3 | 4; text: string },
+  ): string[] {
+    const next = [...current];
+
+    switch (heading.level) {
+      case 1:
+        return [heading.text];
+      case 2:
+        return [next[0]].filter(Boolean).concat(heading.text);
+      case 3:
+        return [next[0], next[1]].filter(Boolean).concat(heading.text);
+      case 4:
+        return [next[0], next[1], next[2]].filter(Boolean).concat(heading.text);
+      default:
+        return [heading.text];
+    }
+  }
+
+  private sectionsToChunks(
+    sections: SectionBlock[],
     params: {
       maxWords: number;
       overlapWords: number;
+      minWords: number;
+      pageMap?: Array<{ pageNumber: number; text: string }>;
       documentTitle?: string;
     },
-  ): Array<{
-    content: string;
-    sectionPath?: string;
-    metadata: Record<string, any>;
-  }> {
-    const paragraphs = section.content
-      .split(/\n{2,}|\n/)
-      .map((p) => p.trim())
-      .filter(Boolean);
+  ): ChunkOutput[] {
+    const chunks: ChunkOutput[] = [];
+    let chunkIndex = 0;
 
-    if (!paragraphs.length) {
-      return [];
-    }
+    for (const section of sections) {
+      const headingText = section.headingPath.join(' > ').trim();
+      const combined = [headingText, section.content].filter(Boolean).join('\n\n');
 
-    const results: Array<{
-      content: string;
-      sectionPath?: string;
-      metadata: Record<string, any>;
-    }> = [];
+      const splitParts = this.splitSmart(
+        combined,
+        params.maxWords,
+        params.overlapWords,
+      );
 
-    let current: string[] = [];
-    let currentWords = 0;
+      for (const part of splitParts) {
+        const normalized = part.trim();
+        const wordCount = this.countWords(normalized);
 
-    const pushCurrent = () => {
-      if (!current.length) return;
-
-      const content = current.join('\n').trim();
-      results.push({
-        content,
-        sectionPath: section.heading,
-        metadata: {
-          kind: this.classifySection(section.heading, content),
-          heading: section.heading ?? null,
-          hasStep: /^BƯỚC\s+\d+/i.test(section.heading ?? ''),
-          wordCount: this.countWords(content),
-          documentTitle: params.documentTitle ?? null,
-        },
-      });
-
-      if (params.overlapWords > 0) {
-        const overlapText = this.takeLastWords(content, params.overlapWords);
-        current = overlapText ? [overlapText] : [];
-        currentWords = this.countWords(overlapText);
-      } else {
-        current = [];
-        currentWords = 0;
-      }
-    };
-
-    for (const paragraph of paragraphs) {
-      const pWords = this.countWords(paragraph);
-
-      if (pWords > params.maxWords) {
-        // paragraph quá dài -> cắt trong paragraph theo câu
-        const sentenceChunks = this.splitLongParagraph(
-          paragraph,
-          params.maxWords,
-          params.overlapWords,
-        );
-
-        for (const part of sentenceChunks) {
-          if (current.length) {
-            pushCurrent();
-          }
-
-          results.push({
-            content: part,
-            sectionPath: section.heading,
-            metadata: {
-              kind: this.classifySection(section.heading, part),
-              heading: section.heading ?? null,
-              hasStep: /^BƯỚC\s+\d+/i.test(section.heading ?? ''),
-              wordCount: this.countWords(part),
-              documentTitle: params.documentTitle ?? null,
-            },
-          });
+        if (wordCount < params.minWords) {
+          continue;
         }
 
-        current = [];
-        currentWords = 0;
-        continue;
-      }
+        if (this.isLowValueChunk(normalized)) {
+          continue;
+        }
 
-      if (currentWords + pWords > params.maxWords && current.length) {
-        pushCurrent();
+        chunks.push(
+          this.makeChunk({
+            chunkIndex: chunkIndex++,
+            content: normalized,
+            sectionPath: headingText || undefined,
+            pageMap: params.pageMap,
+            documentTitle: params.documentTitle,
+            kind: section.kind,
+          }),
+        );
       }
-
-      current.push(paragraph);
-      currentWords += pWords;
     }
 
-    pushCurrent();
-
-    return results;
+    return this.mergeSmallNeighborChunks(chunks, params.minWords);
   }
 
-  private splitLongParagraph(
-    paragraph: string,
+  private splitSmart(
+    text: string,
     maxWords: number,
     overlapWords: number,
   ): string[] {
-    const sentences = paragraph
-      .split(/(?<=[.!?;:])\s+|\s+(?=BƯỚC\s+\d+\s*:)/i)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const sentences = this.splitIntoSentences(text);
+    if (!sentences.length) {
+      return [text.trim()].filter(Boolean);
+    }
 
-    if (!sentences.length) return [paragraph];
-
-    const chunks: string[] = [];
+    const result: string[] = [];
     let current: string[] = [];
     let currentWords = 0;
 
-    const pushCurrent = () => {
-      if (!current.length) return;
-      const content = current.join(' ').trim();
-      chunks.push(content);
-
-      const overlap = this.takeLastWords(content, overlapWords);
-      current = overlap ? [overlap] : [];
-      currentWords = this.countWords(overlap);
-    };
-
     for (const sentence of sentences) {
-      const sWords = this.countWords(sentence);
+      const sentenceWords = this.countWords(sentence);
 
-      if (currentWords + sWords > maxWords && current.length) {
-        pushCurrent();
+      if (currentWords + sentenceWords <= maxWords) {
+        current.push(sentence);
+        currentWords += sentenceWords;
+        continue;
       }
 
-      current.push(sentence);
-      currentWords += sWords;
+      if (current.length) {
+        result.push(current.join(' ').trim());
+      }
+
+      const overlap = this.takeOverlapWords(current.join(' '), overlapWords);
+      current = overlap ? [overlap, sentence] : [sentence];
+      currentWords = this.countWords(current.join(' '));
+
+      if (currentWords > maxWords) {
+        const hardSplit = this.hardSplitByWords(current.join(' '), maxWords, overlapWords);
+        result.push(...hardSplit.slice(0, -1));
+        current = [hardSplit[hardSplit.length - 1]];
+        currentWords = this.countWords(current[0]);
+      }
     }
 
     if (current.length) {
-      chunks.push(current.join(' ').trim());
+      result.push(current.join(' ').trim());
     }
 
-    return chunks;
+    return result.filter(Boolean);
   }
 
-  private classifySection(
-    heading: string | undefined,
-    content: string,
-  ): string {
-    const text = `${heading ?? ''} ${content}`.toLowerCase();
-
-    if (text.includes('bước')) return 'procedure';
-    if (text.includes('hồ sơ') || text.includes('lý lịch')) return 'document';
-    if (text.includes('nghị quyết')) return 'resolution';
-    if (text.includes('giấy giới thiệu')) return 'referral';
-    if (text.includes('đảng phí')) return 'party_fee';
-    if (text.includes('quyền') || text.includes('trách nhiệm')) return 'policy';
-    if (text.includes('lễ kết nạp') || text.includes('lễ công nhận'))
-      return 'ceremony';
-
-    return 'general';
+  private splitIntoSentences(text: string): string[] {
+    return text
+      .split(/(?<=[.!?;:])\s+|\n+/u)
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
 
-  private countWords(text: string): number {
-    return text.split(/\s+/).filter(Boolean).length;
-  }
-
-  private estimateTokenCount(text: string): number {
-    // gần đúng, đủ dùng để debug / filter
-    return Math.ceil(this.countWords(text) * 1.3);
-  }
-
-  private takeLastWords(text: string, n: number): string {
-    if (!text || n <= 0) return '';
+  private hardSplitByWords(
+    text: string,
+    maxWords: number,
+    overlapWords: number,
+  ): string[] {
     const words = text.split(/\s+/).filter(Boolean);
-    return words.slice(-n).join(' ');
+    const result: string[] = [];
+    let start = 0;
+
+    while (start < words.length) {
+      const end = Math.min(start + maxWords, words.length);
+      result.push(words.slice(start, end).join(' '));
+      if (end >= words.length) break;
+      start = Math.max(end - overlapWords, start + 1);
+    }
+
+    return result;
   }
 
-  private findPageNumber(
+  private takeOverlapWords(text: string, overlapWords: number): string {
+    const words = text.split(/\s+/).filter(Boolean);
+    if (!words.length || overlapWords <= 0) return '';
+    return words.slice(Math.max(0, words.length - overlapWords)).join(' ');
+  }
+
+  private mergeSmallNeighborChunks(
+    chunks: ChunkOutput[],
+    minWords: number,
+  ): ChunkOutput[] {
+    if (!chunks.length) return chunks;
+
+    const merged: ChunkOutput[] = [];
+
+    for (const chunk of chunks) {
+      const prev = merged[merged.length - 1];
+      const currentWords = chunk.tokenCount ?? this.countWords(chunk.content);
+
+      if (
+        prev &&
+        prev.sectionPath === chunk.sectionPath &&
+        currentWords < minWords
+      ) {
+        prev.content = `${prev.content}\n\n${chunk.content}`.trim();
+        prev.tokenCount = this.countWords(prev.content);
+        continue;
+      }
+
+      merged.push({ ...chunk });
+    }
+
+    return merged.map((chunk, index) => ({
+      ...chunk,
+      chunkIndex: index,
+      tokenCount: this.countWords(chunk.content),
+    }));
+  }
+
+  private isLowValueChunk(text: string): boolean {
+    const normalized = text.trim();
+
+    if (!normalized) return true;
+
+    if (/^Điều\s+\d+[\s.:]*$/iu.test(normalized)) return true;
+    if (/^Mục\s+[IVXLC0-9]+[\s.:]*$/iu.test(normalized)) return true;
+    if (/^Chương\s+[IVXLC0-9]+[\s.:]*$/iu.test(normalized)) return true;
+
+    return this.countWords(normalized) < 8;
+  }
+
+  private makeChunk(params: {
+    chunkIndex: number;
+    content: string;
+    sectionPath?: string;
+    pageMap?: Array<{ pageNumber: number; text: string }>;
+    documentTitle?: string;
+    kind: string;
+  }): ChunkOutput {
+    const normalizedContent = params.content.trim();
+    const wordCount = this.countWords(normalizedContent);
+
+    return {
+      chunkIndex: params.chunkIndex,
+      content: normalizedContent,
+      pageNumber: this.inferPageNumber(normalizedContent, params.pageMap),
+      sectionPath: params.sectionPath,
+      tokenCount: wordCount,
+      metadata: {
+        kind: params.kind,
+        heading: params.sectionPath ?? null,
+        wordCount,
+        documentTitle: params.documentTitle ?? null,
+      },
+    };
+  }
+
+  private inferPageNumber(
     content: string,
-    pageMap?: PageMapItem[],
+    pageMap?: Array<{ pageNumber: number; text: string }>,
   ): number | undefined {
     if (!pageMap?.length) return undefined;
 
-    const probe = content.slice(0, 120).trim();
-    if (!probe) return undefined;
+    let bestPage: number | undefined;
+    let bestScore = -1;
 
-    const matched = pageMap.find((p) => p.text.includes(probe));
-    return matched?.pageNumber;
+    for (const page of pageMap) {
+      const sample = (page.text ?? '').slice(0, 120).trim();
+      if (!sample) continue;
+
+      let score = 0;
+      const sampleWords = sample.split(/\s+/).filter(Boolean).slice(0, 20);
+
+      for (const word of sampleWords) {
+        if (content.includes(word)) score++;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestPage = page.pageNumber;
+      }
+    }
+
+    return bestPage ?? pageMap[0]?.pageNumber;
+  }
+
+  private countWords(text: string): number {
+    return text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
   }
 }

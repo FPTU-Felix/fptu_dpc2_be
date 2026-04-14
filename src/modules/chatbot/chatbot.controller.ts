@@ -1,5 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { RetrieveDocumentDto } from './dto/retrieve-document.dto';
+import { AskChatbotDto } from './dto/ask-chatbot.dto';
 import { ChatbotRetrievalService } from './services/chatbot-retrieval.service';
 import { ChatbotQaService } from './services/chatbot-qa.service';
 
@@ -16,7 +17,6 @@ export class ChatbotController {
       query: dto.query,
       topK: dto.topK,
       documentId: dto.documentId,
-      documentVersionId: dto.documentVersionId,
     });
 
     return {
@@ -27,12 +27,10 @@ export class ChatbotController {
   }
 
   @Post('ask')
-  async ask(@Body() dto: RetrieveDocumentDto) {
+  async ask(@Body() dto: AskChatbotDto) {
     return this.chatbotQaService.ask({
       query: dto.query,
-      topK: dto.topK,
-      documentId: dto.documentId,
-      documentVersionId: dto.documentVersionId,
+  
     });
   }
 }

@@ -4,22 +4,14 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Queue } from 'bullmq';
 
-import {
-  DocumentCategory,
-  DocumentEntity,
-} from './entities/document.entity';
-import {
-  DocumentVersionEntity,
-  DocumentVersionStatus,
-} from './entities/document-version.entity';
-import { DocumentChunkEntity } from './entities/document-chunk.entity';
 import { UploadDocumentDto } from './dto/upload-document.dto';
-import { DocumentStorageService } from './services/document-storage.service';
+import { DocumentAiKnowledge } from './entities/document-ai-knowledge.entity';
 import { DOCUMENT_JOB_NAMES } from './constants/document-queue.constant';
 import { DOCUMENT_QUEUE_TOKEN } from '@/modules/document-ingestion/queue/document-ingestion.queue.providers';
 
@@ -28,88 +20,58 @@ export class UploadDocumentsService {
   private readonly logger = new Logger(UploadDocumentsService.name);
 
   constructor(
-    @InjectRepository(DocumentEntity)
-    private readonly documentRepository: Repository<DocumentEntity>,
-
-    @InjectRepository(DocumentVersionEntity)
-    private readonly documentVersionRepository: Repository<DocumentVersionEntity>,
-
-    @InjectRepository(DocumentChunkEntity)
-    private readonly documentChunkRepository: Repository<DocumentChunkEntity>,
-
-    private readonly storageService: DocumentStorageService,
+    @InjectRepository(DocumentAiKnowledge)
+    private readonly documentAiKnowledgeRepository: Repository<DocumentAiKnowledge>,
     private readonly dataSource: DataSource,
-
     @Inject(DOCUMENT_QUEUE_TOKEN)
     private readonly documentQueue: Queue,
   ) {}
 
-  async uploadAndQueue(
-    file: Express.Multer.File,
+  async createAndQueue(
     dto: UploadDocumentDto,
     adminUserId: string | null,
   ) {
-    this.logger.log('uploadAndQueue called');
+    this.logger.log('createAndQueue called');
 
-    if (!file) {
-      this.logger.warn('File is missing');
-      throw new BadRequestException('File is required');
+    if (!dto?.title?.trim()) {
+      throw new BadRequestException('Title is required');
     }
 
-    this.validateFile(file);
+    if (!dto?.fileUrl?.trim()) {
+      throw new BadRequestException('fileUrl is required');
+    }
+
+    if (!dto?.objectName?.trim()) {
+      throw new BadRequestException('objectName is required');
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      this.logger.debug(
-        `upload input: ${JSON.stringify({
-          title: dto?.title,
-          category: dto?.category,
-          sourceOrigin: dto?.sourceOrigin,
-          versionLabel: dto?.versionLabel,
-          originalname: file?.originalname,
-          mimetype: file?.mimetype,
-          size: file?.size,
-          adminUserId,
-        })}`,
-      );
-
-      this.logger.log('Uploading file to S3...');
-      const uploadResult = await this.storageService.uploadFile({
-        fileBuffer: file.buffer,
-        originalName: file.originalname,
-        mimeType: file.mimetype,
-      });
-      this.logger.log(`S3 upload success. key=${uploadResult.key}`);
-      this.logger.debug(
-        `S3 upload result: ${JSON.stringify(uploadResult, null, 2)}`,
-      );
-
-      this.logger.log('Creating document record...');
-      const documentPayload = {
-        title: dto.title,
-        fileUrl: uploadResult.fileUrl,
-        category: dto.category ?? DocumentCategory.LAW,
-        sourceOrigin: dto.sourceOrigin,
+      const payload: Partial<DocumentAiKnowledge> = {
+        title: dto.title.trim(),
+        description: dto.description?.trim() || undefined,
+        fileUrl: dto.fileUrl.trim(),
+        objectName: dto.objectName.trim(),
+        bucket: dto.bucket?.trim() || undefined,
+        fileName: dto.fileName?.trim() || undefined,
+        mimeType: dto.mimeType?.trim() || undefined,
+        createdBy: adminUserId ?? undefined,
       };
 
-      this.logger.debug(
-        `documentPayload = ${JSON.stringify(documentPayload, null, 2)}`,
-      );
+      this.logger.debug(`payload = ${JSON.stringify(payload, null, 2)}`);
 
-      const document = queryRunner.manager.create(
-        DocumentEntity,
-        documentPayload,
-      );
+      const document = queryRunner.manager.create(DocumentAiKnowledge, payload);
 
       this.logger.debug(
         `document entity before save = ${JSON.stringify(document, null, 2)}`,
       );
 
       const savedDocument = await queryRunner.manager.save(document);
-      this.logger.log(`Document saved. id=${savedDocument.id}`);
+
+      this.logger.log(`DocumentAiKnowledge saved. id=${savedDocument.id}`);
       this.logger.debug(
         `savedDocument = ${JSON.stringify(savedDocument, null, 2)}`,
       );
@@ -118,47 +80,6 @@ export class UploadDocumentsService {
         throw new Error('savedDocument.id is missing after save');
       }
 
-      this.logger.log('Creating document version record...');
-
-      const versionPayload: Partial<DocumentVersionEntity> = {
-        documentId: savedDocument.id,
-        versionLabel: dto.versionLabel ?? 'v1',
-        fileName: file.originalname,
-        fileUrl: uploadResult.fileUrl,
-        fileKey: uploadResult.key,
-        fileType: file.mimetype,
-        fileSize: String(file.size),
-        checksum: uploadResult.checksum,
-        uploadedBy: adminUserId ?? null,
-        ingestionStatus: DocumentVersionStatus.PENDING,
-        isActive: true,
-      };
-
-      this.logger.debug(
-        `versionPayload = ${JSON.stringify(versionPayload, null, 2)}`,
-      );
-
-      const version = queryRunner.manager.create(
-        DocumentVersionEntity,
-        versionPayload,
-      );
-
-      this.logger.debug(
-        `version.documentId before save = ${version.documentId}`,
-      );
-      this.logger.debug(
-        `version.uploadedBy before save = ${version.uploadedBy}`,
-      );
-      this.logger.debug(
-        `version entity before save = ${JSON.stringify(version, null, 2)}`,
-      );
-
-      const savedVersion = await queryRunner.manager.save(version);
-      this.logger.log(`Document version saved. id=${savedVersion.id}`);
-      this.logger.debug(
-        `savedVersion = ${JSON.stringify(savedVersion, null, 2)}`,
-      );
-
       await queryRunner.commitTransaction();
       this.logger.log('Transaction committed');
 
@@ -166,7 +87,9 @@ export class UploadDocumentsService {
       const job = await this.documentQueue.add(
         DOCUMENT_JOB_NAMES.INGEST_DOCUMENT,
         {
-          documentVersionId: savedVersion.id,
+          documentAiKnowledgeId: savedDocument.id,
+          objectName: savedDocument.objectName,
+          fileUrl: savedDocument.fileUrl,
         },
         {
           attempts: 3,
@@ -181,38 +104,40 @@ export class UploadDocumentsService {
       this.logger.log(`Queue add success. jobId=${job.id}`);
 
       return {
-        message: 'Document uploaded successfully and queued for ingestion',
-        document: {
+        message: 'Document AI knowledge created successfully and queued',
+        data: {
           id: savedDocument.id,
           title: savedDocument.title,
-          category: savedDocument.category,
+          description: savedDocument.description,
+          partyCellId: savedDocument.partyCellId,
+          createdBy: savedDocument.createdBy,
           fileUrl: savedDocument.fileUrl,
+          objectName: savedDocument.objectName,
+          bucket: savedDocument.bucket,
+          fileName: savedDocument.fileName,
+          mimeType: savedDocument.mimeType,
+          fileSize: savedDocument.fileSize,
+          createdAt: savedDocument.createdAt,
+          updatedAt: savedDocument.updatedAt,
         },
-        version: {
-          id: savedVersion.id,
-          versionLabel: savedVersion.versionLabel,
-          status: savedVersion.ingestionStatus,
-        },
-        stats: {
-          fileSize: file.size,
-          mimeType: file.mimetype,
+        queue: {
+          jobId: job.id,
+          jobName: DOCUMENT_JOB_NAMES.INGEST_DOCUMENT,
         },
       };
     } catch (error: any) {
-      this.logger.error('uploadAndQueue failed');
-      this.logger.error(`message: ${error?.message}`);
-      this.logger.error(`stack: ${error?.stack}`);
-
       try {
         await queryRunner.rollbackTransaction();
-        this.logger.warn('Transaction rolled back');
-      } catch (rollbackError: any) {
-        this.logger.error(`Rollback failed: ${rollbackError?.message}`);
-        this.logger.error(`Rollback stack: ${rollbackError?.stack}`);
+      } catch (rollbackError: any) {}
+
+      if (error instanceof BadRequestException) {
+        throw error;
       }
 
       throw new InternalServerErrorException(
-        error instanceof Error ? error.message : 'Upload document failed',
+        error instanceof Error
+          ? error.message
+          : 'Create document AI knowledge failed',
       );
     } finally {
       await queryRunner.release();
@@ -220,57 +145,21 @@ export class UploadDocumentsService {
     }
   }
 
-  async getDocumentChunks(documentVersionId: string) {
-    this.logger.log(`getDocumentChunks called: ${documentVersionId}`);
+  async getById(id: string) {
+    this.logger.log(`getById called: ${id}`);
 
-    const items = await this.documentChunkRepository.find({
-      where: { documentVersionId },
-      order: { chunkIndex: 'ASC' },
+    const item = await this.documentAiKnowledgeRepository.findOne({
+      where: { id },
+      relations: {
+        partyCell: true,
+        user: true,
+      },
     });
 
-    this.logger.debug(`getDocumentChunks result count = ${items.length}`);
-    return items;
-  }
-
-  private validateFile(file: Express.Multer.File) {
-    const allowedMimeTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
-      'text/html',
-    ];
-
-    const allowedExtensions = [
-      '.pdf',
-      '.doc',
-      '.docx',
-      '.txt',
-      '.html',
-      '.htm',
-    ];
-
-    const fileName = file.originalname.toLowerCase();
-    const isAllowedExtension = allowedExtensions.some((ext) =>
-      fileName.endsWith(ext),
-    );
-
-    this.logger.debug(
-      `validateFile: ${JSON.stringify({
-        originalname: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size,
-        isAllowedExtension,
-      })}`,
-    );
-
-    if (!allowedMimeTypes.includes(file.mimetype) && !isAllowedExtension) {
-      throw new BadRequestException('Unsupported file type');
+    if (!item) {
+      throw new NotFoundException('Document AI knowledge not found');
     }
 
-    const maxSize = 20 * 1024 * 1024;
-    if (file.size > maxSize) {
-      throw new BadRequestException('File too large. Max size is 20MB');
-    }
+    return item;
   }
 }

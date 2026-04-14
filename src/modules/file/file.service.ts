@@ -28,7 +28,7 @@ export class FileService implements OnModuleInit {
     this.publicUrl = this.configService.get<string>("minio.publicUrl")!;
     this.serverAddress =
       this.configService.get<string>("server.address", { infer: true }) ||
-       "http://160.25.81.143:3000";
+       "http://localhost:3000";
   }
 
   async onModuleInit() {
