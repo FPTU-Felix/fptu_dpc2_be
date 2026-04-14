@@ -10,12 +10,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IPaginationOptions, paginate } from 'nestjs-typeorm-paginate';
 import { GetPartyFeesDto } from './dto/party-fee.dto';
 import { NotificationType, FeeStatusEnum } from 'src/common/enums';
+import { PartyMember } from '../party-members/entities/party-member.entity';
 
 @Injectable()
 export class PartyFeesService {
   constructor(
     @InjectRepository(PartyFee)
     private feeRepo: Repository<PartyFee>,
+    @InjectRepository(PartyMember)
+    private memberRepo: Repository<PartyMember>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -72,5 +75,38 @@ export class PartyFeesService {
       message: 'Xác nhận thu Đảng phí thành công',
       data: savedFee,
     };
+  }
+
+  async getMyFeeStatus(userId: string, year: number) {
+    const member = await this.memberRepo.findOne({
+      where: { userId },
+      select: ['id'],
+    });
+
+    if (!member) {
+      throw new NotFoundException(
+        'Không tìm thấy thông tin Đảng viên tương ứng với tài khoản này.',
+      );
+    }
+    const paidFees = await this.feeRepo.find({
+      where: {
+        memberId: member.id,
+        year: year,
+        status: FeeStatusEnum.PAID,
+      },
+      select: ['month', 'amount', 'createdAt'],
+    });
+
+    return Array.from({ length: 12 }, (_, i) => {
+      const month = i + 1;
+      const feeRecord = paidFees.find((f) => f.month === month);
+
+      return {
+        month: `Tháng ${month}`,
+        isPaid: !!feeRecord,
+        amount: feeRecord ? Number(feeRecord.amount) : 0,
+        paidAt: feeRecord ? feeRecord.createdAt : null,
+      };
+    });
   }
 }

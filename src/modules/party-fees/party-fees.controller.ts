@@ -11,6 +11,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { GetPartyFeesDto } from './dto/party-fee.dto';
 import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
+import { MyFeeQueryDto } from './dto/my-fee.dto';
 
 @ApiTags('Party Fees - Quản lý Đảng phí')
 @ApiBearerAuth('access-token')
@@ -33,5 +34,20 @@ export class PartyFeesController {
     @GetCurrentUser('sub') userId: string, // ID của Bí thư/người thao tác
   ) {
     return await this.partyFeesService.confirmPayment(feeId, userId);
+  }
+
+  @ApiOperation({
+    summary: 'Đảng viên tự kiểm tra trạng thái đóng phí của mình',
+  })
+  @Get('my-fees')
+  async getMyFees(
+    @GetCurrentUser('sub') userId: string,
+    @Query() query: MyFeeQueryDto,
+  ) {
+    const targetYear = query.year
+      ? parseInt(query.year)
+      : new Date().getFullYear();
+
+    return await this.partyFeesService.getMyFeeStatus(userId, targetYear);
   }
 }
