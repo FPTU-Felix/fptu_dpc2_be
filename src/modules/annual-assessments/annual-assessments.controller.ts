@@ -95,6 +95,7 @@ export class AnnualAssessmentsController {
     UserRole.SECRETARY,
     UserRole.DEPUTY_SECRETARY,
     UserRole.COMMITTEE_MEMBER,
+    UserRole.PARTY_MEMBER,
   )
   @ApiOperation({ summary: 'Lấy danh sách bản tự đánh giá (Phân trang + Lọc)' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
