@@ -12,6 +12,8 @@ import { AuthGuard } from '@nestjs/passport';
 import { GetPartyFeesDto } from './dto/party-fee.dto';
 import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
 import { MyFeeQueryDto } from './dto/my-fee.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from 'src/common/enums';
 
 @ApiTags('Party Fees - Quản lý Đảng phí')
 @ApiBearerAuth('access-token')
@@ -28,10 +30,11 @@ export class PartyFeesController {
   }
 
   @Patch(':id/confirm')
+  @Roles(UserRole.SECRETARY)
   @ApiOperation({ summary: 'Xác nhận đã thu Đảng phí (Chuyển sang PAID)' })
   async confirmPayment(
     @Param('id') feeId: string,
-    @GetCurrentUser('sub') userId: string, // ID của Bí thư/người thao tác
+    @GetCurrentUser('sub') userId: string,
   ) {
     return await this.partyFeesService.confirmPayment(feeId, userId);
   }

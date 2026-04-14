@@ -121,7 +121,7 @@ export class DisciplinesService {
       .leftJoinAndSelect('member.partyCell', 'cell');
 
     if (year) {
-      queryBuilder.andWhere('YEAR(d.date) = :year', { year });
+      queryBuilder.andWhere('EXTRACT(YEAR FROM d.date) = :year', { year });
     }
 
     if (memberId) {
