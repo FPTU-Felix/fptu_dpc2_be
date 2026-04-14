@@ -9,12 +9,7 @@ import {
 } from 'typeorm';
 import { PartyMember } from '../../party-members/entities/party-member.entity';
 import { User } from '../../users/entities/user.entity';
-
-export enum FeeStatusEnum {
-  PAID = 'PAID',
-  PENDING = 'PENDING',
-  EXEMPTED = 'EXEMPTED',
-}
+import { FeeStatusEnum } from 'src/common/enums';
 
 @Entity('party_fees')
 @Unique(['memberId', 'month', 'year'])
