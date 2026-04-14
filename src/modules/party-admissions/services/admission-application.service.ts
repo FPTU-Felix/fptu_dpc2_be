@@ -1309,12 +1309,12 @@ export class AdmissionApplicationService {
       .leftJoin(
         PartyAdmissionStepEntity,
         'currentStep',
-        'currentStep.applicationId = application.id AND currentStep.stepCode = application.currentStepCode',
+        '"currentStep"."applicationId" = "application"."id" AND "currentStep"."stepCode"::text = "application"."currentStepCode"::text',
       )
       .leftJoin(
         User,
         'outstandingUser',
-        'outstandingUser.id = application.outstandingIndividualId',
+        '"outstandingUser"."id" = "application"."outstandingIndividualId"',
       )
       .where('application.overallStatus IN (:...overallStatuses)', {
         overallStatuses: [
