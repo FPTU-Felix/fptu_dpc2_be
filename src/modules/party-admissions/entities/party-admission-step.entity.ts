@@ -16,7 +16,6 @@ import { PartyAdmissionStepSubmissionEntity } from './party-admission-step-submi
 import { PartyAdmissionStepReviewEntity } from './party-admission-step-review.entity';
 import { PartyAdmissionDocumentEntity } from './party-admission-document.entity';
 import { PartyAdmissionWorkflowLogEntity } from './party-admission-workflow-log.entity';
-import { BaseEntity } from 'src/common/base.entity';
 
 @Entity('party_admission_steps')
 @Unique('uq_party_admission_steps_application_step_code', [
@@ -46,6 +45,7 @@ export class PartyAdmissionStepEntity {
   @Column({
     type: 'enum',
     enum: AdmissionWorkflowStep,
+    enumName: 'admission_workflow_step_enum',
   })
   stepCode: AdmissionWorkflowStep;
 
@@ -58,6 +58,7 @@ export class PartyAdmissionStepEntity {
   @Column({
     type: 'enum',
     enum: AdmissionWorkflowStepStatus,
+    enumName: 'admission_workflow_step_status_enum',
     default: AdmissionWorkflowStepStatus.NOT_STARTED,
   })
   status: AdmissionWorkflowStepStatus;

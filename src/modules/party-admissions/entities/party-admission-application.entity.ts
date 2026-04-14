@@ -49,6 +49,7 @@ export class PartyAdmissionApplicationEntity {
   @Column({
     type: 'enum',
     enum: AdmissionWorkflowStep,
+    enumName: 'admission_workflow_step_enum',
     default: AdmissionWorkflowStep.APPLICATION,
   })
   currentStepCode: AdmissionWorkflowStep;
@@ -56,6 +57,7 @@ export class PartyAdmissionApplicationEntity {
   @Column({
     type: 'enum',
     enum: AdmissionWorkflowStepStatus,
+    enumName: 'admission_workflow_step_status_enum',
     default: AdmissionWorkflowStepStatus.NOT_STARTED,
   })
   currentStepStatus: AdmissionWorkflowStepStatus;

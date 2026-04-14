@@ -61,7 +61,7 @@ export class AdmissionApplicationService {
     private readonly roleRepo: Repository<Role>,
 
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   private generateApplicationCode(): string {
     const now = new Date();
@@ -242,9 +242,9 @@ export class AdmissionApplicationService {
       roleId: user.roleId,
       role: user.role
         ? {
-            id: user.role.id,
-            name: user.role.name,
-          }
+          id: user.role.id,
+          name: user.role.name,
+        }
         : null,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -892,11 +892,11 @@ export class AdmissionApplicationService {
 
     const currentSteps = applications.length
       ? await this.stepRepo.find({
-          where: applications.map((application) => ({
-            applicationId: application.id,
-            stepCode: application.currentStepCode,
-          })),
-        })
+        where: applications.map((application) => ({
+          applicationId: application.id,
+          stepCode: application.currentStepCode,
+        })),
+      })
       : [];
 
     const currentStepMap = new Map(
@@ -1328,6 +1328,8 @@ export class AdmissionApplicationService {
       .andWhere('application.currentStepStatus = :currentStepStatus', {
         currentStepStatus: AdmissionWorkflowStepStatus.IN_PROGRESS,
       });
+    console.log("===== QUERY =====");
+    console.log(qb.getSql());
 
     if (query.keyword?.trim()) {
       const keyword = `%${query.keyword.trim()}%`;
@@ -1351,11 +1353,11 @@ export class AdmissionApplicationService {
 
     const currentSteps = applications.length
       ? await this.stepRepo.find({
-          where: applications.map((application) => ({
-            applicationId: application.id,
-            stepCode: application.currentStepCode,
-          })),
-        })
+        where: applications.map((application) => ({
+          applicationId: application.id,
+          stepCode: application.currentStepCode,
+        })),
+      })
       : [];
 
     const currentStepMap = new Map(
