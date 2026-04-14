@@ -43,6 +43,7 @@ export class CommendationsController {
     UserRole.SECRETARY,
     UserRole.DEPUTY_SECRETARY,
     UserRole.COMMITTEE_MEMBER,
+    UserRole.PARTY_MEMBER,
   )
   @ApiOperation({ summary: 'Lấy danh sách khen thưởng (Phân trang + Lọc)' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
@@ -63,7 +64,7 @@ export class CommendationsController {
   }
 
   @Post()
-  @Roles(UserRole.DEPUTY_SECRETARY)
+  @Roles(UserRole.DEPUTY_SECRETARY, UserRole.SECRETARY)
   @ApiOperation({ summary: 'Chi ủy ra Quyết định Khen thưởng Đảng viên' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
@@ -76,7 +77,7 @@ export class CommendationsController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.DEPUTY_SECRETARY)
+  @Roles(UserRole.DEPUTY_SECRETARY, UserRole.SECRETARY)
   @ApiOperation({ summary: 'Cập nhật Quyết định Khen thưởng' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
