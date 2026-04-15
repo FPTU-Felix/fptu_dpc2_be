@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateCommendationDto } from './dto/create-commendation.dto';
 import { Commendation } from './entities/commendation.entity';
 import { PartyMember } from '../party-members/entities/party-member.entity';
@@ -39,7 +43,15 @@ export class CommendationsService {
       throw new NotFoundException('Không tìm thấy hồ sơ Đảng viên này!');
     }
 
-    // Xử lý upload MinIO
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const inputDate = new Date(dto.date);
+    if (dto.date && inputDate < today) {
+      throw new BadRequestException(
+        'Ngày ra quyết định không được là ngày trong quá khứ!',
+      );
+    }
+
     let uploadedUrl: string | undefined = undefined;
     if (file) {
       const uploadResult = await this.minioService.uploadFile({

@@ -84,15 +84,19 @@ export class MeetingsManagerController {
     return this.meetingsService.create(userId, ip, dto);
   }
 
-  @Get(':id/pin')
+  @Get(':id/qr-code')
   @Roles(
     UserRole.SECRETARY,
     UserRole.COMMITTEE_MEMBER,
     UserRole.DEPUTY_SECRETARY,
+    UserRole.ADMIN,
   )
-  @ApiOperation({ summary: 'Lấy mã PIN hiện tại (Gọi mỗi 30s để cập nhật)' })
-  getPin(@Param('id', ParseUUIDPipe) id: string) {
-    return this.meetingsService.getCurrentPin(id);
+  @ApiOperation({
+    summary: 'Lấy dữ liệu mã QR điểm danh (Static QR)',
+    description: 'Dữ liệu này dùng để FE gen mã QR dán cố định tại phòng họp.',
+  })
+  getQRCode(@Param('id', ParseUUIDPipe) id: string) {
+    return this.meetingsService.getMeetingQR(id);
   }
 
   @Patch(':id/toggle-checkin')
