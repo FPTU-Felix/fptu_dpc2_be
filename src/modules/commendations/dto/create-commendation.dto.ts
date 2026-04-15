@@ -52,5 +52,6 @@ export class CreateCommendationDto {
     format: 'binary',
     description: 'File scan Quyết định khen thưởng (PDF, PNG, JPG)',
   })
-  file: any;
+  @IsOptional()
+  file?: any;
 }

@@ -49,5 +49,6 @@ export class CreateDisciplineDto {
     format: 'binary',
     description: 'File scan Quyết định có dấu đỏ (PDF, PNG, JPG)',
   })
-  file: any;
+  @IsOptional()
+  file?: any;
 }

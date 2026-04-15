@@ -45,7 +45,7 @@ export enum AttendeeStatus {
 }
 
 export enum CheckInMethod {
-  PIN_CODE = 'PIN_CODE', // Nhập mã PIN trên web (Offline)
+  QR_CODE = 'QR_CODE', // Quét mã QR (Offline)
   ONLINE_EXT = 'ONLINE_EXT', // Extension tự bắt (Online)
   MANUAL = 'MANUAL', // Chi ủy tích tay
 }

@@ -42,6 +42,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { getObjectDiff } from 'src/common/utils/diff.util';
 import { AuditLogEvent } from '../system/events/audit-log.event';
 import { EventEmitter2 } from 'eventemitter2';
+import { start } from 'repl';
 
 @Injectable()
 export class MeetingsService {
@@ -85,6 +86,14 @@ export class MeetingsService {
     if (endTime && new Date(endTime) <= new Date(startTime)) {
       throw new BadRequestException(
         'Thời gian kết thúc phải diễn ra SAU thời gian bắt đầu cuộc họp!',
+      );
+    }
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - 2);
+    const start = new Date(startTime);
+    if (startTime && start < now) {
+      throw new BadRequestException(
+        'Thời gian bắt đầu không được diễn ra trong quá khứ! Vui lòng chọn thời gian từ hiện tại trở đi.',
       );
     }
 
@@ -210,82 +219,18 @@ export class MeetingsService {
     };
   }
 
-  async getCurrentPin(meetingId: string) {
-    const meeting = await this.meetingRepo
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :id', { id: meetingId })
-      .addSelect('meeting.attendanceSecret')
-      .addSelect('meeting.isCheckinActive')
-      .getOne();
+  async getMeetingQR(meetingId: string) {
+    const meeting = await this.meetingRepo.findOne({
+      where: { id: meetingId },
+      select: ['id', 'title', 'isCheckinActive'],
+    });
+
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
-    if (!meeting.isCheckinActive) {
-      throw new BadRequestException('Phiên điểm danh chưa mở hoặc đã kết thúc');
-    }
-    try {
-      const pin = speakeasy.totp({
-        secret: meeting.attendanceSecret,
-        encoding: 'base32',
-        digits: 6,
-      });
-      const timeRemaining = 30 - (Math.floor(Date.now() / 1000) % 30);
-
-      return {
-        status: 'OPEN',
-        pin,
-        timeRemaining,
-      };
-    } catch (error) {
-      console.error('Lỗi sinh mã PIN:', error);
-      throw new BadRequestException('Lỗi hệ thống khi sinh mã xác thực');
-    }
-  }
-
-  async submitCheckIn(userId: string, meetingId: string, dto: CheckInDto) {
-    const member = await this.partyMemberRepo.findOne({ where: { userId } });
-    if (!member)
-      throw new BadRequestException('Tài khoản này chưa có hồ sơ Đảng viên');
-
-    const meeting = await this.meetingRepo
-      .createQueryBuilder('meeting')
-      .where('meeting.id = :id', { id: meetingId })
-      .addSelect('meeting.attendanceSecret')
-      .addSelect('meeting.isCheckinActive')
-      .getOne();
-
-    if (!meeting) throw new NotFoundException('Cuộc họp không tồn tại');
-    if (!meeting.isCheckinActive)
-      throw new ForbiddenException('Phiên điểm danh hiện đang đóng');
-
-    const isValid = speakeasy.totp.verify({
-      secret: meeting.attendanceSecret,
-      encoding: 'base32',
-      token: dto.pin,
-      window: 1,
-    });
-
-    if (!isValid) {
-      throw new BadRequestException('Mã xác thực sai hoặc đã hết hạn');
-    }
-
-    let attendee = await this.attendeeRepo.findOne({
-      where: { meetingId, memberId: member.id },
-    });
-
-    if (attendee) {
-      attendee.status = AttendeeStatus.PRESENT;
-      attendee.method = CheckInMethod.PIN_CODE;
-      attendee.checkInTime = new Date();
-    } else {
-      attendee = this.attendeeRepo.create({
-        meetingId,
-        memberId: member.id,
-        status: AttendeeStatus.PRESENT,
-        method: CheckInMethod.PIN_CODE,
-        checkInTime: new Date(),
-      });
-    }
-
-    return await this.attendeeRepo.save(attendee);
+    return {
+      status: meeting.isCheckinActive ? 'OPEN' : 'CLOSED',
+      qrData: `MEET|${meeting.id}`,
+      title: meeting.title,
+    };
   }
 
   async toggleCheckIn(meetingId: string) {
@@ -310,8 +255,55 @@ export class MeetingsService {
       message: newState ? 'Đã MỞ phiên điểm danh' : 'Đã ĐÓNG phiên điểm danh',
       meetingId,
       isCheckinActive: newState,
-      // Trả về thêm startTime để FE biết (nếu cần)
       actualStartTime: meeting.startTime,
+    };
+  }
+
+  async submitCheckIn(userId: string, meetingId: string) {
+    const member = await this.partyMemberRepo.findOne({ where: { userId } });
+    if (!member)
+      throw new BadRequestException('Tài khoản này chưa có hồ sơ Đảng viên');
+    const meeting = await this.meetingRepo.findOne({
+      where: { id: meetingId },
+      select: ['id', 'isCheckinActive', 'status'],
+    });
+    if (!meeting) throw new NotFoundException('Cuộc họp không tồn tại');
+    if (!meeting.isCheckinActive)
+      throw new ForbiddenException(
+        'Cổng điểm danh hiện đang đóng. Vui lòng đợi thông báo từ ban tổ chức.',
+      );
+    let attendee = await this.attendeeRepo.findOne({
+      where: { meetingId, memberId: member.id },
+    });
+
+    const now = new Date();
+
+    if (attendee) {
+      if (attendee.status === AttendeeStatus.PRESENT) {
+        return {
+          message: 'Đồng chí đã điểm danh thành công trước đó rồi.',
+          data: attendee,
+        };
+      }
+
+      attendee.status = AttendeeStatus.PRESENT;
+      attendee.method = CheckInMethod.QR_CODE;
+      attendee.checkInTime = now;
+    } else {
+      attendee = this.attendeeRepo.create({
+        meetingId,
+        memberId: member.id,
+        status: AttendeeStatus.PRESENT,
+        method: CheckInMethod.QR_CODE,
+        checkInTime: now,
+      });
+    }
+
+    const saved = await this.attendeeRepo.save(attendee);
+    return {
+      success: true,
+      message: 'Điểm danh thành công!',
+      checkInTime: saved.checkInTime,
     };
   }
 
@@ -437,6 +429,22 @@ export class MeetingsService {
         }
       }
       if (membersToRemove.length > 0) {
+        const removedMembersInfo = await this.partyMemberRepo.find({
+          where: { id: In(membersToRemove) },
+          relations: ['user'],
+        });
+
+        for (const member of removedMembersInfo) {
+          if (member.user) {
+            this.notificationsService.createInternal(
+              member.user.id,
+              `Hủy mời họp: ${meeting.title}`,
+              `Thông báo: Kế hoạch thay đổi, đồng chí <b>không còn trong danh sách tham gia</b> cuộc họp này. Vui lòng cập nhật lại lịch trình cá nhân.`,
+              NotificationType.MEETING,
+              member.user.email,
+            );
+          }
+        }
         await this.attendeeRepo.delete({
           meetingId: id,
           memberId: In(membersToRemove),

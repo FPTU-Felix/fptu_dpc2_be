@@ -19,7 +19,6 @@ import {
   ApiConsumes,
 } from '@nestjs/swagger';
 import { MeetingsService } from './meetings.service';
-import { CheckInDto } from './dto/check-in.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -44,13 +43,15 @@ export class MeetingsController {
     UserRole.SECRETARY,
     UserRole.DEPUTY_SECRETARY,
   )
-  @ApiOperation({ summary: 'Đảng viên nhập mã PIN để điểm danh' })
+  @ApiOperation({
+    summary: 'Đảng viên quét mã QR để điểm danh',
+    description: 'Đảng viên dùng App quét mã QR tĩnh để ghi nhận sự có mặt',
+  })
   checkIn(
     @GetCurrentUser('sub') userId: string,
     @Param('id') meetingId: string,
-    @Body() dto: CheckInDto,
   ) {
-    return this.meetingsService.submitCheckIn(userId, meetingId, dto);
+    return this.meetingsService.submitCheckIn(userId, meetingId);
   }
 
   @Post(':id/check-in-online')
@@ -74,12 +75,6 @@ export class MeetingsController {
       dto.currentUrl,
     );
   }
-
-  // @Get()
-  // @ApiOperation({ summary: '1. Xem danh sách cuộc họp (Lọc Sắp tới/Lịch sử)' })
-  // findAll(@Query() filter: FilterMeetingDto) {
-  //   return this.meetingsService.findAll(filter);
-  // }
 
   @Get(':id')
   @ApiOperation({ summary: 'Xem chi tiết 1 cuộc họp' })

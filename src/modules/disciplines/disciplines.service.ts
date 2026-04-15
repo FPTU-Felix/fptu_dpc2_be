@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Discipline } from './entities/discipline.entity';
@@ -37,6 +37,14 @@ export class DisciplinesService {
 
     if (!member) {
       throw new NotFoundException('Không tìm thấy hồ sơ Đảng viên này!');
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const inputDate = new Date(dto.date);
+    if (dto.date && inputDate < today) {
+      throw new BadRequestException(
+        'Ngày ra quyết định không được là ngày trong quá khứ!',
+      );
     }
     let uploadedUrl: string | undefined = undefined;
     if (file) {
