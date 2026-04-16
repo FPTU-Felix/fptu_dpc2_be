@@ -44,7 +44,12 @@ export class MeetingsManagerController {
   constructor(private readonly meetingsService: MeetingsService) {}
 
   @Get('leave-requests')
-  @Roles(UserRole.ADMIN, UserRole.SECRETARY, UserRole.DEPUTY_SECRETARY)
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.SECRETARY,
+    UserRole.DEPUTY_SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+  )
   @ApiOperation({
     summary: 'Lấy danh sách đơn xin nghỉ họp (Phân trang + Lọc)',
   })
