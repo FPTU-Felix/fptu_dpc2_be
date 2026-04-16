@@ -35,7 +35,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 @Controller('meetings')
 export class MeetingsController {
   constructor(private readonly meetingsService: MeetingsService) {}
-  
+
   @Get('my-attendance')
   @Roles(
     UserRole.PARTY_MEMBER,
@@ -68,7 +68,7 @@ export class MeetingsController {
   })
   checkIn(
     @GetCurrentUser('sub') userId: string,
-    @Param('id') meetingId: string,
+    @Param('id', ParseUUIDPipe) meetingId: string,
   ) {
     return this.meetingsService.submitCheckIn(userId, meetingId);
   }
@@ -85,7 +85,7 @@ export class MeetingsController {
   })
   async onlineCheckIn(
     @GetCurrentUser('sub') userId: string,
-    @Param('id') meetingId: string,
+    @Param('id', ParseUUIDPipe) meetingId: string,
     @Body() dto: OnlineAttendanceDto,
   ) {
     return this.meetingsService.onlineCheckIn(
