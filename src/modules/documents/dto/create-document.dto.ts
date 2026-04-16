@@ -24,11 +24,15 @@ export class CreateDocumentDto {
   @IsNotEmpty({ message: 'Vui lòng chọn danh mục cho tài liệu' })
   categoryId: string;
 
-  @ApiProperty({ example: false, default: false, required: false })
+ @ApiProperty({ example: false, default: false, required: false })
   @IsOptional()
   @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    if (typeof value === 'boolean') {
+      return value;
+    }
     return false;
   })
   @IsBoolean({ message: 'Trạng thái nổi bật phải là giá trị đúng/sai' })

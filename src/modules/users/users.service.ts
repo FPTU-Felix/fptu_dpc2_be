@@ -132,7 +132,7 @@ export class UsersService extends BaseService<User> {
     const savedUser = await this.usersRepository.save(user);
 
     if (role.name === 'OUTSTANDING_INDIVIDUAL') {
-      await this.admissionApplicationService.initAdmissionForQCUT(user.id);
+      await this.admissionApplicationService.initAdmissionForQCUT(savedUser.id);
     }
 
     // 4. Gửi Email
