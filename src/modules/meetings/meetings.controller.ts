@@ -35,6 +35,25 @@ import { FileInterceptor } from '@nestjs/platform-express';
 @Controller('meetings')
 export class MeetingsController {
   constructor(private readonly meetingsService: MeetingsService) {}
+  
+  @Get('my-attendance')
+  @Roles(
+    UserRole.PARTY_MEMBER,
+    UserRole.COMMITTEE_MEMBER,
+    UserRole.SECRETARY,
+    UserRole.DEPUTY_SECRETARY,
+  )
+  @ApiOperation({ summary: 'Đảng viên tự xem lịch sử điểm danh của bản thân' })
+  async getMyAttendance(
+    @GetCurrentUser('sub') userId: string,
+    @Query('year') year?: string,
+  ) {
+    const targetYear = year ? parseInt(year) : undefined;
+    return await this.meetingsService.getMyAttendanceHistory(
+      userId,
+      targetYear,
+    );
+  }
 
   @Post(':id/check-in')
   @Roles(

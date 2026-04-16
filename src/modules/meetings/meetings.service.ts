@@ -835,6 +835,7 @@ export class MeetingsService {
       where: { id: meetingId },
       relations: ['attendees'],
     });
+
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
     if (meeting.status === MeetingStatus.FINISHED) {
       throw new BadRequestException('Cuộc họp này đã kết thúc từ trước rồi!');
@@ -844,35 +845,76 @@ export class MeetingsService {
     meeting.endTime = new Date();
     meeting.isCheckinActive = false;
 
-    if (meeting.format === MeetingFormat.ONLINE) {
-      const meetingDurationSeconds = Math.floor(
-        (meeting.endTime.getTime() - meeting.startTime.getTime()) / 1000,
-      );
-      const validMeetingDuration = Math.max(0, meetingDurationSeconds);
-      const requiredDurationSeconds = (2 / 3) * validMeetingDuration;
-      console.log(
-        `[DEBUG CHỐT SỔ] Tổng thời gian Meeting: ${validMeetingDuration}s. Yêu cầu để Điểm danh thành công: >= ${requiredDurationSeconds}s`,
-      );
+    if (meeting.attendees && meeting.attendees.length > 0) {
+      let attendeesToUpdate: MeetingAttendee[] = [];
 
-      const attendeesToUpdate = meeting.attendees.map((attendee) => {
-        if (attendee.status === AttendeeStatus.EXCUSED) return attendee;
+      if (meeting.format === MeetingFormat.ONLINE) {
+        const meetingDurationSeconds = Math.floor(
+          (meeting.endTime.getTime() - meeting.startTime.getTime()) / 1000,
+        );
+        const validMeetingDuration = Math.max(0, meetingDurationSeconds);
+        const requiredDurationSeconds = (2 / 3) * validMeetingDuration;
 
-        const userOnlineDuration = attendee.onlineDuration || 0;
+        attendeesToUpdate = meeting.attendees.map((attendee) => {
+          if (attendee.status === AttendeeStatus.EXCUSED) return attendee;
 
-        if (userOnlineDuration >= requiredDurationSeconds) {
-          attendee.status = AttendeeStatus.PRESENT;
-        } else {
-          attendee.status = AttendeeStatus.ABSENT;
-        }
-
-        return attendee;
-      });
-
+          const userOnlineDuration = attendee.onlineDuration || 0;
+          if (userOnlineDuration >= requiredDurationSeconds) {
+            attendee.status = AttendeeStatus.PRESENT;
+          } else {
+            attendee.status = AttendeeStatus.ABSENT;
+          }
+          return attendee;
+        });
+      } else if (meeting.format === MeetingFormat.OFFLINE) {
+        attendeesToUpdate = meeting.attendees.map((attendee) => {
+          if (attendee.status === AttendeeStatus.PENDING) {
+            attendee.status = AttendeeStatus.ABSENT;
+          }
+          return attendee;
+        });
+      }
       await this.attendeeRepo.save(attendeesToUpdate);
     }
     await this.meetingRepo.save(meeting);
+    return {
+      message: 'Đã kết thúc cuộc họp & chốt sổ điểm danh tự động!',
+      format: meeting.format,
+    };
+  }
 
-    return { message: 'Đã kết thúc cuộc họp & chốt sổ điểm danh tự động!' };
+  async getMyAttendanceHistory(userId: string, year?: number) {
+    const member = await this.partyMemberRepo.findOne({
+      where: { userId },
+      select: ['id'],
+    });
+
+    if (!member) {
+      throw new NotFoundException('Không tìm thấy hồ sơ Đảng viên của bạn.');
+    }
+    const queryBuilder = this.attendeeRepo
+      .createQueryBuilder('attendee')
+      .leftJoinAndSelect('attendee.meeting', 'meeting')
+      .where('attendee.memberId = :memberId', { memberId: member.id });
+    if (year) {
+      queryBuilder.andWhere('EXTRACT(YEAR FROM meeting.startTime) = :year', {
+        year,
+      });
+    }
+    queryBuilder.orderBy('meeting.startTime', 'DESC');
+    const history = await queryBuilder.getMany();
+    return history.map((item) => ({
+      attendanceId: item.id,
+      meetingId: item.meetingId,
+      meetingTitle: item.meeting?.title,
+      startTime: item.meeting?.startTime,
+      format: item.meeting?.format,
+      location: item.meeting?.location || item.meeting?.onlineLink,
+      status: item.status,
+      checkInTime: item.checkInTime,
+      method: item.method,
+      reason: item.reason,
+    }));
   }
 
   async updateManualAttendance(
