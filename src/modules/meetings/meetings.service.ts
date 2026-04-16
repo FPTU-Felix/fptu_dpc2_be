@@ -168,7 +168,7 @@ export class MeetingsService {
     if (targetMemberIds.length > 0) {
       const membersToInvite = await this.partyMemberRepo.find({
         where: { id: In(targetMemberIds) },
-        relations: ['user'], // 👈 Cực kỳ quan trọng để lấy email gửi mail
+        relations: ['user'],
       });
 
       if (membersToInvite.length !== targetMemberIds.length) {
@@ -809,7 +809,6 @@ export class MeetingsService {
     const now = new Date();
 
     if (attendee.checkOutTime) {
-      // Đảm bảo ép kiểu Date an toàn đề phòng DB trả về String
       const timeSinceLastPingMs =
         now.getTime() - new Date(attendee.checkOutTime).getTime();
 
@@ -883,26 +882,38 @@ export class MeetingsService {
     };
   }
 
-  async getMyAttendanceHistory(userId: string, year?: number) {
+  async getMyAttendanceHistory(
+    userId: string,
+    startDate?: string,
+    endDate?: string,
+  ) {
     const member = await this.partyMemberRepo.findOne({
       where: { userId },
       select: ['id'],
     });
 
-    if (!member) {
-      throw new NotFoundException('Không tìm thấy hồ sơ Đảng viên của bạn.');
-    }
+    if (!member) throw new NotFoundException('Không tìm thấy hồ sơ Đảng viên.');
+
     const queryBuilder = this.attendeeRepo
       .createQueryBuilder('attendee')
       .leftJoinAndSelect('attendee.meeting', 'meeting')
       .where('attendee.memberId = :memberId', { memberId: member.id });
-    if (year) {
-      queryBuilder.andWhere('EXTRACT(YEAR FROM meeting.startTime) = :year', {
-        year,
+
+    if (startDate) {
+      queryBuilder.andWhere('meeting.startTime >= :startDate', {
+        startDate: new Date(startDate),
+      });
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      queryBuilder.andWhere('meeting.startTime <= :endDate', {
+        endDate: end,
       });
     }
     queryBuilder.orderBy('meeting.startTime', 'DESC');
     const history = await queryBuilder.getMany();
+
     return history.map((item) => ({
       attendanceId: item.id,
       meetingId: item.meetingId,
@@ -913,7 +924,6 @@ export class MeetingsService {
       status: item.status,
       checkInTime: item.checkInTime,
       method: item.method,
-      reason: item.reason,
     }));
   }
 

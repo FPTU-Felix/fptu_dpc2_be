@@ -17,6 +17,7 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiConsumes,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { MeetingsService } from './meetings.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -43,15 +44,31 @@ export class MeetingsController {
     UserRole.SECRETARY,
     UserRole.DEPUTY_SECRETARY,
   )
-  @ApiOperation({ summary: 'Đảng viên tự xem lịch sử điểm danh của bản thân' })
+  @ApiOperation({
+    summary:
+      'Đảng viên tự xem lịch sử điểm danh của bản thân (Lọc theo khoảng ngày)',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    description: 'Từ ngày (YYYY-MM-DD)',
+    type: String,
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    description: 'Đến ngày (YYYY-MM-DD)',
+    type: String,
+  })
   async getMyAttendance(
     @GetCurrentUser('sub') userId: string,
-    @Query('year') year?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
-    const targetYear = year ? parseInt(year) : undefined;
     return await this.meetingsService.getMyAttendanceHistory(
       userId,
-      targetYear,
+      startDate,
+      endDate,
     );
   }
 
