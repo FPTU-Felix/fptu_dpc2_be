@@ -17,31 +17,61 @@ type ChunkOutput = {
   content: string;
   pageNumber?: number;
   sectionPath?: string;
-  tokenCount?: number;
+  tokenCount?: number; // giữ tên cũ để tương thích; hiện tại là word count
   metadata?: Record<string, any>;
+};
+
+type HeadingType =
+  | 'phan'
+  | 'chuong'
+  | 'muc'
+  | 'tieu_muc'
+  | 'dieu'
+  | 'khoan'
+  | 'diem'
+  | 'gach_dau_dong'
+  | 'tieu_de_in_hoa';
+
+type HeadingInfo = {
+  level: 1 | 2 | 3 | 4 | 5 | 6;
+  text: string;
+  type: HeadingType;
+  code?: string;
 };
 
 type SectionBlock = {
   headingPath: string[];
-  content: string;
-  kind: 'section';
+  headingInfoPath: HeadingInfo[];
+  contentLines: string[];
 };
 
 @Injectable()
 export class DocumentChunkerService {
-  chunkText(input: ChunkInput): ChunkOutput[] {
-    const text = this.normalizeText(input.text);
-    const maxWords = input.maxWords ?? 220;
-    const overlapWords = input.overlapWords ?? 30;
-    const minWords = input.minWords ?? 40;
+  private static readonly MAX_SECTION_PATH_LENGTH = 1000;
+  private static readonly MAX_HEADING_LINE_LENGTH = 220;
+  private static readonly MAX_HEADING_WORDS = 28;
 
-    if (!text) {
+  chunkText(input: ChunkInput): ChunkOutput[] {
+    const normalizedText = this.normalizeText(input.text);
+    if (!normalizedText) {
       return [];
     }
 
-    const lines = this.toMeaningfulLines(text);
-    const sections = this.buildSectionBlocks(lines);
-    const chunks = this.sectionsToChunks(sections, {
+    const maxWords = this.clampNumber(input.maxWords, 220, 80, 500);
+    const overlapWords = this.clampNumber(input.overlapWords, 30, 0, 120);
+    const minWords = this.clampNumber(input.minWords, 40, 8, 120);
+
+    const lines = this.toMeaningfulLines(normalizedText);
+    if (!lines.length) {
+      return [];
+    }
+
+    const sectionBlocks = this.buildSectionBlocks(lines);
+    if (!sectionBlocks.length) {
+      return [];
+    }
+
+    const chunks = this.sectionsToChunks(sectionBlocks, {
       maxWords,
       overlapWords,
       minWords,
@@ -49,7 +79,20 @@ export class DocumentChunkerService {
       documentTitle: input.documentTitle,
     });
 
-    return chunks;
+    return this.reindexChunks(chunks);
+  }
+
+  private clampNumber(
+    value: number | undefined,
+    fallback: number,
+    min: number,
+    max: number,
+  ): number {
+    if (typeof value !== 'number' || Number.isNaN(value)) {
+      return fallback;
+    }
+
+    return Math.min(Math.max(value, min), max);
   }
 
   private normalizeText(text: string): string {
@@ -59,6 +102,7 @@ export class DocumentChunkerService {
       .replace(/[ \t]+\n/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
       .replace(/[ \t]{2,}/g, ' ')
+      .replace(/[‐-‒–—]/g, '-')
       .trim();
   }
 
@@ -70,105 +114,392 @@ export class DocumentChunkerService {
   }
 
   private buildSectionBlocks(lines: string[]): SectionBlock[] {
-    const sections: SectionBlock[] = [];
+    const blocks: SectionBlock[] = [];
+    const headingStack: HeadingInfo[] = [];
+    let currentBlock: SectionBlock | null = null;
 
-    let headingStack: string[] = [];
-    let buffer: string[] = [];
-
-    const flush = () => {
-      const content = buffer.join('\n').trim();
-      if (!content) {
-        buffer = [];
+    const flushCurrentBlock = () => {
+      if (!currentBlock) {
         return;
       }
 
-      sections.push({
-        headingPath: [...headingStack],
-        content,
-        kind: 'section',
-      });
+      const contentLines = currentBlock.contentLines
+        .map((item) => item.trim())
+        .filter(Boolean);
 
-      buffer = [];
+      if (contentLines.length > 0) {
+        blocks.push({
+          headingPath: [...currentBlock.headingPath],
+          headingInfoPath: [...currentBlock.headingInfoPath],
+          contentLines,
+        });
+      }
+
+      currentBlock = null;
     };
 
-    for (const line of lines) {
-      const heading = this.parseHeading(line);
-
-      if (heading) {
-        flush();
-        headingStack = this.updateHeadingStack(headingStack, heading);
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) {
         continue;
       }
 
-      buffer.push(line);
+      const heading = this.parseHeading(line);
+
+      if (heading) {
+        flushCurrentBlock();
+
+        if (this.isStructuralHeading(heading)) {
+          while (
+            headingStack.length > 0 &&
+            headingStack[headingStack.length - 1].level >= heading.level
+          ) {
+            headingStack.pop();
+          }
+
+          headingStack.push(heading);
+        }
+
+        currentBlock = {
+          headingPath: this.buildSafeHeadingPath(headingStack),
+          headingInfoPath: [...headingStack],
+          contentLines: [],
+        };
+
+        if (!this.isStructuralHeading(heading)) {
+          currentBlock.contentLines.push(line);
+        }
+
+        continue;
+      }
+
+      if (!currentBlock) {
+        currentBlock = {
+          headingPath: this.buildSafeHeadingPath(headingStack),
+          headingInfoPath: [...headingStack],
+          contentLines: [],
+        };
+      }
+
+      currentBlock.contentLines.push(line);
     }
 
-    flush();
+    flushCurrentBlock();
 
-    if (!sections.length && lines.length) {
-      sections.push({
+    if (!blocks.length && lines.length) {
+      blocks.push({
         headingPath: [],
-        content: lines.join('\n'),
-        kind: 'section',
+        headingInfoPath: [],
+        contentLines: [...lines],
       });
     }
 
-    return sections;
+    return blocks;
   }
 
-  private parseHeading(
-    line: string,
-  ): { level: 1 | 2 | 3 | 4; text: string } | null {
-    if (!line) return null;
-
-    if (/^Phần\s+[IVXLC0-9]+[\s.: -]*/iu.test(line)) {
-      return { level: 1, text: line };
+  private parseHeading(line: string): HeadingInfo | null {
+    const normalized = this.normalizeHeadingLine(line);
+    if (!normalized) {
+      return null;
     }
 
-    if (/^Chương\s+[IVXLC0-9]+[\s.: -]*/iu.test(line)) {
-      return { level: 2, text: line };
+    if (!this.isPlausibleHeadingLine(normalized)) {
+      return null;
     }
 
-    if (/^Mục\s+[IVXLC0-9]+[\s.: -]*/iu.test(line)) {
-      return { level: 3, text: line };
+    const partMatch = normalized.match(/^PHẦN\s+([IVXLCDM0-9A-ZĂÂĐÊÔƠƯ]+)/iu);
+    if (partMatch && this.isLikelyHeadingText(normalized, 'phan')) {
+      return {
+        level: 1,
+        text: normalized,
+        type: 'phan',
+        code: partMatch[1],
+      };
     }
 
-    if (/^Điều\s+\d+[\s.: -]*/iu.test(line)) {
-      return { level: 4, text: line };
+    const chapterMatch = normalized.match(/^CHƯƠNG\s+([IVXLCDM0-9A-ZĂÂĐÊÔƠƯ]+)/iu);
+    if (chapterMatch && this.isLikelyHeadingText(normalized, 'chuong')) {
+      return {
+        level: 2,
+        text: normalized,
+        type: 'chuong',
+        code: chapterMatch[1],
+      };
     }
 
-    const clean = line.replace(/[0-9.:]/g, '').trim();
-    const isAllCaps =
-      clean.length >= 3 &&
-      clean === clean.toUpperCase() &&
-      /[A-ZÀ-Ỹ]/u.test(clean) &&
-      clean.length <= 160;
+    const sectionMatch = normalized.match(/^MỤC\s+([IVXLCDM0-9]+)/iu);
+    if (sectionMatch && this.isLikelyHeadingText(normalized, 'muc')) {
+      return {
+        level: 3,
+        text: normalized,
+        type: 'muc',
+        code: sectionMatch[1],
+      };
+    }
 
-    if (isAllCaps) {
-      return { level: 2, text: line };
+    const subsectionMatch = normalized.match(/^TIỂU\s+MỤC\s+([IVXLCDM0-9]+)/iu);
+    if (subsectionMatch && this.isLikelyHeadingText(normalized, 'tieu_muc')) {
+      return {
+        level: 4,
+        text: normalized,
+        type: 'tieu_muc',
+        code: subsectionMatch[1],
+      };
+    }
+
+    const articleMatch = normalized.match(/^ĐIỀU\s+(\d+)(?:[.:]\s*|\s+)/iu);
+    if (articleMatch && this.isLikelyHeadingText(normalized, 'dieu')) {
+      return {
+        level: 4,
+        text: normalized,
+        type: 'dieu',
+        code: articleMatch[1],
+      };
+    }
+
+    const clauseMatch = normalized.match(/^KHOẢN\s+(\d+)(?:[.:]\s*|\s+)/iu);
+    if (clauseMatch && this.isLikelyHeadingText(normalized, 'khoan')) {
+      return {
+        level: 5,
+        text: normalized,
+        type: 'khoan',
+        code: clauseMatch[1],
+      };
+    }
+
+    const pointMatch = normalized.match(/^ĐIỂM\s+([a-zA-ZđĐ])(?:[):.]\s*|\s+)/u);
+    if (pointMatch && this.isLikelyHeadingText(normalized, 'diem')) {
+      return {
+        level: 6,
+        text: normalized,
+        type: 'diem',
+        code: pointMatch[1],
+      };
+    }
+
+    const numberedClauseMatch = normalized.match(/^(\d{1,3})[.)]\s+\S+/u);
+    if (
+      numberedClauseMatch &&
+      this.isLikelyHeadingText(normalized, 'khoan') &&
+      this.isTerseListMarker(normalized)
+    ) {
+      return {
+        level: 5,
+        text: normalized,
+        type: 'khoan',
+        code: numberedClauseMatch[1],
+      };
+    }
+
+    const numberedPointMatch = normalized.match(
+      /^(\d{1,3}(?:\.\d{1,3})+)[.)]?\s+\S+/u,
+    );
+    if (
+      numberedPointMatch &&
+      this.isLikelyHeadingText(normalized, 'diem') &&
+      this.isTerseListMarker(normalized)
+    ) {
+      return {
+        level: 6,
+        text: normalized,
+        type: 'diem',
+        code: numberedPointMatch[1],
+      };
+    }
+
+    const alphaPointMatch = normalized.match(/^([a-zA-ZđĐ])[.)]\s+\S+/u);
+    if (
+      alphaPointMatch &&
+      this.isLikelyHeadingText(normalized, 'diem') &&
+      this.isTerseListMarker(normalized)
+    ) {
+      return {
+        level: 6,
+        text: normalized,
+        type: 'diem',
+        code: alphaPointMatch[1],
+      };
+    }
+
+    if (/^[-•+*]\s+\S+/u.test(normalized) && this.isSafeBulletHeading(normalized)) {
+      return {
+        level: 6,
+        text: normalized,
+        type: 'gach_dau_dong',
+      };
+    }
+
+    if (this.looksLikeStandaloneUppercaseHeading(normalized)) {
+      return {
+        level: 3,
+        text: normalized,
+        type: 'tieu_de_in_hoa',
+      };
     }
 
     return null;
   }
 
-  private updateHeadingStack(
-    current: string[],
-    heading: { level: 1 | 2 | 3 | 4; text: string },
-  ): string[] {
-    const next = [...current];
+  private normalizeHeadingLine(line: string): string {
+    return line.replace(/\s+/g, ' ').trim();
+  }
 
-    switch (heading.level) {
-      case 1:
-        return [heading.text];
-      case 2:
-        return [next[0]].filter(Boolean).concat(heading.text);
-      case 3:
-        return [next[0], next[1]].filter(Boolean).concat(heading.text);
-      case 4:
-        return [next[0], next[1], next[2]].filter(Boolean).concat(heading.text);
-      default:
-        return [heading.text];
+  private isPlausibleHeadingLine(line: string): boolean {
+    if (!line) {
+      return false;
     }
+
+    if (line.length > DocumentChunkerService.MAX_HEADING_LINE_LENGTH) {
+      return false;
+    }
+
+    if (this.countWords(line) > DocumentChunkerService.MAX_HEADING_WORDS) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private isLikelyHeadingText(
+    line: string,
+    type: Exclude<HeadingType, 'gach_dau_dong' | 'tieu_de_in_hoa'>,
+  ): boolean {
+    if (!this.isPlausibleHeadingLine(line)) {
+      return false;
+    }
+
+    const normalized = line.replace(/\s+/g, ' ').trim();
+
+    if (/[;!?]/u.test(normalized)) {
+      return false;
+    }
+
+    const punctuationCount = (normalized.match(/[,:]/g) ?? []).length;
+    if (punctuationCount > 4) {
+      return false;
+    }
+
+    const wordCount = this.countWords(normalized);
+
+    switch (type) {
+      case 'phan':
+      case 'chuong':
+      case 'muc':
+      case 'tieu_muc':
+        return wordCount <= 18;
+
+      case 'dieu':
+        return wordCount <= 32;
+
+      case 'khoan':
+      case 'diem':
+        return wordCount <= 24;
+
+      default:
+        return false;
+    }
+  }
+
+  private isTerseListMarker(line: string): boolean {
+    const wordCount = this.countWords(line);
+    if (wordCount > 18) {
+      return false;
+    }
+
+    if (/[;!?]/u.test(line)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private isSafeBulletHeading(line: string): boolean {
+    const withoutMarker = line.replace(/^[-•+*]\s+/u, '').trim();
+
+    if (!withoutMarker) {
+      return false;
+    }
+
+    if (withoutMarker.length > 120) {
+      return false;
+    }
+
+    if (this.countWords(withoutMarker) > 16) {
+      return false;
+    }
+
+    if (/[;.!?]/u.test(withoutMarker)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private looksLikeStandaloneUppercaseHeading(line: string): boolean {
+    if (line.length < 5 || line.length > 140) {
+      return false;
+    }
+
+    if (
+      /[a-zàáạảãăắằặẳẵâấầậẩẫèéẹẻẽêếềệểễìíịỉĩòóọỏõôốồộổỗơớờợởỡùúụủũưứừựửữỳýỵỷỹ]/u.test(
+        line,
+      )
+    ) {
+      return false;
+    }
+
+    const lettersOnly = line.replace(
+      /[^A-ZÀÁẠẢÃĂẮẰẶẲẴÂẤẦẬẨẪĐÈÉẸẺẼÊẾỀỆỂỄÌÍỊỈĨÒÓỌỎÕÔỐỒỘỔỖƠỚỜỢỞỠÙÚỤỦŨƯỨỪỰỬỮỲÝỴỶỸ ]/gu,
+      '',
+    );
+    const words = lettersOnly.split(/\s+/).filter(Boolean);
+
+    return words.length >= 2 && words.length <= 20;
+  }
+
+  private isStructuralHeading(heading: HeadingInfo): boolean {
+    return heading.type !== 'gach_dau_dong';
+  }
+
+  private buildSafeHeadingPath(headingStack: HeadingInfo[]): string[] {
+    return headingStack
+      .filter((item) => this.isStructuralHeading(item))
+      .map((item) => this.normalizeSectionPathPart(item.text))
+      .filter(Boolean) as string[];
+  }
+
+  private normalizeSectionPathPart(value?: string | null): string | null {
+    if (!value) {
+      return null;
+    }
+
+    const cleaned = value.replace(/\s+/g, ' ').trim();
+    if (!cleaned) {
+      return null;
+    }
+
+    if (cleaned.length > 180) {
+      return cleaned.slice(0, 180).trim();
+    }
+
+    return cleaned;
+  }
+
+  private sanitizeSectionPath(value?: string | null): string | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    const cleaned = value.replace(/\s+/g, ' ').trim();
+    if (!cleaned) {
+      return undefined;
+    }
+
+    if (cleaned.length > DocumentChunkerService.MAX_SECTION_PATH_LENGTH) {
+      return cleaned.slice(0, DocumentChunkerService.MAX_SECTION_PATH_LENGTH).trim();
+    }
+
+    return cleaned;
   }
 
   private sectionsToChunks(
@@ -181,225 +512,603 @@ export class DocumentChunkerService {
       documentTitle?: string;
     },
   ): ChunkOutput[] {
-    const chunks: ChunkOutput[] = [];
-    let chunkIndex = 0;
+    const draftChunks: ChunkOutput[] = [];
 
     for (const section of sections) {
-      const headingText = section.headingPath.join(' > ').trim();
-      const combined = [headingText, section.content].filter(Boolean).join('\n\n');
+      const sectionText = section.contentLines.join('\n').trim();
+      if (!sectionText) {
+        continue;
+      }
 
-      const splitParts = this.splitSmart(
-        combined,
+      const rawSectionPath = section.headingPath.join(' > ');
+      const sectionPath = this.sanitizeSectionPath(rawSectionPath);
+      const sectionMetadata = this.buildSectionMetadata(section);
+
+      if (this.shouldKeepWholeAsProcedure(sectionText, params.maxWords)) {
+        const procedureContent = this.joinHeadingAndContent(
+          section.headingPath,
+          sectionText,
+        );
+
+        if (!this.isLowValueChunk(procedureContent, params.minWords)) {
+          draftChunks.push(
+            this.buildChunk(procedureContent, {
+              sectionPath,
+              pageMap: params.pageMap,
+              documentTitle: params.documentTitle,
+              extraMetadata: {
+                ...sectionMetadata,
+                isProcedure: true,
+                structureType: 'quy_trinh',
+              },
+            }),
+          );
+        }
+
+        continue;
+      }
+
+      const pieces = this.splitSectionContent(
+        section.contentLines,
         params.maxWords,
         params.overlapWords,
       );
 
-      for (const part of splitParts) {
-        const normalized = part.trim();
-        const wordCount = this.countWords(normalized);
+      for (const piece of pieces) {
+        const content = this.joinHeadingAndContent(
+          section.headingPath,
+          piece,
+        ).trim();
 
-        if (wordCount < params.minWords) {
+        if (this.isLowValueChunk(content, params.minWords)) {
           continue;
         }
 
-        if (this.isLowValueChunk(normalized)) {
-          continue;
-        }
-
-        chunks.push(
-          this.makeChunk({
-            chunkIndex: chunkIndex++,
-            content: normalized,
-            sectionPath: headingText || undefined,
+        draftChunks.push(
+          this.buildChunk(content, {
+            sectionPath,
             pageMap: params.pageMap,
             documentTitle: params.documentTitle,
-            kind: section.kind,
+            extraMetadata: {
+              ...sectionMetadata,
+              isProcedure: false,
+              structureType: this.detectStructureType(piece),
+            },
           }),
         );
       }
     }
 
-    return this.mergeSmallNeighborChunks(chunks, params.minWords);
+    return this.mergeSmallNeighborChunks(
+      draftChunks,
+      params.minWords,
+      params.maxWords,
+    );
   }
 
-  private splitSmart(
-    text: string,
+  private buildSectionMetadata(section: SectionBlock): Record<string, any> {
+    const headingInfoPath = section.headingInfoPath;
+
+    const part = headingInfoPath.find((item) => item.type === 'phan');
+    const chapter = headingInfoPath.find((item) => item.type === 'chuong');
+    const sectionHeading = headingInfoPath.find((item) => item.type === 'muc');
+    const subsection = headingInfoPath.find((item) => item.type === 'tieu_muc');
+    const article = headingInfoPath.find((item) => item.type === 'dieu');
+    const clause = headingInfoPath.find((item) => item.type === 'khoan');
+    const point = headingInfoPath.find((item) => item.type === 'diem');
+
+    return {
+      maPhan: part?.code ?? null,
+      maChuong: chapter?.code ?? null,
+      maMuc: sectionHeading?.code ?? null,
+      maTieuMuc: subsection?.code ?? null,
+      soDieu: article?.code ?? null,
+      soKhoan: clause?.code ?? null,
+      maDiem: point?.code ?? null,
+      loaiTieuDe: headingInfoPath.map((item) => item.type),
+    };
+  }
+
+  private splitSectionContent(
+    contentLines: string[],
     maxWords: number,
     overlapWords: number,
   ): string[] {
-    const sentences = this.splitIntoSentences(text);
-    if (!sentences.length) {
-      return [text.trim()].filter(Boolean);
+    const rawText = contentLines.join('\n').trim();
+    const semanticBlocks = this.splitIntoSemanticBlocks(rawText);
+
+    const chunks: string[] = [];
+    let buffer: string[] = [];
+    let bufferWords = 0;
+
+    const flush = () => {
+      if (!buffer.length) {
+        return;
+      }
+
+      const combined = buffer.join('\n').trim();
+      if (combined) {
+        chunks.push(combined);
+      }
+
+      buffer = [];
+      bufferWords = 0;
+    };
+
+    for (const block of semanticBlocks) {
+      const blockWords = this.countWords(block);
+
+      if (blockWords > maxWords) {
+        flush();
+        const smallerChunks = this.splitLargeBlock(
+          block,
+          maxWords,
+          overlapWords,
+        );
+        chunks.push(...smallerChunks);
+        continue;
+      }
+
+      if (bufferWords + blockWords <= maxWords) {
+        buffer.push(block);
+        bufferWords += blockWords;
+        continue;
+      }
+
+      flush();
+      buffer.push(block);
+      bufferWords = blockWords;
     }
 
-    const result: string[] = [];
-    let current: string[] = [];
+    flush();
+
+    return chunks;
+  }
+
+  private splitIntoSemanticBlocks(text: string): string[] {
+    const paragraphs = text
+      .split(/\n{2,}/u)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const blocks: string[] = [];
+
+    for (const paragraph of paragraphs) {
+      if (this.isListHeavyParagraph(paragraph)) {
+        const listItems = this.splitListItems(paragraph);
+        if (listItems.length > 1) {
+          blocks.push(...listItems);
+          continue;
+        }
+      }
+
+      if (this.isLongLegalParagraph(paragraph)) {
+        blocks.push(...this.splitLegalParagraph(paragraph));
+        continue;
+      }
+
+      blocks.push(paragraph);
+    }
+
+    return blocks;
+  }
+
+  private isLongLegalParagraph(text: string): boolean {
+    return (
+      this.countWords(text) >= 120 &&
+      (/^KHOẢN\s+\d+/iu.test(text) ||
+        /^ĐIỂM\s+[a-zA-ZđĐ]/u.test(text) ||
+        /^\d{1,3}[.)]\s+\S+/u.test(text))
+    );
+  }
+
+  private splitLegalParagraph(text: string): string[] {
+    const lines = text.split('\n').map((item) => item.trim()).filter(Boolean);
+    if (lines.length > 1) {
+      return lines;
+    }
+
+    const normalized = text.replace(/\s+/g, ' ').trim();
+    const splitByInlineLegalMarkers = normalized
+      .split(
+        /(?=\bKHOẢN\s+\d+\b)|(?=\bĐIỂM\s+[a-zA-ZđĐ]\b)|(?=\d{1,3}[.)]\s)/iu,
+      )
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    return splitByInlineLegalMarkers.length > 1
+      ? splitByInlineLegalMarkers
+      : [text];
+  }
+
+  private isListHeavyParagraph(text: string): boolean {
+    const lines = text.split('\n').map((item) => item.trim()).filter(Boolean);
+    if (lines.length < 2) {
+      return false;
+    }
+
+    const listLikeCount = lines.filter((line) => this.isListLikeLine(line)).length;
+    return listLikeCount >= 2;
+  }
+
+  private splitListItems(text: string): string[] {
+    const lines = text.split('\n').map((item) => item.trim()).filter(Boolean);
+    const items: string[] = [];
+    let currentItem: string[] = [];
+
+    const flush = () => {
+      if (!currentItem.length) {
+        return;
+      }
+
+      items.push(currentItem.join('\n').trim());
+      currentItem = [];
+    };
+
+    for (const line of lines) {
+      if (this.isListLikeLine(line)) {
+        flush();
+        currentItem.push(line);
+        continue;
+      }
+
+      if (!currentItem.length) {
+        currentItem.push(line);
+      } else {
+        currentItem.push(line);
+      }
+    }
+
+    flush();
+
+    return items.length ? items : [text];
+  }
+
+  private isListLikeLine(line: string): boolean {
+    return (
+      /^\d{1,3}[.)]\s+\S+/u.test(line) ||
+      /^\d{1,3}\.\d{1,3}(?:\.\d{1,3})*[.)]?\s+\S+/u.test(line) ||
+      /^[a-zA-ZđĐ][.)]\s+\S+/u.test(line) ||
+      /^[-•+*]\s+\S+/u.test(line) ||
+      /^KHOẢN\s+\d+/iu.test(line) ||
+      /^ĐIỂM\s+[a-zA-ZđĐ]/u.test(line) ||
+      /^BƯỚC\s+\d+[.:]?\s*/iu.test(line)
+    );
+  }
+
+  private splitLargeBlock(
+    block: string,
+    maxWords: number,
+    overlapWords: number,
+  ): string[] {
+    const sentences = this.splitIntoSentences(block);
+    if (sentences.length <= 1) {
+      return this.slidingWindowByWords(block, maxWords, overlapWords);
+    }
+
+    const chunks: string[] = [];
+    let currentChunk: string[] = [];
     let currentWords = 0;
+
+    const flush = () => {
+      if (!currentChunk.length) {
+        return;
+      }
+
+      const text = currentChunk.join(' ').trim();
+      if (text) {
+        chunks.push(text);
+      }
+
+      if (overlapWords <= 0) {
+        currentChunk = [];
+        currentWords = 0;
+        return;
+      }
+
+      const overlapSentences: string[] = [];
+      let overlapCount = 0;
+
+      for (let i = currentChunk.length - 1; i >= 0; i--) {
+        const sentence = currentChunk[i];
+        const wc = this.countWords(sentence);
+
+        if (overlapCount + wc > overlapWords && overlapSentences.length > 0) {
+          break;
+        }
+
+        overlapSentences.unshift(sentence);
+        overlapCount += wc;
+
+        if (overlapCount >= overlapWords) {
+          break;
+        }
+      }
+
+      currentChunk = overlapSentences;
+      currentWords = overlapCount;
+    };
 
     for (const sentence of sentences) {
       const sentenceWords = this.countWords(sentence);
 
+      if (sentenceWords > maxWords) {
+        flush();
+        chunks.push(...this.slidingWindowByWords(sentence, maxWords, overlapWords));
+        continue;
+      }
+
       if (currentWords + sentenceWords <= maxWords) {
-        current.push(sentence);
+        currentChunk.push(sentence);
         currentWords += sentenceWords;
         continue;
       }
 
-      if (current.length) {
-        result.push(current.join(' ').trim());
-      }
-
-      const overlap = this.takeOverlapWords(current.join(' '), overlapWords);
-      current = overlap ? [overlap, sentence] : [sentence];
-      currentWords = this.countWords(current.join(' '));
-
-      if (currentWords > maxWords) {
-        const hardSplit = this.hardSplitByWords(current.join(' '), maxWords, overlapWords);
-        result.push(...hardSplit.slice(0, -1));
-        current = [hardSplit[hardSplit.length - 1]];
-        currentWords = this.countWords(current[0]);
-      }
+      flush();
+      currentChunk.push(sentence);
+      currentWords += sentenceWords;
     }
 
-    if (current.length) {
-      result.push(current.join(' ').trim());
-    }
+    flush();
 
-    return result.filter(Boolean);
+    return chunks;
   }
 
   private splitIntoSentences(text: string): string[] {
-    return text
-      .split(/(?<=[.!?;:])\s+|\n+/u)
-      .map((s) => s.trim())
+    const normalized = text
+      .replace(/\n+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!normalized) {
+      return [];
+    }
+
+    const parts = normalized
+      .split(
+        /(?<=[.!?])\s+(?=[A-ZÀÁẠẢÃĂẮẰẶẲẴÂẤẦẬẨẪĐÈÉẸẺẼÊẾỀỆỂỄÌÍỊỈĨÒÓỌỎÕÔỐỒỘỔỖƠỚỜỢỞỠÙÚỤỦŨƯỨỪỰỬỮỲÝỴỶỸ0-9])/u,
+      )
+      .map((item) => item.trim())
       .filter(Boolean);
+
+    return parts.length ? parts : [normalized];
   }
 
-  private hardSplitByWords(
+  private slidingWindowByWords(
     text: string,
     maxWords: number,
     overlapWords: number,
   ): string[] {
-    const words = text.split(/\s+/).filter(Boolean);
-    const result: string[] = [];
-    let start = 0;
-
-    while (start < words.length) {
-      const end = Math.min(start + maxWords, words.length);
-      result.push(words.slice(start, end).join(' '));
-      if (end >= words.length) break;
-      start = Math.max(end - overlapWords, start + 1);
+    const words = text.split(/\s+/u).filter(Boolean);
+    if (!words.length) {
+      return [];
     }
 
-    return result;
+    const chunks: string[] = [];
+    const step = Math.max(1, maxWords - overlapWords);
+
+    for (let start = 0; start < words.length; start += step) {
+      const end = Math.min(start + maxWords, words.length);
+      const piece = words.slice(start, end).join(' ').trim();
+      if (piece) {
+        chunks.push(piece);
+      }
+
+      if (end >= words.length) {
+        break;
+      }
+    }
+
+    return chunks;
   }
 
-  private takeOverlapWords(text: string, overlapWords: number): string {
-    const words = text.split(/\s+/).filter(Boolean);
-    if (!words.length || overlapWords <= 0) return '';
-    return words.slice(Math.max(0, words.length - overlapWords)).join(' ');
+  private shouldKeepWholeAsProcedure(text: string, maxWords: number): boolean {
+    const wordCount = this.countWords(text);
+    if (wordCount > maxWords) {
+      return false;
+    }
+
+    const stepMatches = text.match(/\bBƯỚC\s+\d+\b/giu) ?? [];
+    if (stepMatches.length >= 2) {
+      return true;
+    }
+
+    const numberedLines = text
+      .split('\n')
+      .map((item) => item.trim())
+      .filter((item) => /^\d+[.)]\s+\S+/u.test(item));
+
+    return numberedLines.length >= 3;
+  }
+
+  private joinHeadingAndContent(headingPath: string[], content: string): string {
+    const headingText = this.sanitizeSectionPath(headingPath.join(' > ')) ?? '';
+    return [headingText, content].filter(Boolean).join('\n\n').trim();
+  }
+
+  private detectStructureType(
+    text: string,
+  ): 'quy_trinh' | 'danh_sach' | 'menh_de_phap_ly' | 'doan_van' {
+    if (/\bBƯỚC\s+\d+\b/iu.test(text)) {
+      return 'quy_trinh';
+    }
+
+    if (
+      /^KHOẢN\s+\d+/iu.test(text) ||
+      /^ĐIỂM\s+[a-zA-ZđĐ]/u.test(text) ||
+      /^\d{1,3}[.)]\s+\S+/u.test(text) ||
+      /^\d{1,3}\.\d{1,3}(?:\.\d{1,3})*[.)]?\s+\S+/u.test(text)
+    ) {
+      return 'menh_de_phap_ly';
+    }
+
+    if (this.isListHeavyParagraph(text)) {
+      return 'danh_sach';
+    }
+
+    return 'doan_van';
   }
 
   private mergeSmallNeighborChunks(
     chunks: ChunkOutput[],
     minWords: number,
+    maxWords: number,
   ): ChunkOutput[] {
-    if (!chunks.length) return chunks;
+    if (!chunks.length) {
+      return [];
+    }
 
     const merged: ChunkOutput[] = [];
 
     for (const chunk of chunks) {
-      const prev = merged[merged.length - 1];
-      const currentWords = chunk.tokenCount ?? this.countWords(chunk.content);
+      const currentWords = this.countWords(chunk.content);
+      const previous = merged[merged.length - 1];
 
       if (
-        prev &&
-        prev.sectionPath === chunk.sectionPath &&
-        currentWords < minWords
+        previous &&
+        previous.sectionPath === chunk.sectionPath &&
+        (currentWords < minWords || this.countWords(previous.content) < minWords) &&
+        this.countWords(previous.content) + currentWords <= maxWords
       ) {
-        prev.content = `${prev.content}\n\n${chunk.content}`.trim();
-        prev.tokenCount = this.countWords(prev.content);
+        previous.content = `${previous.content}\n${chunk.content}`.trim();
+        previous.tokenCount = this.countWords(previous.content);
+        previous.pageNumber = previous.pageNumber ?? chunk.pageNumber;
+        previous.metadata = {
+          ...(previous.metadata ?? {}),
+          merged: true,
+          wordCount: this.countWords(previous.content),
+        };
         continue;
       }
 
       merged.push({ ...chunk });
     }
 
-    return merged.map((chunk, index) => ({
-      ...chunk,
-      chunkIndex: index,
-      tokenCount: this.countWords(chunk.content),
+    return merged.map((item) => ({
+      ...item,
+      sectionPath: this.sanitizeSectionPath(item.sectionPath),
+      tokenCount: this.countWords(item.content),
+      metadata: {
+        ...(item.metadata ?? {}),
+        heading: this.sanitizeSectionPath(
+          typeof item.metadata?.heading === 'string' ? item.metadata.heading : item.sectionPath,
+        ) ?? null,
+        wordCount: this.countWords(item.content),
+      },
     }));
   }
 
-  private isLowValueChunk(text: string): boolean {
+  private isLowValueChunk(text: string, minWords: number): boolean {
     const normalized = text.trim();
+    if (!normalized) {
+      return true;
+    }
 
-    if (!normalized) return true;
+    if (
+      /^PHẦN\s+[IVXLCDM0-9]+[\s.:]*$/iu.test(normalized) ||
+      /^CHƯƠNG\s+[IVXLCDM0-9]+[\s.:]*$/iu.test(normalized) ||
+      /^MỤC\s+[IVXLCDM0-9]+[\s.:]*$/iu.test(normalized) ||
+      /^TIỂU\s+MỤC\s+[IVXLCDM0-9]+[\s.:]*$/iu.test(normalized) ||
+      /^ĐIỀU\s+\d+[\s.:]*$/iu.test(normalized) ||
+      /^KHOẢN\s+\d+[\s.:]*$/iu.test(normalized) ||
+      /^ĐIỂM\s+[a-zA-ZđĐ][\s.:]*$/u.test(normalized)
+    ) {
+      return true;
+    }
 
-    if (/^Điều\s+\d+[\s.:]*$/iu.test(normalized)) return true;
-    if (/^Mục\s+[IVXLC0-9]+[\s.:]*$/iu.test(normalized)) return true;
-    if (/^Chương\s+[IVXLC0-9]+[\s.:]*$/iu.test(normalized)) return true;
-
-    return this.countWords(normalized) < 8;
+    return this.countWords(normalized) < Math.min(minWords, 8);
   }
 
-  private makeChunk(params: {
-    chunkIndex: number;
-    content: string;
-    sectionPath?: string;
-    pageMap?: Array<{ pageNumber: number; text: string }>;
-    documentTitle?: string;
-    kind: string;
-  }): ChunkOutput {
-    const normalizedContent = params.content.trim();
+  private buildChunk(
+    content: string,
+    options: {
+      sectionPath?: string;
+      pageMap?: Array<{ pageNumber: number; text: string }>;
+      documentTitle?: string;
+      extraMetadata?: Record<string, any>;
+    },
+  ): ChunkOutput {
+    const normalizedContent = content.trim();
     const wordCount = this.countWords(normalizedContent);
+    const safeSectionPath = this.sanitizeSectionPath(options.sectionPath);
 
     return {
-      chunkIndex: params.chunkIndex,
+      chunkIndex: -1,
       content: normalizedContent,
-      pageNumber: this.inferPageNumber(normalizedContent, params.pageMap),
-      sectionPath: params.sectionPath,
+      pageNumber: this.inferBestPageNumber(normalizedContent, options.pageMap),
+      sectionPath: safeSectionPath,
       tokenCount: wordCount,
       metadata: {
-        kind: params.kind,
-        heading: params.sectionPath ?? null,
+        heading: safeSectionPath ?? null,
+        documentTitle: options.documentTitle ?? null,
         wordCount,
-        documentTitle: params.documentTitle ?? null,
+        ...(options.extraMetadata ?? {}),
       },
     };
   }
 
-  private inferPageNumber(
-    content: string,
+  private inferBestPageNumber(
+    chunkContent: string,
     pageMap?: Array<{ pageNumber: number; text: string }>,
   ): number | undefined {
-    if (!pageMap?.length) return undefined;
+    if (!pageMap?.length) {
+      return undefined;
+    }
 
-    let bestPage: number | undefined;
+    const chunkTokens = this.toSearchTokens(chunkContent);
+    if (!chunkTokens.length) {
+      return undefined;
+    }
+
+    let bestPageNumber: number | undefined;
     let bestScore = -1;
 
     for (const page of pageMap) {
-      const sample = (page.text ?? '').slice(0, 120).trim();
-      if (!sample) continue;
+      const pageTokens = new Set(this.toSearchTokens(page.text));
+      if (!pageTokens.size) {
+        continue;
+      }
 
       let score = 0;
-      const sampleWords = sample.split(/\s+/).filter(Boolean).slice(0, 20);
-
-      for (const word of sampleWords) {
-        if (content.includes(word)) score++;
+      for (const token of chunkTokens) {
+        if (pageTokens.has(token)) {
+          score += 1;
+        }
       }
 
       if (score > bestScore) {
         bestScore = score;
-        bestPage = page.pageNumber;
+        bestPageNumber = page.pageNumber;
       }
     }
 
-    return bestPage ?? pageMap[0]?.pageNumber;
+    return bestScore > 0 ? bestPageNumber : pageMap[0]?.pageNumber;
+  }
+
+  private toSearchTokens(text: string): string[] {
+    return this.normalizeVietnameseForSearch(text)
+      .split(/\s+/u)
+      .filter((token) => token.length >= 2)
+      .slice(0, 160);
+  }
+
+  private normalizeVietnameseForSearch(text: string): string {
+    return text
+      .normalize('NFC')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private countWords(text: string): number {
-    return text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+    return (text ?? '').split(/\s+/u).filter(Boolean).length;
+  }
+
+  private reindexChunks(chunks: ChunkOutput[]): ChunkOutput[] {
+    return chunks.map((chunk, index) => ({
+      ...chunk,
+      chunkIndex: index,
+    }));
   }
 }

@@ -6,6 +6,8 @@ export type ToolResult = {
   success: boolean;
   data: any;
   message?: string;
+  confidence?: number;
+
 };
 
 @Injectable()

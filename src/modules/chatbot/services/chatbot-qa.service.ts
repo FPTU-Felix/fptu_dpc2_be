@@ -32,7 +32,7 @@ type RetrievalReason =
 
 @Injectable()
 export class ChatbotQaService {
-  private readonly defaultTopK = 5;
+  private readonly defaultTopK = 10;
   private readonly lowConfidenceThreshold = 0.4;
   private readonly highConfidenceThreshold = 0.52;
 
@@ -45,25 +45,33 @@ export class ChatbotQaService {
   ) {}
 
   async ask(params: AskParams) {
+    // ✅ Chuẩn hoá query (chỉ thêm đoạn này)
+    const normalizedQuery = this.normalizeUserQuery(params.query);
+
     const security = this.promptDefenseService.inspect({
-      query: params.query,
+      query: normalizedQuery,
       userId: params.userId,
       userRole: params.userRole,
     });
 
     if (security.action === 'BLOCK') {
-      return this.handleBlocked(params, {
-        reason: security.reason,
-        message:
-          security.message ??
-          'Yêu cầu này không thể được thực hiện theo chính sách bảo mật của hệ thống.',
-      });
+      return this.handleBlocked(
+        { ...params, query: normalizedQuery },
+        {
+          reason: security.reason,
+          message:
+            security.message ??
+            'Yêu cầu này không thể được thực hiện theo chính sách bảo mật của hệ thống.',
+        },
+      );
     }
 
     const effectiveQuery =
       security.action === 'SANITIZE_AND_CONTINUE'
-        ? security.sanitizedQuery ?? params.query
-        : params.query;
+        ? this.normalizeUserQuery(
+            security.sanitizedQuery ?? normalizedQuery,
+          )
+        : normalizedQuery;
 
     const route = this.queryRouterService.decide(effectiveQuery);
 
@@ -93,6 +101,23 @@ export class ChatbotQaService {
       { ...params, query: effectiveQuery },
       route,
     );
+  }
+
+  // ✅ Function chuẩn hoá (thêm mới)
+  private normalizeUserQuery(query: string): string {
+    if (!query) return '""';
+
+    let q = query.trim();
+
+    // bỏ dấu " nếu user đã nhập
+    q = q.replace(/^"+|"+$/g, '');
+
+    // thêm dấu ? nếu chưa có
+    if (!q.endsWith('?')) {
+      q += '?';
+    }
+
+    return `"${q}"`;
   }
 
   private async handleBlocked(

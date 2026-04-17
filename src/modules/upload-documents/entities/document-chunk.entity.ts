@@ -32,7 +32,7 @@ export class DocumentChunkEntity {
   @Column({
     name: 'section_path',
     type: 'varchar',
-    length: 1000,
+    length: 2000,
     nullable: true,
   })
   sectionPath?: string;

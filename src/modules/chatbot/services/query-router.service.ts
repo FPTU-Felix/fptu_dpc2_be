@@ -22,16 +22,16 @@ export type ClarificationType =
 export type RouteDecision = {
   mode: ChatRouteMode;
   intent:
-    | 'policy_lookup'
-    | 'process_lookup'
-    | 'document_lookup'
-    | 'meeting_lookup'
-    | 'organization_lookup'
-    | 'hybrid_lookup'
-    | 'clarification'
-    | 'out_of_scope'
-    | 'blocked'
-    | 'unknown';
+  | 'policy_lookup'
+  | 'process_lookup'
+  | 'document_lookup'
+  | 'meeting_lookup'
+  | 'organization_lookup'
+  | 'hybrid_lookup'
+  | 'clarification'
+  | 'out_of_scope'
+  | 'blocked'
+  | 'unknown';
   tools?: ToolName[];
   reason: string;
   clarificationQuestion?: string;
@@ -77,15 +77,11 @@ export class QueryRouterService {
       'tuyên thệ',
       'lời tuyên thệ',
       'lời thề',
-      'thề như nào',
-      'thề thế nào',
-      'đọc lời thề',
       'lễ kết nạp',
       'kết nạp đảng',
-      'trong lễ kết nạp đảng',
-      'khi kết nạp đảng',
     ]);
 
+    // 🔥 FIX 1: mở rộng policy detection
     const hasPolicy = this.hasAny(q, [
       'quy trình',
       'thủ tục',
@@ -98,28 +94,29 @@ export class QueryRouterService {
       'mẫu',
       'biểu mẫu',
       'nghị quyết',
-      'giấy giới thiệu',
-      'lời tuyên thệ',
-      'tuyên thệ',
-      'lời thề',
-      'lễ kết nạp',
-      'kết nạp đảng',
-      'quyết định',
-      'văn bản',
-      'thông báo',
       'quy định',
+
+      // ✅ thêm mới
+      'mức',
+      'bao nhiêu',
+      'cách tính',
+      'đảng phí',
+      'khi về hưu',
+      'đóng như thế nào',
+      'đối tượng nào',
     ]);
 
-    const needsTool = hasMeeting || hasOrganization;
-    const needsRag = hasPolicy || hasCeremonyOrOath;
+    const looksLikeQuestion = this.looksLikeQuestion(q);
 
-    // Rule mạnh: hỏi về tuyên thệ / kết nạp Đảng => luôn ưu tiên RAG
+    const needsTool = hasMeeting || hasOrganization;
+    const needsRag = hasPolicy || hasCeremonyOrOath || looksLikeQuestion;
+
+    // ưu tiên nghi thức
     if (hasCeremonyOrOath && !needsTool) {
       return {
         mode: 'rag',
         intent: 'document_lookup',
-        reason:
-          'Câu hỏi liên quan đến nghi thức/lời tuyên thệ/kết nạp Đảng, phù hợp tra cứu tài liệu.',
+        reason: 'Câu hỏi nghi thức → RAG',
       };
     }
 
@@ -129,34 +126,20 @@ export class QueryRouterService {
     }
 
     if (needsTool && needsRag) {
-      const tools = this.pickTools({
-        hasMeeting,
-        hasOrganization,
-      });
-
       return {
         mode: 'hybrid',
         intent: 'hybrid_lookup',
-        tools,
-        reason:
-          'Câu hỏi vừa cần dữ liệu hệ thống công khai vừa cần tra cứu tài liệu/quy định.',
+        tools: this.pickTools({ hasMeeting, hasOrganization }),
+        reason: 'Hybrid query',
       };
     }
 
     if (needsTool) {
-      const tools = this.pickTools({
-        hasMeeting,
-        hasOrganization,
-      });
-
       return {
         mode: 'tool',
-        intent: this.pickIntent({
-          hasMeeting,
-          hasOrganization,
-        }),
-        tools,
-        reason: 'Câu hỏi thiên về dữ liệu công khai trong hệ thống.',
+        intent: this.pickIntent({ hasMeeting, hasOrganization }),
+        tools: this.pickTools({ hasMeeting, hasOrganization }),
+        reason: 'Tool query',
       };
     }
 
@@ -164,18 +147,15 @@ export class QueryRouterService {
       return {
         mode: 'rag',
         intent: this.pickRagIntent(q),
-        reason:
-          'Câu hỏi thiên về quy trình, quy định, biểu mẫu hoặc tài liệu.',
+        reason: 'Fallback → coi là câu hỏi tài liệu',
       };
     }
 
+    // 🔥 FIX 2: fallback luôn về RAG thay vì clarify
     return {
-      mode: 'clarify',
-      intent: 'clarification',
-      reason: 'Câu hỏi chưa đủ rõ để xác định nghiệp vụ cần hỗ trợ.',
-      clarificationType: 'information_type',
-      clarificationQuestion:
-        'Bạn muốn tra cứu nội dung nào trong hệ thống: tài liệu/quy trình, cuộc họp hay thông tin tổ chức?',
+      mode: 'rag',
+      intent: 'policy_lookup',
+      reason: 'Fallback RAG (tránh hỏi lại)',
     };
   }
 
@@ -222,7 +202,18 @@ export class QueryRouterService {
       outOfScopeMessage,
     };
   }
-
+  private looksLikeQuestion(q: string): boolean {
+    return this.hasAny(q, [
+      'bao nhiêu',
+      'là gì',
+      'thế nào',
+      'như thế nào',
+      'cách',
+      'quy định',
+      'mức',
+      'khi nào',
+    ]);
+  }
   private detectAmbiguity(query: string): RouteDecision | null {
     if (this.isAmbiguousMeeting(query)) {
       return {

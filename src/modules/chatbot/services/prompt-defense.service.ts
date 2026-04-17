@@ -114,8 +114,7 @@ export class PromptDefenseService {
         action: 'BLOCK',
         category: 'BULK_EXPORT_REQUEST',
         reason: 'Yêu cầu export dữ liệu hàng loạt.',
-        message:
-          'Tôi không thể xuất dữ liệu hàng loạt qua chatbot.',
+        message: 'Tôi không thể xuất dữ liệu hàng loạt qua chatbot.',
       };
     }
 
@@ -143,9 +142,9 @@ export class PromptDefenseService {
       return {
         action: 'BLOCK',
         category: 'FINANCIAL_DATA_REQUEST',
-        reason: 'Yêu cầu thông tin đảng phí/tài chính cá nhân.',
+        reason: 'Yêu cầu dữ liệu tài chính cá nhân hoặc trạng thái đóng phí của một cá nhân cụ thể.',
         message:
-          'Tôi không hỗ trợ trả lời các câu hỏi về đảng phí hoặc dữ liệu tài chính cá nhân qua chatbot này.',
+          'Tôi không thể cung cấp dữ liệu tài chính cá nhân hoặc trạng thái đóng đảng phí của một cá nhân cụ thể.',
       };
     }
 
@@ -287,28 +286,84 @@ export class PromptDefenseService {
       'lý lịch của tôi',
       'trạng thái hồ sơ của tôi',
       'hồ sơ cá nhân',
-      'lý lịch',
+      'lý lịch của',
       'lý lịch đảng viên',
       'xem hồ sơ của',
       'hồ sơ của ai',
       'thông tin cá nhân',
       'tôi là đảng viên',
-      'vào đảng ngày nào',
-      'công nhận chính thức',
+      'vào đảng ngày nào của tôi',
+      'công nhận chính thức của tôi',
       'nhiệm vụ của tôi',
-      'giúp đỡ tôi',
     ]);
   }
 
   private isFinancialDataRequest(q: string): boolean {
-    return this.hasAny(q, [
+    const hasFinanceKeyword = this.hasAny(q, [
       'đảng phí',
       'đóng đảng phí',
       'nợ đảng phí',
       'đã đóng đảng phí',
       'trạng thái đảng phí',
       'tài chính cá nhân',
+      'mức đảng phí của tôi',
+      'đảng phí của tôi',
+      'tôi nợ đảng phí',
+      'tôi đã đóng đảng phí chưa',
+      'lịch sử đóng đảng phí',
+      'công nợ đảng phí',
     ]);
+
+    if (!hasFinanceKeyword) {
+      return false;
+    }
+
+    // Cho phép câu hỏi về quy định chung / mức đóng chung
+    const isGeneralPolicyQuestion = this.hasAny(q, [
+      'mức đảng phí là bao nhiêu',
+      'mức đảng phí hàng tháng là bao nhiêu',
+      'quy định đảng phí',
+      'quy định về đảng phí',
+      'hướng dẫn đảng phí',
+      'đảng viên nghỉ hưu đóng đảng phí',
+      'khi về hưu thì mức đảng phí',
+      'người về hưu đóng đảng phí',
+      'mức đóng đảng phí',
+      'đối tượng nào đóng đảng phí',
+      'cách tính đảng phí',
+    ]);
+
+    const hasPersonalMarker = this.hasAny(q, [
+      'của tôi',
+      'tôi đã',
+      'tôi có',
+      'tôi còn',
+      'tôi nợ',
+      'trạng thái của tôi',
+      'lịch sử của tôi',
+      'cá nhân tôi',
+      'của anh',
+      'của chị',
+      'của bạn',
+      'của đồng chí',
+    ]);
+
+    const asksPersonalStatus = this.hasAny(q, [
+      'đã đóng chưa',
+      'còn nợ không',
+      'nợ bao nhiêu',
+      'trạng thái đảng phí',
+      'lịch sử đóng',
+      'đóng tháng nào',
+      'đóng đến đâu rồi',
+      'công nợ',
+    ]);
+
+    if (isGeneralPolicyQuestion && !hasPersonalMarker && !asksPersonalStatus) {
+      return false;
+    }
+
+    return hasPersonalMarker || asksPersonalStatus || q.includes('tài chính cá nhân');
   }
 
   private isBulkExportRequest(q: string): boolean {
