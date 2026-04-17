@@ -7,13 +7,40 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ToolResult } from './chatbot-tool.service';
 
-type RetrievedChunk = {
+export type RetrievedChunk = {
   id: string;
   documentId: string;
-  documentTitle: string;
+  documentTitle?: string | null;
   documentDescription?: string | null;
   fileUrl?: string | null;
   objectName?: string | null;
+  chunkIndex: number;
+  content?: string | null;
+  pageNumber?: number | null;
+  sectionPath?: string | null;
+  tokenCount?: number | null;
+  metadata?: Record<string, any> | null;
+  distance?: number | null;
+  score?: number | null;
+
+  /**
+   * Các field mở rộng từ retrieval/rerank service mới
+   */
+  rerankScore?: number | null;
+  lexicalScore?: number | null;
+  phraseScore?: number | null;
+  intentScore?: number | null;
+  matchedPhrases?: string[] | null;
+  isNeighborExpanded?: boolean;
+};
+
+type NormalizedRetrievedChunk = {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  documentDescription: string;
+  fileUrl: string;
+  objectName: string;
   chunkIndex: number;
   content: string;
   pageNumber: number | null;
@@ -22,6 +49,12 @@ type RetrievedChunk = {
   metadata: Record<string, any>;
   distance: number;
   score: number;
+  rerankScore?: number | null;
+  lexicalScore?: number | null;
+  phraseScore?: number | null;
+  intentScore?: number | null;
+  matchedPhrases?: string[] | null;
+  isNeighborExpanded?: boolean;
 };
 
 type OllamaChatResponse = {
@@ -33,7 +66,7 @@ type OllamaChatResponse = {
   done: boolean;
 };
 
-type RankedChunk = RetrievedChunk & {
+type RankedChunk = NormalizedRetrievedChunk & {
   rerankScore: number;
   rerankMeta: {
     originalScore: number;
@@ -72,9 +105,9 @@ type RetrievalPlan = {
 };
 
 type RetrievalBundle = {
-  initialTopChunks: RetrievedChunk[];
+  initialTopChunks: NormalizedRetrievedChunk[];
   rankedChunks: RankedChunk[];
-  finalChunks: RetrievedChunk[];
+  finalChunks: NormalizedRetrievedChunk[];
 };
 
 @Injectable()
@@ -125,13 +158,9 @@ export class OllamaChatService {
     'khoan',
     'muc',
     'chuong',
-    'phan',
-    'muc',
-    'tai',
     'hoac',
     'va',
     'hay',
-    'mot',
     'so',
     'truong',
     'hop',
@@ -393,21 +422,88 @@ ${ragContext}
     question: string,
     chunks: RetrievedChunk[],
   ): RetrievalBundle {
+    const normalizedChunks = this.normalizeChunks(chunks);
     const plan = this.getRetrievalPlan(question);
 
-    const initialTopChunks = this.collectCandidateChunks(question, chunks, plan);
+    const initialTopChunks = this.collectCandidateChunks(
+      question,
+      normalizedChunks,
+      plan,
+    );
     const rankedChunks = this.rerankChunks(question, initialTopChunks);
-    const finalChunks = this.expandAndGroupChunks(initialTopChunks, rankedChunks, {
-      seedLimit: plan.seedLimit,
-      neighborWindow: plan.neighborWindow,
-      maxSameDocument: plan.maxSameDocument,
-      finalLimit: plan.finalLimit,
-    });
+    const finalChunks = this.expandAndGroupChunks(
+      initialTopChunks,
+      rankedChunks,
+      {
+        seedLimit: plan.seedLimit,
+        neighborWindow: plan.neighborWindow,
+        maxSameDocument: plan.maxSameDocument,
+        finalLimit: plan.finalLimit,
+      },
+    );
 
     return {
       initialTopChunks,
       rankedChunks,
       finalChunks,
+    };
+  }
+
+  private normalizeChunks(
+    chunks: RetrievedChunk[],
+  ): NormalizedRetrievedChunk[] {
+    return (chunks ?? [])
+      .filter((chunk): chunk is RetrievedChunk => !!chunk)
+      .map((chunk) => this.normalizeChunk(chunk))
+      .filter((chunk) => !!chunk.id && !!chunk.documentId && !!chunk.content);
+  }
+
+  private normalizeChunk(chunk: RetrievedChunk): NormalizedRetrievedChunk {
+    return {
+      id: String(chunk.id ?? ''),
+      documentId: String(chunk.documentId ?? ''),
+      documentTitle: chunk.documentTitle ?? '',
+      documentDescription: chunk.documentDescription ?? '',
+      fileUrl: chunk.fileUrl ?? '',
+      objectName: chunk.objectName ?? '',
+      chunkIndex: Number.isFinite(Number(chunk.chunkIndex))
+        ? Number(chunk.chunkIndex)
+        : 0,
+      content: chunk.content ?? '',
+      pageNumber:
+        chunk.pageNumber === null || chunk.pageNumber === undefined
+          ? null
+          : Number.isFinite(Number(chunk.pageNumber))
+            ? Number(chunk.pageNumber)
+            : null,
+      sectionPath: chunk.sectionPath ?? null,
+      tokenCount: Number.isFinite(Number(chunk.tokenCount))
+        ? Number(chunk.tokenCount)
+        : 0,
+      metadata:
+        chunk.metadata && typeof chunk.metadata === 'object'
+          ? chunk.metadata
+          : {},
+      distance: Number.isFinite(Number(chunk.distance))
+        ? Number(chunk.distance)
+        : 0,
+      score: Number.isFinite(Number(chunk.score)) ? Number(chunk.score) : 0,
+      rerankScore: Number.isFinite(Number(chunk.rerankScore))
+        ? Number(chunk.rerankScore)
+        : null,
+      lexicalScore: Number.isFinite(Number(chunk.lexicalScore))
+        ? Number(chunk.lexicalScore)
+        : null,
+      phraseScore: Number.isFinite(Number(chunk.phraseScore))
+        ? Number(chunk.phraseScore)
+        : null,
+      intentScore: Number.isFinite(Number(chunk.intentScore))
+        ? Number(chunk.intentScore)
+        : null,
+      matchedPhrases: Array.isArray(chunk.matchedPhrases)
+        ? chunk.matchedPhrases.filter((item) => typeof item === 'string')
+        : null,
+      isNeighborExpanded: Boolean(chunk.isNeighborExpanded),
     };
   }
 
@@ -455,10 +551,19 @@ ${ragContext}
 
   private collectCandidateChunks(
     question: string,
-    chunks: RetrievedChunk[],
+    chunks: NormalizedRetrievedChunk[],
     plan: RetrievalPlan,
-  ): RetrievedChunk[] {
-    const sortedByScore = [...chunks].sort((a, b) => b.score - a.score);
+  ): NormalizedRetrievedChunk[] {
+    const sortedByScore = [...chunks].sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      if (a.documentId === b.documentId) {
+        return a.chunkIndex - b.chunkIndex;
+      }
+      return a.documentId.localeCompare(b.documentId);
+    });
+
     const baseTop = sortedByScore.slice(0, plan.initialTopK);
 
     const diversified = this.diversifyChunksByDocument(
@@ -467,9 +572,13 @@ ${ragContext}
       plan.diversifyPerDocument,
     );
 
-    const rescued = this.pickLexicalRescueChunks(question, sortedByScore, plan.rescueLimit);
+    const rescued = this.pickLexicalRescueChunks(
+      question,
+      sortedByScore,
+      plan.rescueLimit,
+    );
 
-    const merged = new Map<string, RetrievedChunk>();
+    const merged = new Map<string, NormalizedRetrievedChunk>();
 
     for (const chunk of [...baseTop, ...diversified, ...rescued]) {
       merged.set(`${chunk.documentId}:${chunk.chunkIndex}`, chunk);
@@ -487,11 +596,11 @@ ${ragContext}
   }
 
   private diversifyChunksByDocument(
-    chunks: RetrievedChunk[],
+    chunks: NormalizedRetrievedChunk[],
     totalLimit: number,
     perDocumentLimit: number,
-  ): RetrievedChunk[] {
-    const result: RetrievedChunk[] = [];
+  ): NormalizedRetrievedChunk[] {
+    const result: NormalizedRetrievedChunk[] = [];
     const perDocCount = new Map<string, number>();
 
     for (const chunk of chunks) {
@@ -513,16 +622,16 @@ ${ragContext}
 
   private pickLexicalRescueChunks(
     question: string,
-    chunks: RetrievedChunk[],
+    chunks: NormalizedRetrievedChunk[],
     limit: number,
-  ): RetrievedChunk[] {
+  ): NormalizedRetrievedChunk[] {
     const importantPhrases = this.extractImportantPhrases(question);
 
     const scored = chunks
       .map((chunk) => {
-        const title = chunk.documentTitle ?? '';
+        const title = chunk.documentTitle;
         const sectionPath = chunk.sectionPath ?? '';
-        const content = chunk.content ?? '';
+        const content = chunk.content;
 
         const lexicalScore =
           this.computeWeightedOverlap(question, title, 1.8) +
@@ -551,7 +660,7 @@ ${ragContext}
 
   private rerankChunks(
     question: string,
-    chunks: RetrievedChunk[],
+    chunks: NormalizedRetrievedChunk[],
   ): RankedChunk[] {
     const normalizedQuestion = this.normalizeVietnamese(question);
     const importantPhrases = this.extractImportantPhrases(question);
@@ -559,16 +668,19 @@ ${ragContext}
 
     return chunks
       .map((chunk) => {
-        const title = chunk.documentTitle ?? '';
+        const title = chunk.documentTitle;
         const sectionPath = chunk.sectionPath ?? '';
-        const content = chunk.content ?? '';
+        const content = chunk.content;
 
         const titleOverlap = this.countOverlap(question, title);
         const sectionOverlap = this.countOverlap(question, sectionPath);
         const contentOverlap = this.countOverlap(question, content);
 
         const exactTitleMatch = this.hasExactPhrase(normalizedQuestion, title);
-        const exactSectionMatch = this.hasExactPhrase(normalizedQuestion, sectionPath);
+        const exactSectionMatch = this.hasExactPhrase(
+          normalizedQuestion,
+          sectionPath,
+        );
         const exactContentMatch = this.hasExactPhrase(normalizedQuestion, content);
 
         const matchedPhrases = this.findMatchedPhrases(
@@ -644,7 +756,7 @@ ${ragContext}
   }
 
   private expandAndGroupChunks(
-    allRetrievedChunks: RetrievedChunk[],
+    allRetrievedChunks: NormalizedRetrievedChunk[],
     rankedChunks: RankedChunk[],
     options: {
       seedLimit: number;
@@ -652,10 +764,10 @@ ${ragContext}
       maxSameDocument: number;
       finalLimit: number;
     },
-  ): RetrievedChunk[] {
+  ): NormalizedRetrievedChunk[] {
     const seeds = rankedChunks.slice(0, options.seedLimit);
     const docCountMap = new Map<string, number>();
-    const selected = new Map<string, RetrievedChunk>();
+    const selected = new Map<string, NormalizedRetrievedChunk>();
 
     for (const seed of seeds) {
       const sameDocChunks = allRetrievedChunks
@@ -924,7 +1036,7 @@ ${ragContext}
       title: string;
       sectionPath: string;
       content: string;
-      chunk: RetrievedChunk;
+      chunk: NormalizedRetrievedChunk;
     },
   ): number {
     const normalizedTitle = this.normalizeVietnamese(params.title);
@@ -1119,7 +1231,7 @@ ${ragContext}
     }
   }
 
-  private buildChunkContext(chunks: RetrievedChunk[]) {
+  private buildChunkContext(chunks: NormalizedRetrievedChunk[]) {
     return chunks
       .sort((a, b) => {
         if (a.documentId === b.documentId) {
@@ -1130,7 +1242,7 @@ ${ragContext}
       .map((chunk, index) =>
         [
           `[SOURCE ${index + 1}]`,
-          `documentTitle: ${chunk.documentTitle}`,
+          `documentTitle: ${chunk.documentTitle || 'N/A'}`,
           `documentId: ${chunk.documentId}`,
           `chunkIndex: ${chunk.chunkIndex}`,
           `pageNumber: ${chunk.pageNumber ?? 'N/A'}`,
