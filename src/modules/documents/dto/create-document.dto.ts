@@ -26,9 +26,10 @@ export class CreateDocumentDto {
 
   @ApiProperty({ example: false, default: false, required: false })
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
+  @Transform(({ obj }) => {
+    const val = obj.isFeatured;
+    if (val === 'true' || val === true) return true;
+    if (val === 'false' || val === false) return false;
     return false;
   })
   @IsBoolean({ message: 'Trạng thái nổi bật phải là giá trị đúng/sai' })
