@@ -833,7 +833,11 @@ export class MeetingsService {
     });
 
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
-
+    if (meeting.startTime > meeting.endTime) {
+      throw new BadRequestException(
+        'Cuộc họp chưa bắt đầu, không thể kết thúc!',
+      );
+    }
     meeting.status = MeetingStatus.FINISHED;
     meeting.endTime = new Date();
     meeting.isCheckinActive = false;
@@ -1027,6 +1031,7 @@ export class MeetingsService {
     options: IPaginationOptions,
     userId: string,
     status?: AttendeeStatus,
+    meetingId?: string,
   ): Promise<Pagination<any>> {
     const currentUser = await this.dataSource
       .getRepository(PartyMember)
@@ -1052,15 +1057,15 @@ export class MeetingsService {
       });
     }
 
+    if (meetingId) {
+      queryBuilder.andWhere('attendee.meetingId = :meetingId', { meetingId });
+    }
+
     if (status) {
       queryBuilder.andWhere('attendee.status = :status', { status });
     } else {
       queryBuilder.andWhere('attendee.status IN (:...statuses)', {
-        statuses: [
-          AttendeeStatus.PENDING_EXCUSE,
-          AttendeeStatus.EXCUSED,
-          AttendeeStatus.ABSENT,
-        ],
+        statuses: [AttendeeStatus.PENDING_EXCUSE, AttendeeStatus.EXCUSED],
       });
     }
     queryBuilder.orderBy('meeting.startTime', 'DESC');

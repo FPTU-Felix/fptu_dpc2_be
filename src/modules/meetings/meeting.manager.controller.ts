@@ -61,16 +61,24 @@ export class MeetingsManagerController {
     enum: AttendeeStatus,
     description: 'Trạng thái đơn xin nghỉ',
   })
+  @ApiQuery({
+    name: 'meetingId',
+    required: false,
+    type: String,
+    description: 'Lọc đơn xin nghỉ của một cuộc họp cụ thể (UUID)',
+  })
   async getLeaveRequests(
     @GetCurrentUser('sub') userId: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('status') status?: AttendeeStatus,
+    @Query('meetingId') meetingId?: string,
   ) {
     return await this.meetingsService.findAllLeaveRequests(
       { page, limit },
       userId,
       status,
+      meetingId,
     );
   }
 
