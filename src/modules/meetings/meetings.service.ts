@@ -758,6 +758,9 @@ export class MeetingsService {
     } else {
       if (!attendee.checkInTime) {
         attendee.checkInTime = now;
+        console.log(
+          `[Online Check-in] User ${userId} check-in lần đầu cho meeting ${meetingId} lúc ${now.toLocaleTimeString()}`,
+        );
         attendee.method = CheckInMethod.ONLINE_EXT;
         attendee.status = AttendeeStatus.PRESENT;
       } else {
@@ -803,30 +806,24 @@ export class MeetingsService {
     const attendee = await this.attendeeRepo.findOne({
       where: { meetingId, memberId },
     });
-    if (!attendee) {
+    if (!attendee)
       throw new BadRequestException('Vui lòng gọi API Check-in trước!');
-    }
+
     const now = new Date();
+    const lastActive = attendee.checkOutTime || attendee.checkInTime;
 
-    if (attendee.checkOutTime) {
-      const timeSinceLastPingMs =
-        now.getTime() - new Date(attendee.checkOutTime).getTime();
-
-      if (timeSinceLastPingMs > 0 && timeSinceLastPingMs <= 360000) {
-        const addedSeconds = Math.floor(timeSinceLastPingMs / 1000);
+    if (lastActive) {
+      const timeSinceLastMs = now.getTime() - new Date(lastActive).getTime();
+      if (timeSinceLastMs > 0 && timeSinceLastMs <= 360000) {
+        const addedSeconds = Math.floor(timeSinceLastMs / 1000);
         attendee.onlineDuration = (attendee.onlineDuration || 0) + addedSeconds;
       }
-    } else {
-      attendee.onlineDuration = attendee.onlineDuration || 0;
     }
+
     attendee.checkOutTime = now;
     await this.attendeeRepo.save(attendee);
 
-    return {
-      success: true,
-      message: 'Đã đập nhịp tim & cộng dồn giờ!',
-      currentDuration: attendee.onlineDuration,
-    };
+    return { success: true, currentDuration: attendee.onlineDuration };
   }
 
   async endMeeting(meetingId: string) {
@@ -836,50 +833,38 @@ export class MeetingsService {
     });
 
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
-    if (meeting.status === MeetingStatus.FINISHED) {
-      throw new BadRequestException('Cuộc họp này đã kết thúc từ trước rồi!');
-    }
 
     meeting.status = MeetingStatus.FINISHED;
     meeting.endTime = new Date();
     meeting.isCheckinActive = false;
+    const start = new Date(meeting.startTime).getTime();
+    const end = meeting.endTime.getTime();
+    const totalMeetingSec = Math.floor((end - start) / 1000);
+    const requiredSec = (2 / 3) * totalMeetingSec;
 
     if (meeting.attendees && meeting.attendees.length > 0) {
-      let attendeesToUpdate: MeetingAttendee[] = [];
-
-      if (meeting.format === MeetingFormat.ONLINE) {
-        const meetingDurationSeconds = Math.floor(
-          (meeting.endTime.getTime() - meeting.startTime.getTime()) / 1000,
-        );
-        const validMeetingDuration = Math.max(0, meetingDurationSeconds);
-        const requiredDurationSeconds = (2 / 3) * validMeetingDuration;
-
-        attendeesToUpdate = meeting.attendees.map((attendee) => {
-          if (attendee.status === AttendeeStatus.EXCUSED) return attendee;
-
-          const userOnlineDuration = attendee.onlineDuration || 0;
-          if (userOnlineDuration >= requiredDurationSeconds) {
-            attendee.status = AttendeeStatus.PRESENT;
-          } else {
-            attendee.status = AttendeeStatus.ABSENT;
+      const attendeesToUpdate = meeting.attendees.map((attendee) => {
+        if (attendee.status === AttendeeStatus.EXCUSED) return attendee;
+        let finalDuration = attendee.onlineDuration || 0;
+        if (attendee.checkOutTime) {
+          const lastPing = new Date(attendee.checkOutTime).getTime();
+          const gapCuoi = Math.floor((end - lastPing) / 1000);
+          if (gapCuoi > 0 && gapCuoi < 300) {
+            finalDuration += gapCuoi;
           }
-          return attendee;
-        });
-      } else if (meeting.format === MeetingFormat.OFFLINE) {
-        attendeesToUpdate = meeting.attendees.map((attendee) => {
-          if (attendee.status === AttendeeStatus.PENDING) {
-            attendee.status = AttendeeStatus.ABSENT;
-          }
-          return attendee;
-        });
-      }
+        }
+        const isPass = finalDuration >= requiredSec;
+        attendee.status = isPass
+          ? AttendeeStatus.PRESENT
+          : AttendeeStatus.ABSENT;
+        return attendee;
+      });
+
       await this.attendeeRepo.save(attendeesToUpdate);
     }
+
     await this.meetingRepo.save(meeting);
-    return {
-      message: 'Đã kết thúc cuộc họp & chốt sổ điểm danh tự động!',
-      format: meeting.format,
-    };
+    return { message: 'Đã kết thúc & chốt sổ điểm danh thành công!' };
   }
 
   async getMyAttendanceHistory(
