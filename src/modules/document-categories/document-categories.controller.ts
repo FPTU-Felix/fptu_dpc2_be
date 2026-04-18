@@ -19,7 +19,7 @@ export class DocumentCategoriesController {
   constructor(private readonly documentCategoriesService: DocumentCategoriesService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.SECRETARY)
+  @Roles(UserRole.ADMIN, UserRole.COMMITTEE_MEMBER)
   @ApiOperation({ summary: 'Tạo mới danh mục tài liệu' })
   create(@Body() createDocumentCategoryDto: CreateDocumentCategoryDto) {
     return this.documentCategoriesService.create(createDocumentCategoryDto);
@@ -48,7 +48,7 @@ export class DocumentCategoriesController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.COMMITTEE_MEMBER)
   @ApiOperation({ summary: 'Xóa danh mục tài liệu' })
   remove(@Param('id', ParseUUIDPipe) id: string) { // Đổi sang string và ParseUUIDPipe
     return this.documentCategoriesService.remove(id);
