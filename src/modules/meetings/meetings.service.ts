@@ -581,9 +581,6 @@ export class MeetingsService {
         if (parts.length === 2) {
           const oldObjectName = `leave-requests/${meetingId}/${parts[1]}`;
           await this.minioService.deleteFile(oldObjectName);
-          console.log(
-            `[MinIO] Đã dọn dẹp file minh chứng cũ: ${oldObjectName}`,
-          );
         }
       } catch (error) {
         console.error('Lỗi khi dọn dẹp file MinIO cũ:', error.message);
@@ -758,9 +755,6 @@ export class MeetingsService {
     } else {
       if (!attendee.checkInTime) {
         attendee.checkInTime = now;
-        console.log(
-          `[Online Check-in] User ${userId} check-in lần đầu cho meeting ${meetingId} lúc ${now.toLocaleTimeString()}`,
-        );
         attendee.method = CheckInMethod.ONLINE_EXT;
         attendee.status = AttendeeStatus.PRESENT;
       } else {
@@ -833,36 +827,45 @@ export class MeetingsService {
     });
 
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
-    if (meeting.startTime > meeting.endTime) {
-      throw new BadRequestException(
-        'Cuộc họp chưa bắt đầu, không thể kết thúc!',
-      );
-    }
     meeting.status = MeetingStatus.FINISHED;
     meeting.endTime = new Date();
     meeting.isCheckinActive = false;
-    const start = new Date(meeting.startTime).getTime();
+
     const end = meeting.endTime.getTime();
-    const totalMeetingSec = Math.floor((end - start) / 1000);
-    const requiredSec = (2 / 3) * totalMeetingSec;
 
     if (meeting.attendees && meeting.attendees.length > 0) {
-      const attendeesToUpdate = meeting.attendees.map((attendee) => {
-        if (attendee.status === AttendeeStatus.EXCUSED) return attendee;
-        let finalDuration = attendee.onlineDuration || 0;
-        if (attendee.checkOutTime) {
-          const lastPing = new Date(attendee.checkOutTime).getTime();
-          const gapCuoi = Math.floor((end - lastPing) / 1000);
-          if (gapCuoi > 0 && gapCuoi < 300) {
-            finalDuration += gapCuoi;
+      let attendeesToUpdate: MeetingAttendee[] = [];
+
+      if (meeting.format === MeetingFormat.ONLINE) {
+        const start = new Date(meeting.startTime).getTime();
+        const totalMeetingSec = Math.floor((end - start) / 1000);
+        const requiredSec = (2 / 3) * totalMeetingSec;
+        attendeesToUpdate = meeting.attendees.map((attendee) => {
+          if (attendee.status === AttendeeStatus.EXCUSED) return attendee;
+
+          let finalDuration = attendee.onlineDuration || 0;
+          if (attendee.checkOutTime) {
+            const lastPing = new Date(attendee.checkOutTime).getTime();
+            const gapCuoi = Math.floor((end - lastPing) / 1000);
+            if (gapCuoi > 0 && gapCuoi < 300) {
+              finalDuration += gapCuoi;
+            }
           }
-        }
-        const isPass = finalDuration >= requiredSec;
-        attendee.status = isPass
-          ? AttendeeStatus.PRESENT
-          : AttendeeStatus.ABSENT;
-        return attendee;
-      });
+
+          const isPass = finalDuration >= requiredSec;
+          attendee.status = isPass
+            ? AttendeeStatus.PRESENT
+            : AttendeeStatus.ABSENT;
+          return attendee;
+        });
+      } else {
+        attendeesToUpdate = meeting.attendees.map((attendee) => {
+          if (attendee.status === AttendeeStatus.PENDING) {
+            attendee.status = AttendeeStatus.ABSENT;
+          }
+          return attendee;
+        });
+      }
 
       await this.attendeeRepo.save(attendeesToUpdate);
     }
