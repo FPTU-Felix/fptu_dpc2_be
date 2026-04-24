@@ -24,6 +24,9 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { PartyCell } from '../party-cells/entities/party-cell.entity';
 import { AdmissionApplicationService } from '../party-admissions/services/admission-application.service';
+import { MinioService } from '../minio/minio.service';
+import { ConfigService } from '@nestjs/config';
+import { AdminUpdateUserDto } from './dto/admin-update-user.dto';
 
 @Injectable()
 export class UsersService extends BaseService<User> {
@@ -36,6 +39,8 @@ export class UsersService extends BaseService<User> {
     private dataSource: DataSource,
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
+    private readonly minioService: MinioService,
+    private readonly configService: ConfigService,
 
     private readonly admissionApplicationService: AdmissionApplicationService,
   ) {
@@ -90,8 +95,6 @@ export class UsersService extends BaseService<User> {
 
   async createByAdmin(dto: AdminCreateUserDto) {
     const { username, email, roleName } = dto;
-
-    // 1. Kiểm tra tồn tại
     const existing = await this.usersRepository.findOne({
       where: [{ username }, { email }],
     });
@@ -119,7 +122,6 @@ export class UsersService extends BaseService<User> {
       );
 
     const tempPassword = Math.random().toString(36).slice(-8);
-    console.log('tempPassword', tempPassword);
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
     const user = this.usersRepository.create({
@@ -134,8 +136,6 @@ export class UsersService extends BaseService<User> {
     if (role.name === 'OUTSTANDING_INDIVIDUAL') {
       await this.admissionApplicationService.initAdmissionForQCUT(savedUser.id);
     }
-
-    // 4. Gửi Email
     try {
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
@@ -524,19 +524,19 @@ export class UsersService extends BaseService<User> {
         'Không tìm thấy thông tin hồ sơ của đồng chí',
       );
     }
-    console.log(member);
     const currentPosRecord = member.positions?.find(
       (p) => p.isCurrent === true,
     );
     const currentPositionId = currentPosRecord
       ? currentPosRecord.positionId
       : null;
-    const systemRoleCode = member.user?.role?.name || null;
+    const systemRoleCode = member.user?.role?.name;
     return {
       id: member.id,
+      avatarUrl: member.avatarUrl,
       userId: member.userId,
-      employeeCode: member.user?.username || null,
-      email: member.user?.email || null,
+      employeeCode: member.user?.username,
+      email: member.user?.email,
       position: currentPositionId,
       roleCode: systemRoleCode,
       fullName: member.fullName,
@@ -561,6 +561,143 @@ export class UsersService extends BaseService<User> {
             name: member.partyCell.name,
           }
         : null,
+    };
+  }
+
+  async requestEmailChange(userId: string) {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Người dùng không tồn tại');
+    const token = crypto.randomBytes(3).toString('hex').toUpperCase();
+    user.emailChangeToken = token;
+    user.emailChangeExpires = new Date(Date.now() + 10 * 60 * 1000);
+    await this.usersRepository.save(user);
+
+    const htmlContent = `
+      <div style="font-family: Arial; max-width: 500px; border: 1px solid #ddd; padding: 20px;">
+        <h2 style="color: #ce0000;">Xác nhận thay đổi Email</h2>
+        <p>Đồng chí đang thực hiện yêu cầu thay đổi địa chỉ email cho tài khoản <b>${user.username}</b>.</p>
+        <p>Mã xác nhận của đồng chí là:</p>
+        <div style="background: #f4f4f4; padding: 10px; text-align: center; font-size: 24px; font-weight: bold; color: #ce0000; border: 1px dashed #ce0000;">
+          ${token}
+        </div>
+        <p style="font-size: 13px; color: #666; margin-top: 15px;">* Mã này có hiệu lực trong 10 phút. Nếu không phải đồng chí yêu cầu, hãy đổi mật khẩu ngay lập tức.</p>
+      </div>
+    `;
+
+    await this.mailService.sendMail(
+      user.email,
+      'Mã xác nhận thay đổi Email - Hệ thống Đảng viên',
+      htmlContent,
+    );
+
+    return {
+      message: 'Mã xác nhận đã được gửi vào Email hiện tại của đồng chí',
+    };
+  }
+
+  async verifyAndChangeEmail(userId: string, token: string, newEmail: string) {
+    const user = await this.usersRepository.findOne({
+      where: {
+        id: userId,
+        emailChangeToken: token,
+        emailChangeExpires: MoreThan(new Date()),
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException(
+        'Mã xác nhận không chính xác hoặc đã hết hạn',
+      );
+    }
+    const emailExists = await this.usersRepository.findOne({
+      where: { email: newEmail },
+    });
+    if (emailExists) {
+      throw new BadRequestException('Email mới này đã tồn tại trong hệ thống');
+    }
+    user.email = newEmail;
+    user.emailChangeToken = null;
+    user.emailChangeExpires = null;
+    await this.usersRepository.save(user);
+
+    return {
+      success: true,
+      message: 'Đã cập nhật địa chỉ Email mới thành công!',
+      newEmail: user.email,
+    };
+  }
+
+  async updateAvatar(userId: string, file: Express.Multer.File) {
+    const member = await this.dataSource.getRepository(PartyMember).findOne({
+      where: { userId: userId },
+    });
+
+    if (!member) throw new NotFoundException('Không tìm thấy hồ sơ Đảng viên');
+
+    const oldAvatarUrl = member.avatarUrl;
+
+    const uploadResult = await this.minioService.uploadFile({
+      file,
+      folder: 'avatars',
+    });
+    member.avatarUrl = uploadResult.url;
+    await this.dataSource.getRepository(PartyMember).save(member);
+    if (oldAvatarUrl) {
+      try {
+        const urlParts = oldAvatarUrl.split(
+          `${this.configService.get('minio.bucket')}/`,
+        );
+        if (urlParts.length > 1) {
+          const oldObjectName = urlParts[1];
+          await this.minioService.deleteFile(oldObjectName);
+          console.log(`[MINIO] Đã xóa ảnh cũ: ${oldObjectName}`);
+        }
+      } catch (error) {
+        console.error('Lỗi khi xóa ảnh cũ trên MinIO:', error.message);
+      }
+    }
+
+    return {
+      message: 'Cập nhật ảnh đại diện thành công',
+      avatarUrl: uploadResult.url,
+    };
+  }
+
+  async updateUserByAdmin(userId: string, dto: AdminUpdateUserDto) {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Không tìm thấy người dùng');
+    if (dto.username && dto.username !== user.username) {
+      const existingUser = await this.usersRepository.findOne({
+        where: { username: dto.username },
+      });
+      if (existingUser) {
+        throw new BadRequestException(
+          'Tên đăng nhập này đã tồn tại trên hệ thống',
+        );
+      }
+      user.username = dto.username;
+    }
+    if (dto.email && dto.email !== user.email) {
+      const existingEmail = await this.usersRepository.findOne({
+        where: { email: dto.email },
+      });
+      if (existingEmail) {
+        throw new BadRequestException('Email này đã tồn tại trên hệ thống');
+      }
+      user.email = dto.email;
+      user.emailChangeToken = null;
+      user.emailChangeExpires = null;
+    }
+
+    await this.usersRepository.save(user);
+
+    return {
+      success: true,
+      message: `Đã cập nhật thông tin tài khoản ${user.username} thành công!`,
+      data: {
+        username: user.username,
+        email: user.email,
+      },
     };
   }
 }

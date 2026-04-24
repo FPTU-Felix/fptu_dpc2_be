@@ -14,6 +14,7 @@ import {
   ParseIntPipe,
   Query,
   ParseUUIDPipe,
+  Ip,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -240,5 +241,16 @@ export class MeetingsManagerController {
       ip,
       files,
     );
+  }
+
+  @Delete('documents/:docId')
+  @Roles(UserRole.ADMIN, UserRole.SECRETARY, UserRole.DEPUTY_SECRETARY)
+  @ApiOperation({ summary: 'Xóa tài liệu cuộc họp' })
+  async removeDocument(
+    @Param('docId', ParseUUIDPipe) docId: string,
+    @GetCurrentUser('sub') userId: string,
+    @GetClientIp() ip: string,
+  ) {
+    return await this.meetingsService.removeMeetingDocument(docId, userId, ip);
   }
 }

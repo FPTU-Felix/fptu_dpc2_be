@@ -52,6 +52,12 @@ export class User {
   })
   lastForgotPasswordAt: Date | null;
 
+  @Column({ name: 'email_change_token', type: 'varchar', nullable: true })
+  emailChangeToken: string | null;
+
+  @Column({ name: 'email_change_expires', type: 'timestamp', nullable: true })
+  emailChangeExpires: Date | null;
+
   @ManyToOne(() => Role, (role) => role.users)
   @JoinColumn({ name: 'role_id' })
   role: Role;

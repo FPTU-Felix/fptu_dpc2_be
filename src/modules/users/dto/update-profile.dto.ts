@@ -90,4 +90,20 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   politicalTheoryLevel?: string;
+
+  @ApiPropertyOptional({
+    description: 'Ngày gia nhập Đảng (Định dạng: YYYY-MM-DD)',
+    example: '2020-01-01',
+  })
+  @IsOptional()
+  @IsDateString()
+  joinDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Ngày chính thức gia nhập Đảng (Định dạng: YYYY-MM-DD)',
+    example: '2020-01-01',
+  })
+  @IsOptional()
+  @IsDateString()
+  officialDate?: string;
 }

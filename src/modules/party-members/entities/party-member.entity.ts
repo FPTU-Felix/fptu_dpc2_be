@@ -103,6 +103,9 @@ export class PartyMember {
   })
   politicalTheoryLevel: string;
 
+  @Column({ name: 'avatar_url', type: 'varchar', nullable: true })
+  avatarUrl: string | null;
+
   @OneToMany(() => AdmissionProgress, (progress) => progress.member)
   admissionProgress: AdmissionProgress[];
 
