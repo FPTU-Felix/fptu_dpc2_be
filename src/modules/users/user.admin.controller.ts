@@ -9,6 +9,7 @@ import {
   Query,
   Patch,
   Param,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -18,6 +19,7 @@ import { AdminCreateUserDto } from './dto/admin-create-user.dto';
 import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { UserRole } from 'src/common/enums';
+import { AdminUpdateUserDto } from './dto/admin-update-user.dto';
 
 @ApiBearerAuth('access-token')
 @ApiTags('Users - Quản lý người dùng (Admin)')
@@ -103,5 +105,18 @@ export class UsersAdminController {
   @Roles('ADMIN', 'SECRETARY')
   async unbanUser(@Param('id') id: string) {
     return this.usersService.unbanUser(id);
+  }
+
+  @Patch(':id/admin-update')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Admin cập nhật Username/Email cho người dùng' })
+  async adminUpdateUser(
+    @Param('id') userId: string,
+    @Body() dto: AdminUpdateUserDto,
+  ) {
+    if (!dto.username && !dto.email) {
+      throw new BadRequestException('Vui lòng cung cấp thông tin cần cập nhật');
+    }
+    return await this.usersService.updateUserByAdmin(userId, dto);
   }
 }

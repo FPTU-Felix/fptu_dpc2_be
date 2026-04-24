@@ -532,6 +532,7 @@ export class MeetingsService {
       'meeting.status',
       'meeting.format',
       'meeting.onlineLink',
+      'meeting.type',
     ]);
     const meetings = await queryBuilder.getMany();
     return {
@@ -1094,5 +1095,35 @@ export class MeetingsService {
       result.meta,
       result.links,
     );
+  }
+  async removeMeetingDocument(docId: string, actorId: string, ip: string) {
+    const doc = await this.meetingDocRepo.findOne({
+      where: { id: docId },
+    });
+    if (!doc) throw new NotFoundException('Không tìm thấy tài liệu này!');
+    try {
+      await this.minioService.deleteFile(doc.fileUrl);
+    } catch (error) {
+      console.error(
+        `[MINIO ERROR] Không thể xóa file: ${doc.fileUrl}`,
+        error.message,
+      );
+    }
+    this.eventEmitter.emit(
+      'audit.log',
+      new AuditLogEvent(
+        actorId,
+        'DELETE_MEETING_DOCUMENT',
+        'meeting_documents',
+        doc.id,
+        null,
+        ip,
+      ),
+    );
+    await this.meetingDocRepo.remove(doc);
+    return {
+      success: true,
+      message: 'Đã xóa tài liệu cuộc họp thành công!',
+    };
   }
 }
