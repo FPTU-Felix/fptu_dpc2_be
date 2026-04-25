@@ -42,7 +42,7 @@ export class PartyFeesController {
   @ApiOperation({
     summary: 'Đảng viên tự kiểm tra trạng thái đóng phí của mình',
   })
-  @Get('my-fees')
+  @Get('test/my-fees')
   async getMyFees(
     @GetCurrentUser('sub') userId: string,
     @Query() query: MyFeeQueryDto,
