@@ -65,11 +65,20 @@ describe('MeetingsService - Attendance (PIN, Heartbeat, Finalize)', () => {
           provide: getRepositoryToken(PartyMember),
           useValue: { findOne: jest.fn() },
         },
-        { provide: getRepositoryToken(PartyCell), useValue: { findOne: jest.fn() } },
+        {
+          provide: getRepositoryToken(PartyCell),
+          useValue: { findOne: jest.fn() },
+        },
         { provide: getRepositoryToken(MeetingDocument), useValue: {} },
         { provide: DataSource, useValue: { getRepository: jest.fn() } },
-        { provide: MinioService, useValue: { uploadFile: jest.fn(), deleteFile: jest.fn() } },
-        { provide: NotificationsService, useValue: { createInternal: jest.fn() } },
+        {
+          provide: MinioService,
+          useValue: { uploadFile: jest.fn(), deleteFile: jest.fn() },
+        },
+        {
+          provide: NotificationsService,
+          useValue: { createInternal: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -91,7 +100,7 @@ describe('MeetingsService - Attendance (PIN, Heartbeat, Finalize)', () => {
       (speakeasy.totp as unknown as jest.Mock).mockReturnValue('123456');
 
       const result = await service.getCurrentPin(mockMeetingId);
-      
+
       expect(result.pin).toBe('123456');
       expect(result.status).toBe('OPEN');
       expect(result.timeRemaining).toBeDefined();
@@ -99,12 +108,16 @@ describe('MeetingsService - Attendance (PIN, Heartbeat, Finalize)', () => {
 
     it(' Ném lỗi khi cuộc họp không tồn tại', async () => {
       mockQueryBuilder.getOne.mockResolvedValue(null);
-      await expect(service.getCurrentPin(mockMeetingId)).rejects.toThrow(NotFoundException);
+      await expect(service.getCurrentPin(mockMeetingId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it(' Ném lỗi khi phiên điểm danh đang đóng', async () => {
       mockQueryBuilder.getOne.mockResolvedValue({ isCheckinActive: false });
-      await expect(service.getCurrentPin(mockMeetingId)).rejects.toThrow(BadRequestException);
+      await expect(service.getCurrentPin(mockMeetingId)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -114,51 +127,72 @@ describe('MeetingsService - Attendance (PIN, Heartbeat, Finalize)', () => {
 
     it(' Cộng dồn giây khi heartbeat hợp lệ (60s)', async () => {
       const now = Date.now();
-      const lastCheckOut = new Date(now - 60000); 
-      
-      meetingRepo.findOne.mockResolvedValue({ 
-        format: MeetingFormat.ONLINE, 
-        onlineLink: validUrl, 
-        isCheckinActive: true 
+      const lastCheckOut = new Date(now - 60000);
+
+      meetingRepo.findOne.mockResolvedValue({
+        format: MeetingFormat.ONLINE,
+        onlineLink: validUrl,
+        isCheckinActive: true,
       });
       partyMemberRepo.findOne.mockResolvedValue({ id: mockMemberId });
-      attendeeRepo.findOne.mockResolvedValue({ 
-        memberId: mockMemberId, 
-        checkOutTime: lastCheckOut, 
-        onlineDuration: 100 
+      attendeeRepo.findOne.mockResolvedValue({
+        memberId: mockMemberId,
+        checkOutTime: lastCheckOut,
+        onlineDuration: 100,
       });
 
       jest.useFakeTimers().setSystemTime(now);
-      const result = await service.recordHeartbeat(mockMeetingId, mockUserId, validUrl);
-      
-      expect(result.currentDuration).toBe(160); 
+      const result = await service.recordHeartbeat(
+        mockMeetingId,
+        mockUserId,
+        validUrl,
+      );
+
+      expect(result.currentDuration).toBe(160);
       jest.useRealTimers();
     });
 
     it(' Không cộng giây nếu khoảng cách > 6 phút (360000ms)', async () => {
       const now = Date.now();
-      const lastCheckOut = new Date(now - 400000); 
-      meetingRepo.findOne.mockResolvedValue({ format: MeetingFormat.ONLINE, onlineLink: validUrl, isCheckinActive: true });
+      const lastCheckOut = new Date(now - 400000);
+      meetingRepo.findOne.mockResolvedValue({
+        format: MeetingFormat.ONLINE,
+        onlineLink: validUrl,
+        isCheckinActive: true,
+      });
       partyMemberRepo.findOne.mockResolvedValue({ id: mockMemberId });
-      attendeeRepo.findOne.mockResolvedValue({ memberId: mockMemberId, checkOutTime: lastCheckOut, onlineDuration: 100 });
+      attendeeRepo.findOne.mockResolvedValue({
+        memberId: mockMemberId,
+        checkOutTime: lastCheckOut,
+        onlineDuration: 100,
+      });
 
       jest.useFakeTimers().setSystemTime(now);
-      const result = await service.recordHeartbeat(mockMeetingId, mockUserId, validUrl);
-      
-      expect(result.currentDuration).toBe(100); 
+      const result = await service.recordHeartbeat(
+        mockMeetingId,
+        mockUserId,
+        validUrl,
+      );
+
+      expect(result.currentDuration).toBe(100);
       jest.useRealTimers();
     });
 
     it(' Phát hiện gian lận sai URL Meet', async () => {
-      meetingRepo.findOne.mockResolvedValue({ 
-        format: MeetingFormat.ONLINE, 
+      meetingRepo.findOne.mockResolvedValue({
+        format: MeetingFormat.ONLINE,
         onlineLink: validUrl,
-        isCheckinActive: true 
+        isCheckinActive: true,
       });
       partyMemberRepo.findOne.mockResolvedValue({ id: mockMemberId });
-      
-      await expect(service.recordHeartbeat(mockMeetingId, mockUserId, 'https://meet.google.com/wrong-room-xyz'))
-        .rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.recordHeartbeat(
+          mockMeetingId,
+          mockUserId,
+          'https://meet.google.com/wrong-room-xyz',
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -177,7 +211,7 @@ describe('MeetingsService - Attendance (PIN, Heartbeat, Finalize)', () => {
           { id: 'a1', onlineDuration: 3600, status: AttendeeStatus.PENDING },
           { id: 'a2', onlineDuration: 3599, status: AttendeeStatus.PENDING },
           { id: 'a3', status: AttendeeStatus.EXCUSED },
-        ]
+        ],
       };
 
       meetingRepo.findOne.mockResolvedValue(mockMeeting);
@@ -186,16 +220,24 @@ describe('MeetingsService - Attendance (PIN, Heartbeat, Finalize)', () => {
       await service.endMeeting(mockMeetingId);
 
       const savedAttendees = attendeeRepo.save.mock.calls[0][0];
-      expect(savedAttendees.find((a: any) => a.id === 'a1').status).toBe(AttendeeStatus.PRESENT);
-      expect(savedAttendees.find((a: any) => a.id === 'a2').status).toBe(AttendeeStatus.ABSENT);
-      expect(savedAttendees.find((a: any) => a.id === 'a3').status).toBe(AttendeeStatus.EXCUSED);
-      
+      expect(savedAttendees.find((a: any) => a.id === 'a1').status).toBe(
+        AttendeeStatus.PRESENT,
+      );
+      expect(savedAttendees.find((a: any) => a.id === 'a2').status).toBe(
+        AttendeeStatus.ABSENT,
+      );
+      expect(savedAttendees.find((a: any) => a.id === 'a3').status).toBe(
+        AttendeeStatus.EXCUSED,
+      );
+
       jest.useRealTimers();
     });
 
     it(' Báo lỗi nếu kết thúc cuộc họp đã FINISHED', async () => {
       meetingRepo.findOne.mockResolvedValue({ status: MeetingStatus.FINISHED });
-      await expect(service.endMeeting(mockMeetingId)).rejects.toThrow(BadRequestException);
+      await expect(service.endMeeting(mockMeetingId)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 });

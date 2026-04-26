@@ -89,7 +89,6 @@ export class PartyAdmissionApplicationEntity {
   @OneToMany(() => PartyAdmissionWorkflowLogEntity, (log) => log.applicationId)
   workflowLogs: PartyAdmissionWorkflowLogEntity[];
 
-
   @CreateDateColumn()
   createdAt: Date;
 }

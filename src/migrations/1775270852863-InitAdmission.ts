@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class InitAdmission1775270852863 implements MigrationInterface {
-  name = "InitAdmission1775270852863";
+  name = 'InitAdmission1775270852863';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // ===== EXTENSION =====
@@ -255,14 +255,22 @@ export class InitAdmission1775270852863 implements MigrationInterface {
     await queryRunner.query(`DROP INDEX IF EXISTS uq_steps_app_step`);
 
     await queryRunner.query(`DROP TABLE IF EXISTS party_admission_documents`);
-    await queryRunner.query(`DROP TABLE IF EXISTS party_admission_step_reviews`);
-    await queryRunner.query(`DROP TABLE IF EXISTS party_admission_step_submissions`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS party_admission_step_reviews`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS party_admission_step_submissions`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS party_admission_steps`);
-    await queryRunner.query(`DROP TABLE IF EXISTS party_admission_applications`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS party_admission_applications`,
+    );
 
     await queryRunner.query(`DROP TYPE IF EXISTS admission_document_type_enum`);
     await queryRunner.query(`DROP TYPE IF EXISTS admission_step_enum`);
     await queryRunner.query(`DROP TYPE IF EXISTS admission_step_status_enum`);
-    await queryRunner.query(`DROP TYPE IF EXISTS admission_overall_status_enum`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS admission_overall_status_enum`,
+    );
   }
 }

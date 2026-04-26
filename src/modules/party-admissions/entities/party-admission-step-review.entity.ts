@@ -19,16 +19,19 @@ import { AdmissionReviewAction } from '../enum/party-admissions.enum';
 @Index('idx_party_admission_step_reviews_step_id', ['stepId'])
 @Index('idx_party_admission_step_reviews_submission_id', ['submissionId'])
 export class PartyAdmissionStepReviewEntity {
-
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'uuid' })
   applicationId: string;
 
-  @ManyToOne(() => PartyAdmissionApplicationEntity, (application) => application.reviews, {
-    onDelete: 'CASCADE',
-  })
+  @ManyToOne(
+    () => PartyAdmissionApplicationEntity,
+    (application) => application.reviews,
+    {
+      onDelete: 'CASCADE',
+    },
+  )
   @JoinColumn({ name: 'applicationId' })
   application: PartyAdmissionApplicationEntity;
 
@@ -44,10 +47,14 @@ export class PartyAdmissionStepReviewEntity {
   @Column({ type: 'uuid', nullable: true })
   submissionId?: string;
 
-  @ManyToOne(() => PartyAdmissionStepSubmissionEntity, (submission) => submission.reviews, {
-    onDelete: 'SET NULL',
-    nullable: true,
-  })
+  @ManyToOne(
+    () => PartyAdmissionStepSubmissionEntity,
+    (submission) => submission.reviews,
+    {
+      onDelete: 'SET NULL',
+      nullable: true,
+    },
+  )
   @JoinColumn({ name: 'submissionId' })
   submission?: PartyAdmissionStepSubmissionEntity;
 
@@ -82,5 +89,4 @@ export class PartyAdmissionStepReviewEntity {
 
   @Column({ type: 'timestamp', nullable: true })
   processedAt?: Date;
-
 }

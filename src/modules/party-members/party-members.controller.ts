@@ -27,5 +27,4 @@ export class PartyMembersController {
   ) {
     return this.partyMembersService.assignPosition(adminId, memberId, dto);
   }
-
 }

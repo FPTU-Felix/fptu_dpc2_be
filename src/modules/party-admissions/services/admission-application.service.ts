@@ -61,7 +61,7 @@ export class AdmissionApplicationService {
     private readonly roleRepo: Repository<Role>,
 
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
 
   private generateApplicationCode(): string {
     const now = new Date();
@@ -242,9 +242,9 @@ export class AdmissionApplicationService {
       roleId: user.roleId,
       role: user.role
         ? {
-          id: user.role.id,
-          name: user.role.name,
-        }
+            id: user.role.id,
+            name: user.role.name,
+          }
         : null,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -565,7 +565,9 @@ export class AdmissionApplicationService {
 
     const currentStep =
       mappedSteps.find((step) => step.isCurrent) ||
-      mappedSteps.find((step) => step.stepCode === application.currentStepCode) ||
+      mappedSteps.find(
+        (step) => step.stepCode === application.currentStepCode,
+      ) ||
       null;
 
     return {
@@ -892,15 +894,18 @@ export class AdmissionApplicationService {
 
     const currentSteps = applications.length
       ? await this.stepRepo.find({
-        where: applications.map((application) => ({
-          applicationId: application.id,
-          stepCode: application.currentStepCode,
-        })),
-      })
+          where: applications.map((application) => ({
+            applicationId: application.id,
+            stepCode: application.currentStepCode,
+          })),
+        })
       : [];
 
     const currentStepMap = new Map(
-      currentSteps.map((step) => [`${step.applicationId}_${step.stepCode}`, step]),
+      currentSteps.map((step) => [
+        `${step.applicationId}_${step.stepCode}`,
+        step,
+      ]),
     );
 
     const usersMap = await this.getUsersMap(
@@ -1006,7 +1011,11 @@ export class AdmissionApplicationService {
     } as AdmissionApplicationDetailDto;
   }
 
-  async approveStep(applicationId: string, userId: string, dto: ApproveStepDto) {
+  async approveStep(
+    applicationId: string,
+    userId: string,
+    dto: ApproveStepDto,
+  ) {
     return this.dataSource.transaction(async (manager) => {
       const appRepo = manager.getRepository(PartyAdmissionApplicationEntity);
       const stepRepo = manager.getRepository(PartyAdmissionStepEntity);
@@ -1053,7 +1062,11 @@ export class AdmissionApplicationService {
 
       await stepRepo.save(step);
 
-      const next = await this.getNextStep(manager, applicationId, step.stepOrder);
+      const next = await this.getNextStep(
+        manager,
+        applicationId,
+        step.stepOrder,
+      );
 
       if (!next) {
         app.overallStatus = AdmissionOverallStatus.APPROVED;
@@ -1328,7 +1341,7 @@ export class AdmissionApplicationService {
       .andWhere('application.currentStepStatus = :currentStepStatus', {
         currentStepStatus: AdmissionWorkflowStepStatus.IN_PROGRESS,
       });
-    console.log("===== QUERY =====");
+    console.log('===== QUERY =====');
     console.log(qb.getSql());
 
     if (query.keyword?.trim()) {
@@ -1353,15 +1366,18 @@ export class AdmissionApplicationService {
 
     const currentSteps = applications.length
       ? await this.stepRepo.find({
-        where: applications.map((application) => ({
-          applicationId: application.id,
-          stepCode: application.currentStepCode,
-        })),
-      })
+          where: applications.map((application) => ({
+            applicationId: application.id,
+            stepCode: application.currentStepCode,
+          })),
+        })
       : [];
 
     const currentStepMap = new Map(
-      currentSteps.map((step) => [`${step.applicationId}_${step.stepCode}`, step]),
+      currentSteps.map((step) => [
+        `${step.applicationId}_${step.stepCode}`,
+        step,
+      ]),
     );
 
     const usersMap = await this.getUsersMap(
@@ -1515,7 +1531,8 @@ export class AdmissionApplicationService {
       }
 
       if (
-        application.currentStepCode !== AdmissionWorkflowStep.RESOLUTION_DRAFTING
+        application.currentStepCode !==
+        AdmissionWorkflowStep.RESOLUTION_DRAFTING
       ) {
         throw new BadRequestException('Hồ sơ không ở bước soạn nghị quyết');
       }

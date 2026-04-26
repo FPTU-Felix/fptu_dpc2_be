@@ -8,7 +8,12 @@ import { PartyCell } from '../party-cells/entities/party-cell.entity';
 import { MailService } from '../mail/mail.service';
 import { AdmissionApplicationService } from '../party-admissions/services/admission-application.service';
 import { DataSource, Repository, MoreThan } from 'typeorm';
-import { BadRequestException, ForbiddenException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
@@ -26,16 +31,17 @@ describe('UsersService', () => {
   let dataSource: DataSource;
 
   // --- MOCK DATA ---
-  const createMockUser = () => ({
-    id: 'user-uuid',
-    username: '20206125',
-    email: 'anhvv@fpt.edu.vn',
-    password: 'hashedPassword',
-    isActive: true,
-    isFirstLogin: true,
-    role: { id: 'role-1', name: 'USER' },
-    lastForgotPasswordAt: null,
-  } as any);
+  const createMockUser = () =>
+    ({
+      id: 'user-uuid',
+      username: '20206125',
+      email: 'anhvv@fpt.edu.vn',
+      password: 'hashedPassword',
+      isActive: true,
+      isFirstLogin: true,
+      role: { id: 'role-1', name: 'USER' },
+      lastForgotPasswordAt: null,
+    }) as any;
 
   const mockQueryRunner = {
     connect: jest.fn(),
@@ -73,7 +79,10 @@ describe('UsersService', () => {
         },
         { provide: getRepositoryToken(Role), useValue: { findOne: jest.fn() } },
         { provide: MailService, useValue: { sendMail: jest.fn() } },
-        { provide: AdmissionApplicationService, useValue: { initAdmissionForQCUT: jest.fn() } },
+        {
+          provide: AdmissionApplicationService,
+          useValue: { initAdmissionForQCUT: jest.fn() },
+        },
         {
           provide: DataSource,
           useValue: {
@@ -104,22 +113,33 @@ describe('UsersService', () => {
       (userRepo.findOne as jest.Mock).mockResolvedValue(mockUser);
       const res = await service.findOneByUsername('20206125');
       expect(res).toEqual(mockUser);
-      expect(userRepo.findOne).toHaveBeenCalledWith(expect.objectContaining({ relations: ['role'] }));
+      expect(userRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ relations: ['role'] }),
+      );
     });
 
     it('updateRefreshToken: nên cập nhật token vào DB', async () => {
       await service.updateRefreshToken('id', 'token');
-      expect(userRepo.update).toHaveBeenCalledWith('id', { hashedRefreshToken: 'token' });
+      expect(userRepo.update).toHaveBeenCalledWith('id', {
+        hashedRefreshToken: 'token',
+      });
     });
   });
 
   // --- 2. ADMIN CREATE USER (Complex Logic) ---
   describe('createByAdmin', () => {
-    const dto = { username: 'anhvv', email: 'anh@fpt.vn', roleName: 'OUTSTANDING_INDIVIDUAL' };
+    const dto = {
+      username: 'anhvv',
+      email: 'anh@fpt.vn',
+      roleName: 'OUTSTANDING_INDIVIDUAL',
+    };
 
     it('Normal: Tạo user thành công và gửi mail', async () => {
       (userRepo.findOne as jest.Mock).mockResolvedValue(null); // Không trùng
-      (roleRepo.findOne as jest.Mock).mockResolvedValue({ id: 'r1', name: 'OUTSTANDING_INDIVIDUAL' });
+      (roleRepo.findOne as jest.Mock).mockResolvedValue({
+        id: 'r1',
+        name: 'OUTSTANDING_INDIVIDUAL',
+      });
       (userRepo.save as jest.Mock).mockResolvedValue({ id: 'new-id' });
 
       const res = await service.createByAdmin(dto);
@@ -131,24 +151,35 @@ describe('UsersService', () => {
 
     it('Abnormal: Role không tồn tại', async () => {
       (roleRepo.findOne as jest.Mock).mockResolvedValue(null);
-      await expect(service.createByAdmin(dto)).rejects.toThrow(BadRequestException);
+      await expect(service.createByAdmin(dto)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('Boundary: Đã có 1 ADMIN trong hệ thống', async () => {
-      (roleRepo.findOne as jest.Mock).mockResolvedValue({ id: 'ra', name: 'ADMIN' });
+      (roleRepo.findOne as jest.Mock).mockResolvedValue({
+        id: 'ra',
+        name: 'ADMIN',
+      });
       (userRepo.findOne as jest.Mock)
         .mockResolvedValueOnce(null) // Check existing email
         .mockResolvedValueOnce({ id: 'other-admin' }); // Check existingRoleUser
-      
-      await expect(service.createByAdmin({ ...dto, roleName: 'ADMIN' }))
-        .rejects.toThrow('Chỉ được phép có 1 ADMIN');
+
+      await expect(
+        service.createByAdmin({ ...dto, roleName: 'ADMIN' }),
+      ).rejects.toThrow('Chỉ được phép có 1 ADMIN');
     });
 
     it('Abnormal: Tạo thành công nhưng lỗi gửi mail', async () => {
       (userRepo.findOne as jest.Mock).mockResolvedValue(null);
-      (roleRepo.findOne as jest.Mock).mockResolvedValue({ id: 'r1', name: 'USER' });
+      (roleRepo.findOne as jest.Mock).mockResolvedValue({
+        id: 'r1',
+        name: 'USER',
+      });
       (userRepo.save as jest.Mock).mockResolvedValue({ id: 'id' });
-      (mailService.sendMail as jest.Mock).mockRejectedValue(new Error('SMTP Error'));
+      (mailService.sendMail as jest.Mock).mockRejectedValue(
+        new Error('SMTP Error'),
+      );
 
       const res = await service.createByAdmin(dto);
       expect(res.success).toBe(false);
@@ -170,9 +201,9 @@ describe('UsersService', () => {
       const user = createMockUser();
       mockQueryRunner.manager.findOne
         .mockResolvedValueOnce(user) // User check
-        .mockResolvedValueOnce(null)     // Existing member check
+        .mockResolvedValueOnce(null) // Existing member check
         .mockResolvedValueOnce({ id: 'cell-id' }); // Cell check
-      
+
       const res = await service.completeProfile('user-uuid', dto);
       expect(res.status).toBe('COMPLETED');
       expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
@@ -180,15 +211,20 @@ describe('UsersService', () => {
 
     it('Abnormal: Mật khẩu xác nhận không khớp', async () => {
       mockQueryRunner.manager.findOne.mockResolvedValue(createMockUser());
-      await expect(service.completeProfile('user-uuid', { ...dto, confirmPassword: 'wrong' }))
-        .rejects.toThrow('Mật khẩu xác nhận không khớp');
+      await expect(
+        service.completeProfile('user-uuid', {
+          ...dto,
+          confirmPassword: 'wrong',
+        }),
+      ).rejects.toThrow('Mật khẩu xác nhận không khớp');
       expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
     });
 
     it('Boundary: Mật khẩu không đủ mạnh', async () => {
       mockQueryRunner.manager.findOne.mockResolvedValue(createMockUser());
-      await expect(service.completeProfile('user-uuid', { ...dto, newPassword: '123' }))
-        .rejects.toThrow('Mật khẩu phải có ít nhất 6 ký tự');
+      await expect(
+        service.completeProfile('user-uuid', { ...dto, newPassword: '123' }),
+      ).rejects.toThrow('Mật khẩu phải có ít nhất 6 ký tự');
     });
 
     it('Abnormal: Chi bộ không tồn tại', async () => {
@@ -197,26 +233,32 @@ describe('UsersService', () => {
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null); // Cell check return null
 
-      await expect(service.completeProfile('user-uuid', dto)).rejects.toThrow('Chi bộ không tồn tại');
+      await expect(service.completeProfile('user-uuid', dto)).rejects.toThrow(
+        'Chi bộ không tồn tại',
+      );
     });
   });
 
   // --- 4. PASSWORD RECOVERY ---
   describe('ForgotPassword & Reset', () => {
     it('Boundary: Throttle 60s cho yêu cầu mã mới', async () => {
-      const userWithTime = { 
-        ...createMockUser(), 
-        lastForgotPasswordAt: new Date(Date.now() - 30 * 1000) // Mới gửi 30s trước
+      const userWithTime = {
+        ...createMockUser(),
+        lastForgotPasswordAt: new Date(Date.now() - 30 * 1000), // Mới gửi 30s trước
       };
       (userRepo.findOne as jest.Mock).mockResolvedValue(userWithTime);
 
-      await expect(service.forgotPassword({ email: 'anhvv@fpt.edu.vn' }))
-        .rejects.toThrow('Vui lòng đợi');
+      await expect(
+        service.forgotPassword({ email: 'anhvv@fpt.edu.vn' }),
+      ).rejects.toThrow('Vui lòng đợi');
     });
 
     it('Normal: resetPassword thành công', async () => {
       (userRepo.findOne as jest.Mock).mockResolvedValue(createMockUser());
-      const res = await service.resetPassword({ token: 'valid-token', newPassword: 'NewPassword123' });
+      const res = await service.resetPassword({
+        token: 'valid-token',
+        newPassword: 'NewPassword123',
+      });
       expect(res.message).toBe('Đổi mật khẩu thành công!');
       expect(userRepo.save).toHaveBeenCalled();
     });
@@ -225,12 +267,20 @@ describe('UsersService', () => {
   // --- 5. BAN / UNBAN ---
   describe('Ban/Unban', () => {
     it('Abnormal: Không được ban ADMIN', async () => {
-      (userRepo.findOne as jest.Mock).mockResolvedValue({ ...createMockUser(), role: { name: 'ADMIN' } });
-      await expect(service.banUser('id')).rejects.toThrow('Không thể khóa tài khoản Quản trị viên');
+      (userRepo.findOne as jest.Mock).mockResolvedValue({
+        ...createMockUser(),
+        role: { name: 'ADMIN' },
+      });
+      await expect(service.banUser('id')).rejects.toThrow(
+        'Không thể khóa tài khoản Quản trị viên',
+      );
     });
 
     it('Normal: Ban user thành công', async () => {
-      (userRepo.findOne as jest.Mock).mockResolvedValue({ ...createMockUser(), isActive: true });
+      (userRepo.findOne as jest.Mock).mockResolvedValue({
+        ...createMockUser(),
+        isActive: true,
+      });
       const res = await service.banUser('id');
       expect(res.success).toBe(true);
     });
@@ -245,11 +295,13 @@ describe('UsersService', () => {
         user: { username: '20206125', role: { name: 'USER' } },
         positions: [
           { positionId: 'old-pos', isCurrent: false },
-          { positionId: 'current-pos', isCurrent: true }
+          { positionId: 'current-pos', isCurrent: true },
         ],
-        partyCell: { id: 'c1', name: 'Chi bộ CNTT' }
+        partyCell: { id: 'c1', name: 'Chi bộ CNTT' },
       };
-      (dataSource.getRepository(PartyMember).findOne as jest.Mock).mockResolvedValue(mockMember);
+      (
+        dataSource.getRepository(PartyMember).findOne as jest.Mock
+      ).mockResolvedValue(mockMember);
 
       const res = await service.getProfile('u1');
       expect(res.position).toBe('current-pos');
@@ -257,7 +309,9 @@ describe('UsersService', () => {
     });
 
     it('Abnormal: Không tìm thấy hồ sơ', async () => {
-      (dataSource.getRepository(PartyMember).findOne as jest.Mock).mockResolvedValue(null);
+      (
+        dataSource.getRepository(PartyMember).findOne as jest.Mock
+      ).mockResolvedValue(null);
       await expect(service.getProfile('u1')).rejects.toThrow(NotFoundException);
     });
   });
@@ -265,9 +319,12 @@ describe('UsersService', () => {
   // --- 7. PAGINATION ---
   describe('paginateMembersByCell', () => {
     it('Abnormal: Người yêu cầu không có trong chi bộ nào', async () => {
-      (dataSource.getRepository(PartyMember).findOne as jest.Mock).mockResolvedValue(null);
-      await expect(service.paginateMembersByCell('u1', { page: 1, limit: 10 }))
-        .rejects.toThrow(ForbiddenException);
+      (
+        dataSource.getRepository(PartyMember).findOne as jest.Mock
+      ).mockResolvedValue(null);
+      await expect(
+        service.paginateMembersByCell('u1', { page: 1, limit: 10 }),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 });

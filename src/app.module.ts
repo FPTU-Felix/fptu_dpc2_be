@@ -31,6 +31,9 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { StatisticsModule } from './modules/statistics/statistics.module';
+import { ChatbotModule } from './modules/chatbot/chatbot.module';
+import { UploadDocumentsModule } from './modules/upload-documents/upload-documents.module';
+import { DocumentIngestionModule } from './modules/document-ingestion/document-ingestion.module';
 @Module({
   imports: [
     EventEmitterModule.forRoot(),
@@ -86,6 +89,9 @@ import { StatisticsModule } from './modules/statistics/statistics.module';
     DocumentCategoriesModule,
     FileModule,
     StatisticsModule,
+    ChatbotModule,
+    UploadDocumentsModule,
+    DocumentIngestionModule,
   ],
   controllers: [AppController],
   providers: [

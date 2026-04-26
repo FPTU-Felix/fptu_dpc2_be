@@ -10,7 +10,11 @@ import { DataSource } from 'typeorm';
 import { MinioService } from '../minio/minio.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { AttendeeStatus, MeetingStatus, NotificationType } from 'src/common/enums';
+import {
+  AttendeeStatus,
+  MeetingStatus,
+  NotificationType,
+} from 'src/common/enums';
 
 describe('MeetingsService - Leave Requests', () => {
   let service: MeetingsService;
@@ -78,19 +82,38 @@ describe('MeetingsService - Leave Requests', () => {
 
   // --- PHẦN 1: NỘP ĐƠN XIN NGHỈ (SUBMIT) ---
   describe('submitLeaveRequest', () => {
-    const mockFile = { originalname: 'don-xin-nghi.pdf' } as Express.Multer.File;
+    const mockFile = {
+      originalname: 'don-xin-nghi.pdf',
+    } as Express.Multer.File;
     const mockDto = { reason: 'Đi công tác' };
 
     it(' Nộp đơn thành công và thông báo cho Chi ủy', async () => {
-      meetingRepo.findOne.mockResolvedValue({ id: mockMeetingId, status: MeetingStatus.SCHEDULED, partyCellId: 'cell-1', title: 'Họp tháng' });
-      partyMemberRepo.findOne.mockResolvedValue({ id: mockMemberId, fullName: 'Nguyễn Văn A' });
+      meetingRepo.findOne.mockResolvedValue({
+        id: mockMeetingId,
+        status: MeetingStatus.SCHEDULED,
+        partyCellId: 'cell-1',
+        title: 'Họp tháng',
+      });
+      partyMemberRepo.findOne.mockResolvedValue({
+        id: mockMemberId,
+        fullName: 'Nguyễn Văn A',
+      });
       attendeeRepo.findOne.mockResolvedValue(null); // Chưa nộp đơn trước đó
-      minioService.uploadFile.mockResolvedValue({ objectName: 'path/to/file.pdf' });
-      
-      // Mock tìm ban lãnh đạo để gửi thông báo
-      partyMemberRepo.find.mockResolvedValue([{ user: { id: 'boss-1', email: 'boss@test.com' } }]);
+      minioService.uploadFile.mockResolvedValue({
+        objectName: 'path/to/file.pdf',
+      });
 
-      const result = await service.submitLeaveRequest(mockMeetingId, mockUserId, mockDto, mockFile);
+      // Mock tìm ban lãnh đạo để gửi thông báo
+      partyMemberRepo.find.mockResolvedValue([
+        { user: { id: 'boss-1', email: 'boss@test.com' } },
+      ]);
+
+      const result = await service.submitLeaveRequest(
+        mockMeetingId,
+        mockUserId,
+        mockDto,
+        mockFile,
+      );
 
       expect(result.success).toBe(true);
       expect(minioService.uploadFile).toHaveBeenCalled();
@@ -99,28 +122,45 @@ describe('MeetingsService - Leave Requests', () => {
         expect.stringContaining('Có đơn vắng mặt mới'),
         expect.any(String),
         NotificationType.SUBMISSION,
-        'boss@test.com'
+        'boss@test.com',
       );
     });
 
     it(' Chặn nộp đơn khi cuộc họp đã kết thúc (FINISHED)', async () => {
-      meetingRepo.findOne.mockResolvedValue({ id: mockMeetingId, status: MeetingStatus.FINISHED });
+      meetingRepo.findOne.mockResolvedValue({
+        id: mockMeetingId,
+        status: MeetingStatus.FINISHED,
+      });
       partyMemberRepo.findOne.mockResolvedValue({ id: mockMemberId });
 
-      await expect(service.submitLeaveRequest(mockMeetingId, mockUserId, mockDto, mockFile))
-        .rejects.toThrow(BadRequestException);
+      await expect(
+        service.submitLeaveRequest(
+          mockMeetingId,
+          mockUserId,
+          mockDto,
+          mockFile,
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it(' Xóa file minh chứng cũ trên MinIO nếu nộp lại đơn', async () => {
-      meetingRepo.findOne.mockResolvedValue({ id: mockMeetingId, status: MeetingStatus.SCHEDULED });
+      meetingRepo.findOne.mockResolvedValue({
+        id: mockMeetingId,
+        status: MeetingStatus.SCHEDULED,
+      });
       partyMemberRepo.findOne.mockResolvedValue({ id: mockMemberId });
-      
+
       // Giả lập đã có đơn và có proofUrl cũ
       const oldUrl = `leave-requests/${mockMeetingId}/old-file.pdf`;
       attendeeRepo.findOne.mockResolvedValue({ id: 'att-1', proofUrl: oldUrl });
       minioService.uploadFile.mockResolvedValue({ objectName: 'new-file.pdf' });
 
-      await service.submitLeaveRequest(mockMeetingId, mockUserId, mockDto, mockFile);
+      await service.submitLeaveRequest(
+        mockMeetingId,
+        mockUserId,
+        mockDto,
+        mockFile,
+      );
 
       expect(minioService.deleteFile).toHaveBeenCalledWith(oldUrl);
     });
@@ -133,11 +173,13 @@ describe('MeetingsService - Leave Requests', () => {
         id: 'att-123',
         status: AttendeeStatus.PENDING_EXCUSE,
         member: { user: { id: 'u1', email: 'u1@test.com' } },
-        meeting: { title: 'Họp Chi bộ' }
+        meeting: { title: 'Họp Chi bộ' },
       };
       attendeeRepo.findOne.mockResolvedValue(mockAttendee);
 
-      const result = await service.reviewLeaveRequest('att-123', { status: AttendeeStatus.EXCUSED });
+      const result = await service.reviewLeaveRequest('att-123', {
+        status: AttendeeStatus.EXCUSED,
+      });
 
       expect(result.success).toBe(true);
       expect(mockAttendee.status).toBe(AttendeeStatus.EXCUSED);
@@ -146,15 +188,20 @@ describe('MeetingsService - Leave Requests', () => {
         'Kết quả duyệt đơn xin vắng mặt',
         expect.stringContaining('CHẤP NHẬN'),
         NotificationType.APPROVAL,
-        'u1@test.com'
+        'u1@test.com',
       );
     });
 
     it(' Ném lỗi nếu duyệt đơn không ở trạng thái PENDING_EXCUSE', async () => {
-      attendeeRepo.findOne.mockResolvedValue({ status: AttendeeStatus.PRESENT });
-      
-      await expect(service.reviewLeaveRequest('att-123', { status: AttendeeStatus.EXCUSED }))
-        .rejects.toThrow(BadRequestException);
+      attendeeRepo.findOne.mockResolvedValue({
+        status: AttendeeStatus.PRESENT,
+      });
+
+      await expect(
+        service.reviewLeaveRequest('att-123', {
+          status: AttendeeStatus.EXCUSED,
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -162,9 +209,10 @@ describe('MeetingsService - Leave Requests', () => {
   describe('findAllLeaveRequests', () => {
     it(' Ném lỗi nếu không tìm thấy hồ sơ Đảng viên của người đang đăng nhập', async () => {
       dataSource.getRepository().findOne.mockResolvedValue(null);
-      
-      await expect(service.findAllLeaveRequests({ page: 1, limit: 10 }, mockUserId))
-        .rejects.toThrow(NotFoundException);
+
+      await expect(
+        service.findAllLeaveRequests({ page: 1, limit: 10 }, mockUserId),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

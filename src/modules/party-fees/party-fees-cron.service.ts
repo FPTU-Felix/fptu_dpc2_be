@@ -3,7 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PartyFee } from './entities/party-fee.entity';
-import { FeeStatusEnum } from 'src/common/enums'
+import { FeeStatusEnum } from 'src/common/enums';
 import { PartyMember } from '../party-members/entities/party-member.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from 'src/common/enums';
@@ -18,7 +18,7 @@ export class PartyFeesCronService {
     @InjectRepository(PartyMember)
     private memberRepo: Repository<PartyMember>,
     private notificationsService: NotificationsService,
-  ) { }
+  ) {}
 
   @Cron('0 8 1 * *')
   async generateMonthlyFees() {

@@ -7,10 +7,10 @@ import { DocumentCategory } from './entities/document-category.entity'; // Impor
 @Module({
   imports: [
     // QUAN TRỌNG: Phải đăng ký Entity ở đây để DocumentCategoriesService có thể sử dụng @InjectRepository
-    TypeOrmModule.forFeature([DocumentCategory]), 
+    TypeOrmModule.forFeature([DocumentCategory]),
   ],
   controllers: [DocumentCategoriesController],
   providers: [DocumentCategoriesService],
-  exports: [DocumentCategoriesService], 
+  exports: [DocumentCategoriesService],
 })
 export class DocumentCategoriesModule {}

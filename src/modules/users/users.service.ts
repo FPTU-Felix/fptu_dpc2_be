@@ -276,7 +276,7 @@ export class UsersService extends BaseService<User> {
       }
       const member = queryRunner.manager.create(PartyMember, {
         fullName: dto.fullName,
-        gender: dto.gender as GenderEnum,
+        gender: dto.gender,
         dob: dto.dateOfBirth,
         hometown: dto.hometown,
         phone: dto.phone,

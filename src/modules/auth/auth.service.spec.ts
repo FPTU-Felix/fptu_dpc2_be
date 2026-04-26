@@ -56,46 +56,64 @@ describe('AuthService', () => {
       usersService.findOneByEmailOrUsername.mockResolvedValue(mockUser as any);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       jwtService.signAsync.mockResolvedValue('token-string');
-      jest.spyOn(service, 'updateRefreshTokenHash').mockResolvedValue(undefined);
+      jest
+        .spyOn(service, 'updateRefreshTokenHash')
+        .mockResolvedValue(undefined);
 
       const result = await service.signin(signinDto);
 
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('refreshToken');
-      expect(usersService.findOneByEmailOrUsername).toHaveBeenCalledWith(signinDto.username);
+      expect(usersService.findOneByEmailOrUsername).toHaveBeenCalledWith(
+        signinDto.username,
+      );
     });
 
     it('nên ném lỗi nếu không tìm thấy user', async () => {
       usersService.findOneByEmailOrUsername.mockResolvedValue(null);
 
-      await expect(service.signin(signinDto)).rejects.toThrow('Sai tài khoản hoặc mật khẩu');
+      await expect(service.signin(signinDto)).rejects.toThrow(
+        'Sai tài khoản hoặc mật khẩu',
+      );
     });
 
     it('nên ném lỗi nếu sai mật khẩu', async () => {
       usersService.findOneByEmailOrUsername.mockResolvedValue(mockUser as any);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
-      await expect(service.signin(signinDto)).rejects.toThrow('Sai tài khoản hoặc mật khẩu');
+      await expect(service.signin(signinDto)).rejects.toThrow(
+        'Sai tài khoản hoặc mật khẩu',
+      );
     });
 
     it('nên ném lỗi nếu tài khoản bị khóa', async () => {
-      usersService.findOneByEmailOrUsername.mockResolvedValue({ ...mockUser, isActive: false } as any);
+      usersService.findOneByEmailOrUsername.mockResolvedValue({
+        ...mockUser,
+        isActive: false,
+      } as any);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
-      await expect(service.signin(signinDto)).rejects.toThrow('Tài khoản của bạn đã bị khóa');
+      await expect(service.signin(signinDto)).rejects.toThrow(
+        'Tài khoản của bạn đã bị khóa',
+      );
     });
     it('nên đăng nhập thành công khi mật khẩu có độ dài đúng bằng biên tối thiểu (6 ký tự)', async () => {
       const boundaryDto = { username: 'testuser', password: 'p12345' }; // Đúng 6 ký tự
-      
+
       usersService.findOneByEmailOrUsername.mockResolvedValue(mockUser as any);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       jwtService.signAsync.mockResolvedValue('token-string');
-      jest.spyOn(service, 'updateRefreshTokenHash').mockResolvedValue(undefined);
+      jest
+        .spyOn(service, 'updateRefreshTokenHash')
+        .mockResolvedValue(undefined);
 
       const result = await service.signin(boundaryDto);
 
       expect(result).toHaveProperty('accessToken');
-      expect(bcrypt.compare).toHaveBeenCalledWith(boundaryDto.password, mockUser.password);
+      expect(bcrypt.compare).toHaveBeenCalledWith(
+        boundaryDto.password,
+        mockUser.password,
+      );
     });
   });
 
@@ -104,7 +122,10 @@ describe('AuthService', () => {
       const userId = 'user-123';
       const result = await service.logout(userId);
 
-      expect(usersService.updateRefreshToken).toHaveBeenCalledWith(userId, null);
+      expect(usersService.updateRefreshToken).toHaveBeenCalledWith(
+        userId,
+        null,
+      );
       expect(result).toEqual({ message: 'Đăng xuất thành công' });
     });
   });
@@ -116,8 +137,12 @@ describe('AuthService', () => {
     it('nên trả về tokens mới khi RT hợp lệ', async () => {
       usersService.findOneById.mockResolvedValue(mockUser as any);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      jest.spyOn(service, 'generateTokens').mockResolvedValue({ accessToken: 'at', refreshToken: 'rt' });
-      jest.spyOn(service, 'updateRefreshTokenHash').mockResolvedValue(undefined);
+      jest
+        .spyOn(service, 'generateTokens')
+        .mockResolvedValue({ accessToken: 'at', refreshToken: 'rt' });
+      jest
+        .spyOn(service, 'updateRefreshTokenHash')
+        .mockResolvedValue(undefined);
 
       const result = await service.refreshTokens(userId, rt);
 
@@ -125,22 +150,32 @@ describe('AuthService', () => {
     });
 
     it('nên chặn truy cập nếu user không có hashedRefreshToken trong DB', async () => {
-      usersService.findOneById.mockResolvedValue({ ...mockUser, hashedRefreshToken: null } as any);
-      await expect(service.refreshTokens(userId, rt)).rejects.toThrow('Từ chối truy cập');
+      usersService.findOneById.mockResolvedValue({
+        ...mockUser,
+        hashedRefreshToken: null,
+      } as any);
+      await expect(service.refreshTokens(userId, rt)).rejects.toThrow(
+        'Từ chối truy cập',
+      );
     });
 
     it('nên ném lỗi nếu RT không khớp với hash', async () => {
       usersService.findOneById.mockResolvedValue(mockUser as any);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
-      await expect(service.refreshTokens(userId, rt)).rejects.toThrow('Token không hợp lệ');
+      await expect(service.refreshTokens(userId, rt)).rejects.toThrow(
+        'Token không hợp lệ',
+      );
     });
   });
 
   describe('updateRefreshTokenHash', () => {
     it('nên xóa token trong DB nếu rt là null', async () => {
       await service.updateRefreshTokenHash('user-123', null);
-      expect(usersService.updateRefreshToken).toHaveBeenCalledWith('user-123', null);
+      expect(usersService.updateRefreshToken).toHaveBeenCalledWith(
+        'user-123',
+        null,
+      );
     });
 
     it('nên hash token và lưu vào database nếu rt hợp lệ', async () => {
@@ -148,7 +183,10 @@ describe('AuthService', () => {
       await service.updateRefreshTokenHash('user-123', 'raw-rt');
 
       expect(bcrypt.hash).toHaveBeenCalledWith('raw-rt', 10);
-      expect(usersService.updateRefreshToken).toHaveBeenCalledWith('user-123', 'hashed-rt');
+      expect(usersService.updateRefreshToken).toHaveBeenCalledWith(
+        'user-123',
+        'hashed-rt',
+      );
     });
   });
 });

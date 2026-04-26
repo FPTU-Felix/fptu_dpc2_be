@@ -1,15 +1,15 @@
-import { ArgumentMetadata, PipeTransform } from "@nestjs/common";
-import { CreateFileDto } from "../dto/create-file.dto.js";
+import { ArgumentMetadata, PipeTransform } from '@nestjs/common';
+import { CreateFileDto } from '../dto/create-file.dto.js';
 
 export class FileUploadTransform implements PipeTransform<
-    CreateFileDto,
-    CreateFileDto
+  CreateFileDto,
+  CreateFileDto
 > {
-    transform(
-        value: CreateFileDto,
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        metadata: ArgumentMetadata,
-    ): CreateFileDto {
-        return value;
-    }
+  transform(
+    value: CreateFileDto,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    metadata: ArgumentMetadata,
+  ): CreateFileDto {
+    return value;
+  }
 }

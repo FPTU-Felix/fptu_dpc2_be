@@ -20,7 +20,13 @@ import { AssessmentRank, AssessmentStatus } from 'src/common/enums';
 jest.mock('nestjs-typeorm-paginate', () => ({
   paginate: jest.fn().mockResolvedValue({
     items: [],
-    meta: { totalItems: 0, itemCount: 0, itemsPerPage: 10, totalPages: 0, currentPage: 1 },
+    meta: {
+      totalItems: 0,
+      itemCount: 0,
+      itemsPerPage: 10,
+      totalPages: 0,
+      currentPage: 1,
+    },
   }),
   Pagination: jest.fn().mockImplementation((items, meta) => ({ items, meta })),
 }));
@@ -35,8 +41,18 @@ describe('AnnualAssessmentsService', () => {
   let disRepo: Repository<Discipline>;
   let userRepo: Repository<User>;
 
-  const mockMember = { id: 'm-1', userId: 'u-1', fullName: 'Nguyễn Văn A', partyCellId: 'cell-1' };
-  const mockAssessment = { id: 'a-1', memberId: 'm-1', year: 2026, status: AssessmentStatus.PENDING };
+  const mockMember = {
+    id: 'm-1',
+    userId: 'u-1',
+    fullName: 'Nguyễn Văn A',
+    partyCellId: 'cell-1',
+  };
+  const mockAssessment = {
+    id: 'a-1',
+    memberId: 'm-1',
+    year: 2026,
+    status: AssessmentStatus.PENDING,
+  };
 
   // Factory tạo Mock Repository
   const mockQb = {
@@ -62,14 +78,33 @@ describe('AnnualAssessmentsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AnnualAssessmentsService,
-        { provide: getRepositoryToken(AnnualAssessment), useFactory: repositoryMockFactory },
-        { provide: getRepositoryToken(PartyMember), useFactory: repositoryMockFactory },
-        { provide: getRepositoryToken(Discipline), useFactory: repositoryMockFactory },
-        { provide: getRepositoryToken(EvaluationConfig), useFactory: repositoryMockFactory },
-        { provide: getRepositoryToken(User), useFactory: repositoryMockFactory },
+        {
+          provide: getRepositoryToken(AnnualAssessment),
+          useFactory: repositoryMockFactory,
+        },
+        {
+          provide: getRepositoryToken(PartyMember),
+          useFactory: repositoryMockFactory,
+        },
+        {
+          provide: getRepositoryToken(Discipline),
+          useFactory: repositoryMockFactory,
+        },
+        {
+          provide: getRepositoryToken(EvaluationConfig),
+          useFactory: repositoryMockFactory,
+        },
+        {
+          provide: getRepositoryToken(User),
+          useFactory: repositoryMockFactory,
+        },
         {
           provide: MinioService,
-          useValue: { uploadFile: jest.fn().mockResolvedValue({ objectName: 'path/to/file' }) },
+          useValue: {
+            uploadFile: jest
+              .fn()
+              .mockResolvedValue({ objectName: 'path/to/file' }),
+          },
         },
         {
           provide: NotificationsService,
@@ -97,7 +132,9 @@ describe('AnnualAssessmentsService', () => {
   // =========================================================
   describe('upsertEvaluationConfig', () => {
     it('nên tạo config mới nếu chưa tồn tại', async () => {
-      (pmRepo.createQueryBuilder().getOne as jest.Mock).mockResolvedValue({ id: 'cell-1' });
+      (pmRepo.createQueryBuilder().getOne as jest.Mock).mockResolvedValue({
+        id: 'cell-1',
+      });
       (configRepo.findOne as jest.Mock).mockResolvedValue(null);
 
       await service.upsertEvaluationConfig('cell-1', 2026, ['Tiêu chí 1']);
@@ -108,8 +145,9 @@ describe('AnnualAssessmentsService', () => {
     it('nên báo lỗi nếu Chi bộ không tồn tại', async () => {
       (pmRepo.createQueryBuilder().getOne as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.upsertEvaluationConfig('invalid', 2026, []))
-        .rejects.toThrow(NotFoundException);
+      await expect(
+        service.upsertEvaluationConfig('invalid', 2026, []),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -117,15 +155,21 @@ describe('AnnualAssessmentsService', () => {
   // 2. SUBMIT ASSESSMENT
   // =========================================================
   describe('submitAssessment', () => {
-    const dto = { year: 2026, selfRank: AssessmentRank.EXCELLENT, remarks: 'Tốt', file: undefined };
+    const dto = {
+      year: 2026,
+      selfRank: AssessmentRank.EXCELLENT,
+      remarks: 'Tốt',
+      file: undefined,
+    };
 
     it('nên báo lỗi nếu Đảng viên bị kỷ luật mà đòi xếp loại Xuất sắc', async () => {
       (pmRepo.findOne as jest.Mock).mockResolvedValue(mockMember);
       (assessmentRepo.findOne as jest.Mock).mockResolvedValue(null);
       (disRepo.findOne as jest.Mock).mockResolvedValue({ id: 'dis-1' }); // Có kỷ luật
 
-      await expect(service.submitAssessment('u-1', dto))
-        .rejects.toThrow(BadRequestException);
+      await expect(service.submitAssessment('u-1', dto)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('nên nộp thành công và gọi Minio nếu có đính kèm file', async () => {
@@ -138,9 +182,11 @@ describe('AnnualAssessmentsService', () => {
       await service.submitAssessment('u-1', dto, mockFile);
 
       expect(minioService.uploadFile).toHaveBeenCalled();
-      expect(assessmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({
-        assessmentFileUrl: 'path/to/file'
-      }));
+      expect(assessmentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assessmentFileUrl: 'path/to/file',
+        }),
+      );
     });
   });
 
@@ -152,12 +198,15 @@ describe('AnnualAssessmentsService', () => {
       status: AssessmentStatus.APPROVED,
       finalRank: AssessmentRank.GOOD,
       score: 95,
-      criteriaChecklist: []
+      criteriaChecklist: [],
     };
 
     it('nên duyệt thành công và gửi thông báo cho Đảng viên', async () => {
       (assessmentRepo.findOne as jest.Mock).mockResolvedValue(mockAssessment);
-      (pmRepo.findOne as jest.Mock).mockResolvedValue({ ...mockMember, user: { id: 'u-1', email: 'a@g.com' } });
+      (pmRepo.findOne as jest.Mock).mockResolvedValue({
+        ...mockMember,
+        user: { id: 'u-1', email: 'a@g.com' },
+      });
 
       await service.reviewAssessment('a-1', 'reviewer-1', reviewDto);
 
@@ -168,11 +217,12 @@ describe('AnnualAssessmentsService', () => {
     it('nên chặn nếu bản đánh giá đã được xử lý trước đó', async () => {
       (assessmentRepo.findOne as jest.Mock).mockResolvedValue({
         ...mockAssessment,
-        status: AssessmentStatus.APPROVED
+        status: AssessmentStatus.APPROVED,
       });
 
-      await expect(service.reviewAssessment('a-1', 'rev', reviewDto))
-        .rejects.toThrow(BadRequestException);
+      await expect(
+        service.reviewAssessment('a-1', 'rev', reviewDto),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -181,11 +231,19 @@ describe('AnnualAssessmentsService', () => {
   // =========================================================
   describe('findAll', () => {
     it('nên gọi hàm paginate với các tham số filter', async () => {
-      await service.findAll({ page: 1, limit: 10 }, 2026, AssessmentStatus.PENDING);
-      
+      await service.findAll(
+        { page: 1, limit: 10 },
+        2026,
+        AssessmentStatus.PENDING,
+      );
+
       const qb = assessmentRepo.createQueryBuilder();
-      expect(qb.andWhere).toHaveBeenCalledWith('a.year = :year', { year: 2026 });
-      expect(qb.andWhere).toHaveBeenCalledWith('a.status = :status', { status: AssessmentStatus.PENDING });
+      expect(qb.andWhere).toHaveBeenCalledWith('a.year = :year', {
+        year: 2026,
+      });
+      expect(qb.andWhere).toHaveBeenCalledWith('a.status = :status', {
+        status: AssessmentStatus.PENDING,
+      });
     });
   });
 
@@ -205,8 +263,9 @@ describe('AnnualAssessmentsService', () => {
       (pmRepo.findOne as jest.Mock).mockResolvedValue(mockMember);
       (assessmentRepo.findOne as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.getMyAssessmentByYear('u-1', 2026))
-        .rejects.toThrow(NotFoundException);
+      await expect(service.getMyAssessmentByYear('u-1', 2026)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

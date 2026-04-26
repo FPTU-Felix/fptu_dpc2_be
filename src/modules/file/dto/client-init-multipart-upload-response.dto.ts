@@ -1,11 +1,11 @@
-import { MultipartPresignedUrlDataDto } from "./mutipart-presigned-url-data.dto";
+import { MultipartPresignedUrlDataDto } from './mutipart-presigned-url-data.dto';
 
 export class ClientInitMultipartUploadResponseDto {
-    multipartPartSize: number;
+  multipartPartSize: number;
 
-    totalPart: number;
+  totalPart: number;
 
-    presignedUrls: MultipartPresignedUrlDataDto[];
+  presignedUrls: MultipartPresignedUrlDataDto[];
 
-    fileId: string;
+  fileId: string;
 }

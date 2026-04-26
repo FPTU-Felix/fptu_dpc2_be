@@ -10,7 +10,7 @@ describe('DocumentCategoriesService', () => {
   let repo: Repository<DocumentCategory>;
 
   const mockId = '550e8400-e29b-41d4-a716-446655440000'; // Mock UUID
-  
+
   const mockCategory = {
     id: mockId,
     name: 'Nghị quyết',
@@ -44,7 +44,9 @@ describe('DocumentCategoriesService', () => {
     }).compile();
 
     service = module.get<DocumentCategoriesService>(DocumentCategoriesService);
-    repo = module.get<Repository<DocumentCategory>>(getRepositoryToken(DocumentCategory));
+    repo = module.get<Repository<DocumentCategory>>(
+      getRepositoryToken(DocumentCategory),
+    );
   });
 
   afterEach(() => {
@@ -58,7 +60,9 @@ describe('DocumentCategoriesService', () => {
 
       const result = await service.create(mockCreateDto);
 
-      expect(repo.findOne).toHaveBeenCalledWith({ where: { slug: mockCreateDto.slug } });
+      expect(repo.findOne).toHaveBeenCalledWith({
+        where: { slug: mockCreateDto.slug },
+      });
       expect(repo.create).toHaveBeenCalledWith(mockCreateDto);
       expect(repo.save).toHaveBeenCalled();
       expect(result).toEqual(mockCategory);
@@ -67,8 +71,9 @@ describe('DocumentCategoriesService', () => {
     it(' nên ném lỗi ConflictException nếu slug đã tồn tại', async () => {
       (repo.findOne as jest.Mock).mockResolvedValue(mockCategory); // Giả lập đã có slug này
 
-      await expect(service.create(mockCreateDto))
-        .rejects.toThrow(ConflictException);
+      await expect(service.create(mockCreateDto)).rejects.toThrow(
+        ConflictException,
+      );
     });
   });
 
@@ -111,16 +116,15 @@ describe('DocumentCategoriesService', () => {
     it(' nên ném lỗi NotFoundException nếu ID không tồn tại', async () => {
       (repo.findOne as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.findOne(mockId))
-        .rejects.toThrow(NotFoundException);
+      await expect(service.findOne(mockId)).rejects.toThrow(NotFoundException);
     });
   });
 
   // --- UPDATE ---
   describe('update', () => {
     it(' nên cập nhật thành công khi không đổi slug', async () => {
-      (repo.findOne as jest.Mock).mockResolvedValue(mockCategory); 
-      
+      (repo.findOne as jest.Mock).mockResolvedValue(mockCategory);
+
       const updateDto = { name: 'Tên mới' };
       const result = await service.update(mockId, updateDto);
 
@@ -130,8 +134,8 @@ describe('DocumentCategoriesService', () => {
 
     it(' nên cập nhật thành công khi đổi sang slug mới chưa tồn tại', async () => {
       (repo.findOne as jest.Mock)
-        .mockResolvedValueOnce(mockCategory) 
-        .mockResolvedValueOnce(null);      
+        .mockResolvedValueOnce(mockCategory)
+        .mockResolvedValueOnce(null);
 
       const updateDto = { slug: 'slug-moi' };
       const result = await service.update(mockId, updateDto);
@@ -145,8 +149,9 @@ describe('DocumentCategoriesService', () => {
         .mockResolvedValueOnce(mockCategory) // Record hiện tại
         .mockResolvedValueOnce({ id: 'other-id', slug: 'slug-trung' }); // Slug mới bị trùng
 
-      await expect(service.update(mockId, { slug: 'slug-trung' }))
-        .rejects.toThrow(ConflictException);
+      await expect(
+        service.update(mockId, { slug: 'slug-trung' }),
+      ).rejects.toThrow(ConflictException);
     });
   });
 
@@ -165,8 +170,7 @@ describe('DocumentCategoriesService', () => {
     it(' nên thất bại nếu không tìm thấy danh mục để xóa', async () => {
       (repo.findOne as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.remove(mockId))
-        .rejects.toThrow(NotFoundException);
+      await expect(service.remove(mockId)).rejects.toThrow(NotFoundException);
     });
   });
 });

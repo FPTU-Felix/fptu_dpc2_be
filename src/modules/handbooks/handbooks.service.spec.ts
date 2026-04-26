@@ -2,7 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { HandbooksService } from './handbooks.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { HandbookCategory } from './entities/handbook-category.entity';
-import { HandbookArticle, ArticleStatus } from './entities/handbook-article.entity';
+import {
+  HandbookArticle,
+  ArticleStatus,
+} from './entities/handbook-article.entity';
 import { User } from '../users/entities/user.entity';
 import { Repository } from 'typeorm';
 import { MinioService } from '../minio/minio.service';
@@ -23,10 +26,14 @@ describe('HandbooksService - Full Coverage Suite', () => {
   let notificationsService: NotificationsService;
 
   const mockCategory = { id: 'cat-1', name: 'Hướng dẫn', slug: 'huong-dan' };
-  const mockArticle = { 
-    id: 'art-1', title: 'Bài viết 1', slug: 'bai-viet-1', 
-    status: ArticleStatus.PUBLISHED, viewCount: 0, thumbnailUrl: 'old.jpg',
-    categoryId: 'cat-1'
+  const mockArticle = {
+    id: 'art-1',
+    title: 'Bài viết 1',
+    slug: 'bai-viet-1',
+    status: ArticleStatus.PUBLISHED,
+    viewCount: 0,
+    thumbnailUrl: 'old.jpg',
+    categoryId: 'cat-1',
   };
 
   const mockQueryBuilder: any = {
@@ -48,8 +55,12 @@ describe('HandbooksService - Full Coverage Suite', () => {
         {
           provide: getRepositoryToken(HandbookCategory),
           useValue: {
-            create: jest.fn().mockImplementation(dto => dto),
-            save: jest.fn().mockImplementation(c => Promise.resolve({ id: 'new-cat', ...c })),
+            create: jest.fn().mockImplementation((dto) => dto),
+            save: jest
+              .fn()
+              .mockImplementation((c) =>
+                Promise.resolve({ id: 'new-cat', ...c }),
+              ),
             findOne: jest.fn(),
             remove: jest.fn(),
             createQueryBuilder: jest.fn(() => mockQueryBuilder),
@@ -58,8 +69,10 @@ describe('HandbooksService - Full Coverage Suite', () => {
         {
           provide: getRepositoryToken(HandbookArticle),
           useValue: {
-            create: jest.fn().mockImplementation(dto => ({ ...mockArticle, ...dto })),
-            save: jest.fn().mockImplementation(a => Promise.resolve(a)),
+            create: jest
+              .fn()
+              .mockImplementation((dto) => ({ ...mockArticle, ...dto })),
+            save: jest.fn().mockImplementation((a) => Promise.resolve(a)),
             findOne: jest.fn(),
             remove: jest.fn(),
             count: jest.fn(),
@@ -68,11 +81,16 @@ describe('HandbooksService - Full Coverage Suite', () => {
         },
         {
           provide: getRepositoryToken(User),
-          useValue: { find: jest.fn().mockResolvedValue([{ id: 'u1', email: 'u@t.com' }]) },
+          useValue: {
+            find: jest.fn().mockResolvedValue([{ id: 'u1', email: 'u@t.com' }]),
+          },
         },
         {
           provide: MinioService,
-          useValue: { uploadFile: jest.fn().mockResolvedValue({ objectName: 'new.jpg' }), deleteFile: jest.fn() },
+          useValue: {
+            uploadFile: jest.fn().mockResolvedValue({ objectName: 'new.jpg' }),
+            deleteFile: jest.fn(),
+          },
         },
         {
           provide: NotificationsService,
@@ -103,7 +121,10 @@ describe('HandbooksService - Full Coverage Suite', () => {
     it(' getPublishedArticles - gọi paginate với các filter đúng', async () => {
       const filters = { search: 'Đảng', categoryId: 'cat-1' };
       await service.getPublishedArticles({ page: 1, limit: 10 }, filters);
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(expect.stringContaining('ILIKE'), { search: '%Đảng%' });
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('ILIKE'),
+        { search: '%Đảng%' },
+      );
       expect(nestjsTypeormPaginate.paginate).toHaveBeenCalled();
     });
 
@@ -116,7 +137,9 @@ describe('HandbooksService - Full Coverage Suite', () => {
 
     it(' getArticleBySlug - ném lỗi nếu bài viết không tồn tại/bị ẩn', async () => {
       (articleRepo.findOne as jest.Mock).mockResolvedValue(null);
-      await expect(service.getArticleBySlug('unknown')).rejects.toThrow(NotFoundException);
+      await expect(service.getArticleBySlug('unknown')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it(' getRelatedArticles - lấy đúng 3 bài cùng chuyên mục (trừ bài hiện tại)', async () => {
@@ -141,7 +164,9 @@ describe('HandbooksService - Full Coverage Suite', () => {
 
     it(' createCategory - lỗi nếu tên đã tồn tại', async () => {
       (categoryRepo.findOne as jest.Mock).mockResolvedValue(mockCategory);
-      await expect(service.createCategory({ name: 'Hướng dẫn' })).rejects.toThrow(BadRequestException);
+      await expect(
+        service.createCategory({ name: 'Hướng dẫn' }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it(' deleteCategory - xóa thành công', async () => {
@@ -153,33 +178,49 @@ describe('HandbooksService - Full Coverage Suite', () => {
 
   describe('Admin - Quản lý Bài viết', () => {
     it(' getAdminArticles - trả về bài viết kèm thống kê stats', async () => {
-      (articleRepo.count as jest.Mock).mockResolvedValueOnce(10).mockResolvedValueOnce(7);
+      (articleRepo.count as jest.Mock)
+        .mockResolvedValueOnce(10)
+        .mockResolvedValueOnce(7);
       const result = await service.getAdminArticles({ page: 1, limit: 10 });
-      expect(result.dashboardStats).toEqual({ total: 10, published: 7, draft: 3 });
+      expect(result.dashboardStats).toEqual({
+        total: 10,
+        published: 7,
+        draft: 3,
+      });
     });
 
     it(' createArticle - xử lý va chạm Slug (thêm timestamp)', async () => {
       (articleRepo.findOne as jest.Mock).mockResolvedValue(mockArticle); // Giả lập trùng slug
-      const result = await service.createArticle({ title: 'Bài viết 1', status: ArticleStatus.DRAFT });
+      const result = await service.createArticle({
+        title: 'Bài viết 1',
+        status: ArticleStatus.DRAFT,
+      });
       expect(result.slug).toMatch(/^bai-viet-1-\d{4}$/);
     });
 
     it(' createArticle - upload ảnh lên MinIO nếu có file', async () => {
-      await service.createArticle({ title: 'A', status: ArticleStatus.DRAFT }, { filename: 'a.jpg' } as any);
+      await service.createArticle({ title: 'A', status: ArticleStatus.DRAFT }, {
+        filename: 'a.jpg',
+      } as any);
       expect(minioService.uploadFile).toHaveBeenCalled();
     });
 
     it(' updateArticle - bắn thông báo khi chuyển từ DRAFT sang PUBLISHED', async () => {
-      (articleRepo.findOne as jest.Mock).mockResolvedValue({ ...mockArticle, status: ArticleStatus.DRAFT });
+      (articleRepo.findOne as jest.Mock).mockResolvedValue({
+        ...mockArticle,
+        status: ArticleStatus.DRAFT,
+      });
       await service.updateArticle('art-1', { status: ArticleStatus.PUBLISHED });
       expect(userRepo.find).toHaveBeenCalled();
     });
 
     it(' deleteArticle - log lỗi nếu xóa ảnh MinIO thất bại nhưng vẫn xóa DB', async () => {
       (articleRepo.findOne as jest.Mock).mockResolvedValue(mockArticle);
-      (minioService.deleteFile as jest.Mock).mockRejectedValue(new Error('MinIO Error'));
+      (minioService.deleteFile as jest.Mock).mockRejectedValue(
+        new Error('MinIO Error'),
+      );
       const loggerSpy = jest.spyOn(service['logger'], 'warn');
-      
+
       await service.deleteArticle('art-1');
       expect(loggerSpy).toHaveBeenCalled();
       expect(articleRepo.remove).toHaveBeenCalled();

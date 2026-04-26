@@ -6,11 +6,7 @@ import { Document } from './entities/document.entity'; // Import Entity Document
 import { MinioModule } from '../minio/minio.module'; // Đảm bảo có cái này để dùng MinioService
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Document]),
-    
-    MinioModule, 
-  ],
+  imports: [TypeOrmModule.forFeature([Document]), MinioModule],
   controllers: [DocumentsController],
   providers: [DocumentsService],
 })

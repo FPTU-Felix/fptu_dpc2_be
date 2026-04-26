@@ -81,7 +81,10 @@ describe('AuthController', () => {
       const response = await controller.refreshTokens(userId, refreshToken);
 
       expect(response).toEqual(result);
-      expect(authService.refreshTokens).toHaveBeenCalledWith(userId, refreshToken);
+      expect(authService.refreshTokens).toHaveBeenCalledWith(
+        userId,
+        refreshToken,
+      );
     });
   });
 });

@@ -1,13 +1,10 @@
+import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Query,
-  Req,
-} from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { ApproveStepDto } from '../dto/approve-step.dto';
@@ -28,11 +25,10 @@ import { AdmissionWorkflowStep } from '../enum/admission-workflow-step.enum';
 @Controller('admission-applications')
 @UseGuards(AuthGuard('jwt'))
 @ApiBearerAuth('access-token')
-
 export class AdmissionApplicationController {
   constructor(
     private readonly admissionApplicationService: AdmissionApplicationService,
-  ) { }
+  ) {}
 
   @Get('my-current-status')
   @ApiOperation({ summary: 'Xem trạng thái hồ sơ hiện tại của QCUT' })
@@ -46,7 +42,9 @@ export class AdmissionApplicationController {
       exp: number;
     };
 
-    return this.admissionApplicationService.getMyCurrentStatusWithRoleCheck(user);
+    return this.admissionApplicationService.getMyCurrentStatusWithRoleCheck(
+      user,
+    );
   }
 
   @Get()
@@ -64,8 +62,6 @@ export class AdmissionApplicationController {
   async getApplicationDetail(@Param('id') id: string) {
     return this.admissionApplicationService.getApplicationDetail(id);
   }
-
-
 
   @Post(':stepCode/save-draft')
   @ApiOperation({ summary: 'Lưu nháp dữ liệu của step hiện tại' })
@@ -86,8 +82,6 @@ export class AdmissionApplicationController {
       dto,
     );
   }
-
-
 
   @Post(':stepCode/submit')
   @ApiOperation({
@@ -168,7 +162,9 @@ export class AdmissionApplicationController {
   }
 
   @Get('my-pending')
-  @ApiOperation({ summary: 'Danh sách hồ sơ đang chờ cần xử lý (PBT, Chi uỷ, Bí thư)' })
+  @ApiOperation({
+    summary: 'Danh sách hồ sơ đang chờ cần xử lý (PBT, Chi uỷ, Bí thư)',
+  })
   async getMyPending(
     @Query() query: GetAdmissionApplicationListQueryDto,
     @Req() req: Request,

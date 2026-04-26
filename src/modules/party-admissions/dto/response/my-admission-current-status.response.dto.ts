@@ -270,7 +270,6 @@ export class MyAdmissionStepResponseDto {
   })
   updatedAt?: Date;
 
-
   @ApiProperty({
     type: () => [MyAdmissionStepSubmissionResponseDto],
   })

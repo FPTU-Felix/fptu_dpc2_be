@@ -1,9 +1,13 @@
-import { Injectable, InternalServerErrorException, OnModuleInit } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import * as Minio from "minio";
-import { randomUUID } from "crypto";
-import * as path from "path";
-import { generateSafeFileName } from "src/common/utils/file.util";
+import {
+  Injectable,
+  InternalServerErrorException,
+  OnModuleInit,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as Minio from 'minio';
+import { randomUUID } from 'crypto';
+import * as path from 'path';
+import { generateSafeFileName } from 'src/common/utils/file.util';
 
 @Injectable()
 export class MinioService implements OnModuleInit {
@@ -13,22 +17,24 @@ export class MinioService implements OnModuleInit {
 
   constructor(private readonly configService: ConfigService) {
     this.client = new Minio.Client({
-      endPoint: this.configService.get<string>("minio.endPoint")!,
-      port: this.configService.get<number>("minio.port")!,
-      useSSL: this.configService.get<boolean>("minio.useSSL")!,
-      accessKey: this.configService.get<string>("minio.accessKey")!,
-      secretKey: this.configService.get<string>("minio.secretKey")!,
+      endPoint: this.configService.get<string>('minio.endPoint')!,
+      port: this.configService.get<number>('minio.port')!,
+      useSSL: this.configService.get<boolean>('minio.useSSL')!,
+      accessKey: this.configService.get<string>('minio.accessKey')!,
+      secretKey: this.configService.get<string>('minio.secretKey')!,
     });
 
-    this.bucket = this.configService.get<string>("minio.bucket")!;
-    this.publicUrl = this.configService.get<string>("minio.publicUrl")!;
+    this.bucket = this.configService.get<string>('minio.bucket')!;
+    this.publicUrl = this.configService.get<string>('minio.publicUrl')!;
   }
 
   async onModuleInit() {
-    const exists = await this.client.bucketExists(this.bucket).catch(() => false);
+    const exists = await this.client
+      .bucketExists(this.bucket)
+      .catch(() => false);
 
     if (!exists) {
-      await this.client.makeBucket(this.bucket, "us-east-1");
+      await this.client.makeBucket(this.bucket, 'us-east-1');
     }
   }
 
@@ -50,7 +56,7 @@ export class MinioService implements OnModuleInit {
         file.buffer,
         file.size,
         {
-          "Content-Type": file.mimetype,
+          'Content-Type': file.mimetype,
           ...metadata,
         },
       );
@@ -65,7 +71,7 @@ export class MinioService implements OnModuleInit {
         url: `${this.publicUrl}/${this.bucket}/${objectName}`,
       };
     } catch (error) {
-      throw new InternalServerErrorException("Upload file lên MinIO thất bại");
+      throw new InternalServerErrorException('Upload file lên MinIO thất bại');
     }
   }
 
@@ -74,7 +80,7 @@ export class MinioService implements OnModuleInit {
       await this.client.removeObject(this.bucket, objectName);
       return true;
     } catch (error) {
-      throw new InternalServerErrorException("Xóa file trên MinIO thất bại");
+      throw new InternalServerErrorException('Xóa file trên MinIO thất bại');
     }
   }
 
@@ -88,7 +94,7 @@ export class MinioService implements OnModuleInit {
 
       return url;
     } catch (error) {
-      throw new InternalServerErrorException("Tạo presigned URL thất bại");
+      throw new InternalServerErrorException('Tạo presigned URL thất bại');
     }
   }
 
@@ -96,7 +102,7 @@ export class MinioService implements OnModuleInit {
     try {
       return await this.client.statObject(this.bucket, objectName);
     } catch (error) {
-      throw new InternalServerErrorException("Không lấy được thông tin file");
+      throw new InternalServerErrorException('Không lấy được thông tin file');
     }
   }
 

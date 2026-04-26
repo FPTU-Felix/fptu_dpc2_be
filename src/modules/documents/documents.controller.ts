@@ -1,11 +1,27 @@
 import {
-  Controller, Get, Post, Body, Patch, Param, Delete,
-  UseGuards, UseInterceptors, UploadedFile, ParseUUIDPipe, Res,ParseFilePipe,
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  ParseUUIDPipe,
+  Res,
+  ParseFilePipe,
   MaxFileSizeValidator,
-  FileTypeValidator
+  FileTypeValidator,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
@@ -29,15 +45,20 @@ export class DocumentsController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 2 * 1024 * 1024, message: 'File không được vượt quá 2MB' }),
+          new MaxFileSizeValidator({
+            maxSize: 2 * 1024 * 1024,
+            message: 'File không được vượt quá 2MB',
+          }),
           // Kiểm tra định dạng file (Regex)
-          new FileTypeValidator({ 
-          fileType: /(pdf|msword|wordprocessingml|ms-excel|spreadsheetml|image\/(png|jpg|jpeg))/, 
-          }),        
+          new FileTypeValidator({
+            fileType:
+              /(pdf|msword|wordprocessingml|ms-excel|spreadsheetml|image\/(png|jpg|jpeg))/,
+          }),
         ],
         fileIsRequired: true, // Bắt buộc phải có file khi tạo mới
       }),
-    ) file: Express.Multer.File,
+    )
+    file: Express.Multer.File,
     @GetCurrentUser('sub') userId: string,
   ) {
     return this.documentsService.create(createDocumentDto, file, userId);
@@ -55,7 +76,7 @@ export class DocumentsController {
     return this.documentsService.findOne(id);
   }
 
-@Patch(':id')
+  @Patch(':id')
   @ApiOperation({ summary: 'Cập nhật tài liệu' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
@@ -65,14 +86,19 @@ export class DocumentsController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 2 * 1024 * 1024, message: 'File không được vượt quá 2MB' }),
-          new FileTypeValidator({ 
-              fileType: /(pdf|msword|wordprocessingml|ms-excel|spreadsheetml|image\/(png|jpg|jpeg))/, 
-          }),       
-         ],
+          new MaxFileSizeValidator({
+            maxSize: 2 * 1024 * 1024,
+            message: 'File không được vượt quá 2MB',
+          }),
+          new FileTypeValidator({
+            fileType:
+              /(pdf|msword|wordprocessingml|ms-excel|spreadsheetml|image\/(png|jpg|jpeg))/,
+          }),
+        ],
         fileIsRequired: false, // Cho phép không gửi file nếu chỉ update text
       }),
-    ) file?: Express.Multer.File,
+    )
+    file?: Express.Multer.File,
   ) {
     return this.documentsService.update(id, updateDocumentDto, file);
   }
@@ -84,10 +110,7 @@ export class DocumentsController {
   }
   @Get(':id/download')
   @ApiOperation({ summary: 'Tải xuống tài liệu' })
-  async download(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Res() res: Response,
-  ) {
+  async download(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     const { stream, fileName } = await this.documentsService.download(id);
 
     res.set({
