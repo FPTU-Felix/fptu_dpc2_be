@@ -1,5 +1,5 @@
-import { File } from "../entities/file.entity";
+import { File } from '../entities/file.entity';
 export class CreateFileResponseDto {
-    file: File;
-    url: string;
+  file: File;
+  url: string;
 }

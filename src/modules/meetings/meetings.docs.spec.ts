@@ -77,7 +77,10 @@ describe('MeetingsService - Documents & Manual Attendance', () => {
         size: args.file.size,
       }));
 
-      const result = await service.uploadMeetingDocuments(mockMeetingId, mockFiles);
+      const result = await service.uploadMeetingDocuments(
+        mockMeetingId,
+        mockFiles,
+      );
 
       expect(result.success).toBe(true);
       expect(result.documents).toHaveLength(2);
@@ -88,14 +91,16 @@ describe('MeetingsService - Documents & Manual Attendance', () => {
 
     it(' Ném lỗi khi không có file nào được chọn', async () => {
       meetingRepo.findOne.mockResolvedValue({ id: mockMeetingId });
-      await expect(service.uploadMeetingDocuments(mockMeetingId, []))
-        .rejects.toThrow(BadRequestException);
+      await expect(
+        service.uploadMeetingDocuments(mockMeetingId, []),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it(' Ném lỗi khi cuộc họp không tồn tại', async () => {
       meetingRepo.findOne.mockResolvedValue(null);
-      await expect(service.uploadMeetingDocuments('wrong-id', mockFiles))
-        .rejects.toThrow(NotFoundException);
+      await expect(
+        service.uploadMeetingDocuments('wrong-id', mockFiles),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -103,24 +108,31 @@ describe('MeetingsService - Documents & Manual Attendance', () => {
   describe('updateManualAttendance', () => {
     const mockDto = {
       attendances: [
-        { memberId: 'member-1', status: AttendeeStatus.PRESENT, reason: 'Có mặt' }, // Đã có trong list
-        { memberId: 'member-2', status: AttendeeStatus.ABSENT, reason: 'Ốm' },      // Người mới
+        {
+          memberId: 'member-1',
+          status: AttendeeStatus.PRESENT,
+          reason: 'Có mặt',
+        }, // Đã có trong list
+        { memberId: 'member-2', status: AttendeeStatus.ABSENT, reason: 'Ốm' }, // Người mới
       ],
     };
 
     it(' Cập nhật trạng thái cho người cũ và tạo mới cho người chưa có tên', async () => {
       meetingRepo.findOne.mockResolvedValue({ id: mockMeetingId });
-      
+
       // Giả sử member-1 đã có bản ghi PENDING
       attendeeRepo.find.mockResolvedValue([
-        { memberId: 'member-1', status: AttendeeStatus.PENDING, reason: '' }
+        { memberId: 'member-1', status: AttendeeStatus.PENDING, reason: '' },
       ]);
 
-      const result = await service.updateManualAttendance(mockMeetingId, mockDto);
+      const result = await service.updateManualAttendance(
+        mockMeetingId,
+        mockDto,
+      );
 
       expect(result.success).toBe(true);
       expect(result.updatedCount).toBe(2);
-      
+
       // Kiểm tra xem bản ghi được lưu có dùng CheckInMethod.MANUAL không
       const savedList = attendeeRepo.save.mock.calls[0][0];
       expect(savedList[0].memberId).toBe('member-1');
@@ -133,7 +145,9 @@ describe('MeetingsService - Documents & Manual Attendance', () => {
       meetingRepo.findOne.mockResolvedValue({ id: mockMeetingId });
       attendeeRepo.find.mockResolvedValue([]);
 
-      const result = await service.updateManualAttendance(mockMeetingId, { attendances: [] });
+      const result = await service.updateManualAttendance(mockMeetingId, {
+        attendances: [],
+      });
 
       expect(result.updatedCount).toBe(0);
       expect(attendeeRepo.save).toHaveBeenCalledWith([]);
@@ -141,8 +155,9 @@ describe('MeetingsService - Documents & Manual Attendance', () => {
 
     it(' Ném lỗi nếu cuộc họp không tồn tại', async () => {
       meetingRepo.findOne.mockResolvedValue(null);
-      await expect(service.updateManualAttendance('id', mockDto))
-        .rejects.toThrow(NotFoundException);
+      await expect(
+        service.updateManualAttendance('id', mockDto),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

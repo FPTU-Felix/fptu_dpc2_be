@@ -27,8 +27,8 @@ describe('PartyFeesService', () => {
     year: 2026,
     status: FeeStatusEnum.PENDING,
     member: {
-      user: { id: 'user-1', email: 'test@gmail.com' }
-    }
+      user: { id: 'user-1', email: 'test@gmail.com' },
+    },
   };
 
   beforeEach(async () => {
@@ -64,7 +64,8 @@ describe('PartyFeesService', () => {
 
     service = module.get<PartyFeesService>(PartyFeesService);
     feeRepo = module.get<Repository<PartyFee>>(getRepositoryToken(PartyFee));
-    notificationsService = module.get<NotificationsService>(NotificationsService);
+    notificationsService =
+      module.get<NotificationsService>(NotificationsService);
   });
 
   afterEach(() => {
@@ -78,13 +79,17 @@ describe('PartyFeesService', () => {
 
     it(' nên trả về danh sách phân trang thành công', async () => {
       const mockPaginatedResult = { items: [mockFeeRecord], meta: {} };
-      (nestjsTypeormPaginate.paginate as jest.Mock).mockResolvedValue(mockPaginatedResult);
+      (nestjsTypeormPaginate.paginate as jest.Mock).mockResolvedValue(
+        mockPaginatedResult,
+      );
 
       const result = await service.getFeesByChiBo(dto, options);
 
       expect(result).toEqual(mockPaginatedResult);
       expect(feeRepo.createQueryBuilder).toHaveBeenCalledWith('fee');
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith(expect.any(String), { partyCellId: 'cell-1' });
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith(expect.any(String), {
+        partyCellId: 'cell-1',
+      });
     });
 
     it(' nên ném lỗi BadRequest nếu query builder gặp sự cố', async () => {
@@ -92,7 +97,9 @@ describe('PartyFeesService', () => {
         throw new Error('Database Error');
       });
 
-      await expect(service.getFeesByChiBo(dto, options)).rejects.toThrow(BadRequestException);
+      await expect(service.getFeesByChiBo(dto, options)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -101,23 +108,28 @@ describe('PartyFeesService', () => {
     it(' nên cập nhật trạng thái PAID và gửi thông báo cho Đảng viên', async () => {
       // Mock tìm thấy bản ghi đang PENDING
       (feeRepo.findOne as jest.Mock).mockResolvedValue({ ...mockFeeRecord });
-      (feeRepo.save as jest.Mock).mockImplementation((val) => Promise.resolve({ ...val, paymentDate: new Date() }));
+      (feeRepo.save as jest.Mock).mockImplementation((val) =>
+        Promise.resolve({ ...val, paymentDate: new Date() }),
+      );
 
       const result = await service.confirmPayment(mockFeeId, mockAdminId);
 
       expect(result.success).toBe(true);
-      expect(feeRepo.save).toHaveBeenCalledWith(expect.objectContaining({
-        status: FeeStatusEnum.PAID,
-        recordedById: mockAdminId,
-      }));
+      expect(feeRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: FeeStatusEnum.PAID,
+          recordedById: mockAdminId,
+        }),
+      );
       expect(notificationsService.createInternal).toHaveBeenCalled();
     });
 
     it(' nên ném lỗi NotFoundException nếu ID phí không tồn tại', async () => {
       (feeRepo.findOne as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.confirmPayment('wrong-id', mockAdminId))
-        .rejects.toThrow(NotFoundException);
+      await expect(
+        service.confirmPayment('wrong-id', mockAdminId),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it(' nên ném lỗi BadRequest nếu Đảng phí đã được đóng từ trước (PAID)', async () => {
@@ -126,17 +138,20 @@ describe('PartyFeesService', () => {
         status: FeeStatusEnum.PAID,
       });
 
-      await expect(service.confirmPayment(mockFeeId, mockAdminId))
-        .rejects.toThrow(BadRequestException);
+      await expect(
+        service.confirmPayment(mockFeeId, mockAdminId),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it(' vẫn thành công nhưng không gửi thông báo nếu Đảng viên không có User liên kết', async () => {
       // Giả lập bản ghi không có thông tin user
       (feeRepo.findOne as jest.Mock).mockResolvedValue({
         ...mockFeeRecord,
-        member: { user: null } 
+        member: { user: null },
       });
-      (feeRepo.save as jest.Mock).mockImplementation((val) => Promise.resolve({ ...val, paymentDate: new Date() }));
+      (feeRepo.save as jest.Mock).mockImplementation((val) =>
+        Promise.resolve({ ...val, paymentDate: new Date() }),
+      );
 
       const result = await service.confirmPayment(mockFeeId, mockAdminId);
 

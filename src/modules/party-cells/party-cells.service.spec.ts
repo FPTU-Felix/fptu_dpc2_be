@@ -59,9 +59,9 @@ describe('PartyCellsService', () => {
 
     it('nên trả về mảng rỗng nếu không có Chi bộ nào trong DB', async () => {
       mockRepo.find.mockResolvedValueOnce([]);
-      
+
       const result = await service.findAllForDropdown();
-      
+
       expect(result).toEqual([]);
       expect(result.length).toBe(0);
     });

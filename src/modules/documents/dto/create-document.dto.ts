@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsOptional, IsUUID, IsBoolean, MaxLength } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsUUID,
+  IsBoolean,
+  MaxLength,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class CreateDocumentDto {
@@ -24,7 +31,7 @@ export class CreateDocumentDto {
   @IsNotEmpty({ message: 'Vui lòng chọn danh mục cho tài liệu' })
   categoryId: string;
 
- @ApiProperty({ example: false, default: false, required: false })
+  @ApiProperty({ example: false, default: false, required: false })
   @IsOptional()
   @Transform(({ value }) => {
     if (typeof value === 'string') {

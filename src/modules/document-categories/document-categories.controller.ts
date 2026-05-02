@@ -1,6 +1,13 @@
-import { 
-  Controller, Get, Post, Body, Patch, Param, Delete, 
-  UseGuards, ParseUUIDPipe 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DocumentCategoriesService } from './document-categories.service';
@@ -16,7 +23,9 @@ import { UserRole } from 'src/common/enums';
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('document-categories')
 export class DocumentCategoriesController {
-  constructor(private readonly documentCategoriesService: DocumentCategoriesService) {}
+  constructor(
+    private readonly documentCategoriesService: DocumentCategoriesService,
+  ) {}
 
   @Post()
   @Roles(UserRole.ADMIN, UserRole.COMMITTEE_MEMBER)
@@ -33,7 +42,8 @@ export class DocumentCategoriesController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Chi tiết danh mục tài liệu' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) { // Đổi sang string và ParseUUIDPipe
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    // Đổi sang string và ParseUUIDPipe
     return this.documentCategoriesService.findOne(id);
   }
 
@@ -42,7 +52,7 @@ export class DocumentCategoriesController {
   @ApiOperation({ summary: 'Cập nhật danh mục tài liệu' })
   update(
     @Param('id', ParseUUIDPipe) id: string, // Đổi sang string và ParseUUIDPipe
-    @Body() updateDocumentCategoryDto: UpdateDocumentCategoryDto
+    @Body() updateDocumentCategoryDto: UpdateDocumentCategoryDto,
   ) {
     return this.documentCategoriesService.update(id, updateDocumentCategoryDto);
   }
@@ -50,7 +60,8 @@ export class DocumentCategoriesController {
   @Delete(':id')
   @Roles(UserRole.ADMIN, UserRole.COMMITTEE_MEMBER)
   @ApiOperation({ summary: 'Xóa danh mục tài liệu' })
-  remove(@Param('id', ParseUUIDPipe) id: string) { // Đổi sang string và ParseUUIDPipe
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    // Đổi sang string và ParseUUIDPipe
     return this.documentCategoriesService.remove(id);
   }
 }

@@ -32,12 +32,12 @@ export class Document {
   fileName: string;
 
   @Column({ name: 'file_type', type: 'varchar', length: 10, nullable: true })
-  fileType: string; 
+  fileType: string;
 
   @Column({ name: 'uploaded_by', type: 'varchar', length: 255, nullable: true })
   uploadedBy: string;
 
-  @Column({ name: 'status', type: 'varchar', length: 20, default: 'active' }) 
+  @Column({ name: 'status', type: 'varchar', length: 20, default: 'active' })
   status: string;
 
   @Column({ name: 'is_featured', type: 'boolean', default: false })

@@ -1,164 +1,467 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class V113AddParticipantTypeToMeeting1774761250360 implements MigrationInterface {
-    name = 'V113AddParticipantTypeToMeeting1774761250360'
+  name = 'V113AddParticipantTypeToMeeting1774761250360';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`CREATE TYPE "public"."meetings_participant_type_enum" AS ENUM('ALL', 'COMMITTEE', 'MANUAL')`);
-        await queryRunner.query(`ALTER TABLE "meetings" ADD "participant_type" "public"."meetings_participant_type_enum" DEFAULT 'ALL'`);
-        await queryRunner.query(`ALTER TABLE "users" DROP CONSTRAINT "FK_a2cecd1a3531c0b041e29ba46e1"`);
-        await queryRunner.query(`ALTER TABLE "roles" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "meeting_sessions" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "meeting_sessions" DROP CONSTRAINT "FK_79bd95834df6a4229d47c89ddc9"`);
-        await queryRunner.query(`ALTER TABLE "meeting_attendees" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "meeting_opinions" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "meeting_attendees" DROP CONSTRAINT "FK_8643679c49d7234b266433bc201"`);
-        await queryRunner.query(`ALTER TABLE "meeting_opinions" DROP CONSTRAINT "FK_b37b346f4b2304af77b536431ab"`);
-        await queryRunner.query(`ALTER TABLE "meeting_documents" DROP CONSTRAINT "FK_71ce465252b5177f3a8734a66de"`);
-        await queryRunner.query(`ALTER TABLE "meetings" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "ai_knowledge_base" DROP CONSTRAINT "FK_fa554fa15e67675623cdecf80a1"`);
-        await queryRunner.query(`ALTER TABLE "meetings" DROP CONSTRAINT "FK_5d9e6ff1adcbd2c4b1251646a79"`);
-        await queryRunner.query(`ALTER TABLE "party_members" DROP CONSTRAINT "FK_59fcd9e0286d8c9009113772e5d"`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" DROP CONSTRAINT "FK_2b3335beefdad662520afc33dc8"`);
-        await queryRunner.query(`ALTER TABLE "party_admissions" DROP CONSTRAINT "FK_52e8c691a7e540ba4502ef6e380"`);
-        await queryRunner.query(`ALTER TABLE "party_cells" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "admission_progress" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "party_fees" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "annual_assessments" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "commendations" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "disciplines" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" DROP CONSTRAINT "FK_024d33513a12806d355e41c7a84"`);
-        await queryRunner.query(`ALTER TABLE "party_positions" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "admission_progress" DROP CONSTRAINT "FK_35840074ee49c531d63aa6bc5e3"`);
-        await queryRunner.query(`ALTER TABLE "annual_assessments" DROP CONSTRAINT "FK_0342cc197942a79f70c80b59056"`);
-        await queryRunner.query(`ALTER TABLE "commendations" DROP CONSTRAINT "FK_b6145c47fe1c9fa7d25dda485af"`);
-        await queryRunner.query(`ALTER TABLE "disciplines" DROP CONSTRAINT "FK_ac15435de2541a99ece22304683"`);
-        await queryRunner.query(`ALTER TABLE "meeting_attendees" DROP CONSTRAINT "FK_5b652a28dc0c9357eab6f2c5bc5"`);
-        await queryRunner.query(`ALTER TABLE "meeting_opinions" DROP CONSTRAINT "FK_197bbaf8030304b86ae73cbcc45"`);
-        await queryRunner.query(`ALTER TABLE "party_fees" DROP CONSTRAINT "FK_d7d3391431eeb1c26d4fed940cd"`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" DROP CONSTRAINT "FK_13852a503d1ecbc89cebbf61676"`);
-        await queryRunner.query(`ALTER TABLE "party_members" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "system_audit_logs" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "ai_knowledge_base" DROP CONSTRAINT "FK_5d0b4754d35c7539f36aaa86bfd"`);
-        await queryRunner.query(`ALTER TABLE "annual_assessments" DROP CONSTRAINT "FK_f4159e49ff328fb4da0b6d5b0d0"`);
-        await queryRunner.query(`ALTER TABLE "commendations" DROP CONSTRAINT "FK_b8ce993df302ee3a9b8d96a7ff9"`);
-        await queryRunner.query(`ALTER TABLE "disciplines" DROP CONSTRAINT "FK_db82b8b2bd57e5bcde1aa9e13a4"`);
-        await queryRunner.query(`ALTER TABLE "party_members" DROP CONSTRAINT "FK_3dcc38b247864e98e3e86e18f6d"`);
-        await queryRunner.query(`ALTER TABLE "system_audit_logs" DROP CONSTRAINT "FK_4c946fb94a0a262fb72579b0a08"`);
-        await queryRunner.query(`ALTER TABLE "party_admissions" DROP CONSTRAINT "FK_e0b44af873f38222508c41c63da"`);
-        await queryRunner.query(`ALTER TABLE "users" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "party_admissions" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "handbook_links" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "handbook_links" DROP CONSTRAINT "FK_08ca89b7c2d7ed362f8cbc46cbc"`);
-        await queryRunner.query(`ALTER TABLE "handbooks" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "ai_knowledge_base" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
-        await queryRunner.query(`ALTER TABLE "meeting_sessions" ADD CONSTRAINT "FK_79bd95834df6a4229d47c89ddc9" FOREIGN KEY ("attendee_id") REFERENCES "meeting_attendees"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meeting_attendees" ADD CONSTRAINT "FK_8643679c49d7234b266433bc201" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meeting_attendees" ADD CONSTRAINT "FK_5b652a28dc0c9357eab6f2c5bc5" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meeting_opinions" ADD CONSTRAINT "FK_b37b346f4b2304af77b536431ab" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meeting_opinions" ADD CONSTRAINT "FK_197bbaf8030304b86ae73cbcc45" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meeting_documents" ADD CONSTRAINT "FK_71ce465252b5177f3a8734a66de" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meetings" ADD CONSTRAINT "FK_5d9e6ff1adcbd2c4b1251646a79" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "admission_progress" ADD CONSTRAINT "FK_35840074ee49c531d63aa6bc5e3" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_fees" ADD CONSTRAINT "FK_d7d3391431eeb1c26d4fed940cd" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "annual_assessments" ADD CONSTRAINT "FK_0342cc197942a79f70c80b59056" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "annual_assessments" ADD CONSTRAINT "FK_f4159e49ff328fb4da0b6d5b0d0" FOREIGN KEY ("reviewer_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "commendations" ADD CONSTRAINT "FK_b6145c47fe1c9fa7d25dda485af" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "commendations" ADD CONSTRAINT "FK_b8ce993df302ee3a9b8d96a7ff9" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "disciplines" ADD CONSTRAINT "FK_ac15435de2541a99ece22304683" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "disciplines" ADD CONSTRAINT "FK_db82b8b2bd57e5bcde1aa9e13a4" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" ADD CONSTRAINT "FK_13852a503d1ecbc89cebbf61676" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" ADD CONSTRAINT "FK_024d33513a12806d355e41c7a84" FOREIGN KEY ("position_id") REFERENCES "party_positions"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" ADD CONSTRAINT "FK_2b3335beefdad662520afc33dc8" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_members" ADD CONSTRAINT "FK_3dcc38b247864e98e3e86e18f6d" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_members" ADD CONSTRAINT "FK_59fcd9e0286d8c9009113772e5d" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "system_audit_logs" ADD CONSTRAINT "FK_4c946fb94a0a262fb72579b0a08" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "users" ADD CONSTRAINT "FK_a2cecd1a3531c0b041e29ba46e1" FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_admissions" ADD CONSTRAINT "FK_e0b44af873f38222508c41c63da" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_admissions" ADD CONSTRAINT "FK_52e8c691a7e540ba4502ef6e380" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "handbook_links" ADD CONSTRAINT "FK_08ca89b7c2d7ed362f8cbc46cbc" FOREIGN KEY ("handbook_id") REFERENCES "handbooks"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "ai_knowledge_base" ADD CONSTRAINT "FK_fa554fa15e67675623cdecf80a1" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "ai_knowledge_base" ADD CONSTRAINT "FK_5d0b4754d35c7539f36aaa86bfd" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-    }
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `CREATE TYPE "public"."meetings_participant_type_enum" AS ENUM('ALL', 'COMMITTEE', 'MANUAL')`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meetings" ADD "participant_type" "public"."meetings_participant_type_enum" DEFAULT 'ALL'`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP CONSTRAINT "FK_a2cecd1a3531c0b041e29ba46e1"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "roles" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_sessions" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_sessions" DROP CONSTRAINT "FK_79bd95834df6a4229d47c89ddc9"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_attendees" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_opinions" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_attendees" DROP CONSTRAINT "FK_8643679c49d7234b266433bc201"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_opinions" DROP CONSTRAINT "FK_b37b346f4b2304af77b536431ab"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_documents" DROP CONSTRAINT "FK_71ce465252b5177f3a8734a66de"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meetings" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "ai_knowledge_base" DROP CONSTRAINT "FK_fa554fa15e67675623cdecf80a1"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meetings" DROP CONSTRAINT "FK_5d9e6ff1adcbd2c4b1251646a79"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_members" DROP CONSTRAINT "FK_59fcd9e0286d8c9009113772e5d"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" DROP CONSTRAINT "FK_2b3335beefdad662520afc33dc8"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_admissions" DROP CONSTRAINT "FK_52e8c691a7e540ba4502ef6e380"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_cells" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "admission_progress" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_fees" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "annual_assessments" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "commendations" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "disciplines" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" DROP CONSTRAINT "FK_024d33513a12806d355e41c7a84"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_positions" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "admission_progress" DROP CONSTRAINT "FK_35840074ee49c531d63aa6bc5e3"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "annual_assessments" DROP CONSTRAINT "FK_0342cc197942a79f70c80b59056"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "commendations" DROP CONSTRAINT "FK_b6145c47fe1c9fa7d25dda485af"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "disciplines" DROP CONSTRAINT "FK_ac15435de2541a99ece22304683"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_attendees" DROP CONSTRAINT "FK_5b652a28dc0c9357eab6f2c5bc5"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_opinions" DROP CONSTRAINT "FK_197bbaf8030304b86ae73cbcc45"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_fees" DROP CONSTRAINT "FK_d7d3391431eeb1c26d4fed940cd"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" DROP CONSTRAINT "FK_13852a503d1ecbc89cebbf61676"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_members" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "system_audit_logs" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "ai_knowledge_base" DROP CONSTRAINT "FK_5d0b4754d35c7539f36aaa86bfd"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "annual_assessments" DROP CONSTRAINT "FK_f4159e49ff328fb4da0b6d5b0d0"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "commendations" DROP CONSTRAINT "FK_b8ce993df302ee3a9b8d96a7ff9"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "disciplines" DROP CONSTRAINT "FK_db82b8b2bd57e5bcde1aa9e13a4"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_members" DROP CONSTRAINT "FK_3dcc38b247864e98e3e86e18f6d"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "system_audit_logs" DROP CONSTRAINT "FK_4c946fb94a0a262fb72579b0a08"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_admissions" DROP CONSTRAINT "FK_e0b44af873f38222508c41c63da"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_admissions" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "handbook_links" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "handbook_links" DROP CONSTRAINT "FK_08ca89b7c2d7ed362f8cbc46cbc"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "handbooks" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "ai_knowledge_base" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_sessions" ADD CONSTRAINT "FK_79bd95834df6a4229d47c89ddc9" FOREIGN KEY ("attendee_id") REFERENCES "meeting_attendees"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_attendees" ADD CONSTRAINT "FK_8643679c49d7234b266433bc201" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_attendees" ADD CONSTRAINT "FK_5b652a28dc0c9357eab6f2c5bc5" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_opinions" ADD CONSTRAINT "FK_b37b346f4b2304af77b536431ab" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_opinions" ADD CONSTRAINT "FK_197bbaf8030304b86ae73cbcc45" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_documents" ADD CONSTRAINT "FK_71ce465252b5177f3a8734a66de" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meetings" ADD CONSTRAINT "FK_5d9e6ff1adcbd2c4b1251646a79" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "admission_progress" ADD CONSTRAINT "FK_35840074ee49c531d63aa6bc5e3" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_fees" ADD CONSTRAINT "FK_d7d3391431eeb1c26d4fed940cd" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "annual_assessments" ADD CONSTRAINT "FK_0342cc197942a79f70c80b59056" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "annual_assessments" ADD CONSTRAINT "FK_f4159e49ff328fb4da0b6d5b0d0" FOREIGN KEY ("reviewer_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "commendations" ADD CONSTRAINT "FK_b6145c47fe1c9fa7d25dda485af" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "commendations" ADD CONSTRAINT "FK_b8ce993df302ee3a9b8d96a7ff9" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "disciplines" ADD CONSTRAINT "FK_ac15435de2541a99ece22304683" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "disciplines" ADD CONSTRAINT "FK_db82b8b2bd57e5bcde1aa9e13a4" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" ADD CONSTRAINT "FK_13852a503d1ecbc89cebbf61676" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" ADD CONSTRAINT "FK_024d33513a12806d355e41c7a84" FOREIGN KEY ("position_id") REFERENCES "party_positions"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" ADD CONSTRAINT "FK_2b3335beefdad662520afc33dc8" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_members" ADD CONSTRAINT "FK_3dcc38b247864e98e3e86e18f6d" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_members" ADD CONSTRAINT "FK_59fcd9e0286d8c9009113772e5d" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "system_audit_logs" ADD CONSTRAINT "FK_4c946fb94a0a262fb72579b0a08" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" ADD CONSTRAINT "FK_a2cecd1a3531c0b041e29ba46e1" FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_admissions" ADD CONSTRAINT "FK_e0b44af873f38222508c41c63da" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_admissions" ADD CONSTRAINT "FK_52e8c691a7e540ba4502ef6e380" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "handbook_links" ADD CONSTRAINT "FK_08ca89b7c2d7ed362f8cbc46cbc" FOREIGN KEY ("handbook_id") REFERENCES "handbooks"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "ai_knowledge_base" ADD CONSTRAINT "FK_fa554fa15e67675623cdecf80a1" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "ai_knowledge_base" ADD CONSTRAINT "FK_5d0b4754d35c7539f36aaa86bfd" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "ai_knowledge_base" DROP CONSTRAINT "FK_5d0b4754d35c7539f36aaa86bfd"`);
-        await queryRunner.query(`ALTER TABLE "ai_knowledge_base" DROP CONSTRAINT "FK_fa554fa15e67675623cdecf80a1"`);
-        await queryRunner.query(`ALTER TABLE "handbook_links" DROP CONSTRAINT "FK_08ca89b7c2d7ed362f8cbc46cbc"`);
-        await queryRunner.query(`ALTER TABLE "party_admissions" DROP CONSTRAINT "FK_52e8c691a7e540ba4502ef6e380"`);
-        await queryRunner.query(`ALTER TABLE "party_admissions" DROP CONSTRAINT "FK_e0b44af873f38222508c41c63da"`);
-        await queryRunner.query(`ALTER TABLE "users" DROP CONSTRAINT "FK_a2cecd1a3531c0b041e29ba46e1"`);
-        await queryRunner.query(`ALTER TABLE "system_audit_logs" DROP CONSTRAINT "FK_4c946fb94a0a262fb72579b0a08"`);
-        await queryRunner.query(`ALTER TABLE "party_members" DROP CONSTRAINT "FK_59fcd9e0286d8c9009113772e5d"`);
-        await queryRunner.query(`ALTER TABLE "party_members" DROP CONSTRAINT "FK_3dcc38b247864e98e3e86e18f6d"`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" DROP CONSTRAINT "FK_2b3335beefdad662520afc33dc8"`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" DROP CONSTRAINT "FK_024d33513a12806d355e41c7a84"`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" DROP CONSTRAINT "FK_13852a503d1ecbc89cebbf61676"`);
-        await queryRunner.query(`ALTER TABLE "disciplines" DROP CONSTRAINT "FK_db82b8b2bd57e5bcde1aa9e13a4"`);
-        await queryRunner.query(`ALTER TABLE "disciplines" DROP CONSTRAINT "FK_ac15435de2541a99ece22304683"`);
-        await queryRunner.query(`ALTER TABLE "commendations" DROP CONSTRAINT "FK_b8ce993df302ee3a9b8d96a7ff9"`);
-        await queryRunner.query(`ALTER TABLE "commendations" DROP CONSTRAINT "FK_b6145c47fe1c9fa7d25dda485af"`);
-        await queryRunner.query(`ALTER TABLE "annual_assessments" DROP CONSTRAINT "FK_f4159e49ff328fb4da0b6d5b0d0"`);
-        await queryRunner.query(`ALTER TABLE "annual_assessments" DROP CONSTRAINT "FK_0342cc197942a79f70c80b59056"`);
-        await queryRunner.query(`ALTER TABLE "party_fees" DROP CONSTRAINT "FK_d7d3391431eeb1c26d4fed940cd"`);
-        await queryRunner.query(`ALTER TABLE "admission_progress" DROP CONSTRAINT "FK_35840074ee49c531d63aa6bc5e3"`);
-        await queryRunner.query(`ALTER TABLE "meetings" DROP CONSTRAINT "FK_5d9e6ff1adcbd2c4b1251646a79"`);
-        await queryRunner.query(`ALTER TABLE "meeting_documents" DROP CONSTRAINT "FK_71ce465252b5177f3a8734a66de"`);
-        await queryRunner.query(`ALTER TABLE "meeting_opinions" DROP CONSTRAINT "FK_197bbaf8030304b86ae73cbcc45"`);
-        await queryRunner.query(`ALTER TABLE "meeting_opinions" DROP CONSTRAINT "FK_b37b346f4b2304af77b536431ab"`);
-        await queryRunner.query(`ALTER TABLE "meeting_attendees" DROP CONSTRAINT "FK_5b652a28dc0c9357eab6f2c5bc5"`);
-        await queryRunner.query(`ALTER TABLE "meeting_attendees" DROP CONSTRAINT "FK_8643679c49d7234b266433bc201"`);
-        await queryRunner.query(`ALTER TABLE "meeting_sessions" DROP CONSTRAINT "FK_79bd95834df6a4229d47c89ddc9"`);
-        await queryRunner.query(`ALTER TABLE "ai_knowledge_base" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "handbooks" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "handbook_links" ADD CONSTRAINT "FK_08ca89b7c2d7ed362f8cbc46cbc" FOREIGN KEY ("handbook_id") REFERENCES "handbooks"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "handbook_links" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "party_admissions" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "users" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "party_admissions" ADD CONSTRAINT "FK_e0b44af873f38222508c41c63da" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "system_audit_logs" ADD CONSTRAINT "FK_4c946fb94a0a262fb72579b0a08" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_members" ADD CONSTRAINT "FK_3dcc38b247864e98e3e86e18f6d" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "disciplines" ADD CONSTRAINT "FK_db82b8b2bd57e5bcde1aa9e13a4" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "commendations" ADD CONSTRAINT "FK_b8ce993df302ee3a9b8d96a7ff9" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "annual_assessments" ADD CONSTRAINT "FK_f4159e49ff328fb4da0b6d5b0d0" FOREIGN KEY ("reviewer_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "ai_knowledge_base" ADD CONSTRAINT "FK_5d0b4754d35c7539f36aaa86bfd" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "system_audit_logs" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "party_members" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" ADD CONSTRAINT "FK_13852a503d1ecbc89cebbf61676" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_fees" ADD CONSTRAINT "FK_d7d3391431eeb1c26d4fed940cd" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meeting_opinions" ADD CONSTRAINT "FK_197bbaf8030304b86ae73cbcc45" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meeting_attendees" ADD CONSTRAINT "FK_5b652a28dc0c9357eab6f2c5bc5" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "disciplines" ADD CONSTRAINT "FK_ac15435de2541a99ece22304683" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "commendations" ADD CONSTRAINT "FK_b6145c47fe1c9fa7d25dda485af" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "annual_assessments" ADD CONSTRAINT "FK_0342cc197942a79f70c80b59056" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "admission_progress" ADD CONSTRAINT "FK_35840074ee49c531d63aa6bc5e3" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "party_positions" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" ADD CONSTRAINT "FK_024d33513a12806d355e41c7a84" FOREIGN KEY ("position_id") REFERENCES "party_positions"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "disciplines" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "commendations" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "annual_assessments" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "party_fees" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "admission_progress" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "party_cells" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "party_admissions" ADD CONSTRAINT "FK_52e8c691a7e540ba4502ef6e380" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_member_positions" ADD CONSTRAINT "FK_2b3335beefdad662520afc33dc8" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "party_members" ADD CONSTRAINT "FK_59fcd9e0286d8c9009113772e5d" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meetings" ADD CONSTRAINT "FK_5d9e6ff1adcbd2c4b1251646a79" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "ai_knowledge_base" ADD CONSTRAINT "FK_fa554fa15e67675623cdecf80a1" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meetings" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "meeting_documents" ADD CONSTRAINT "FK_71ce465252b5177f3a8734a66de" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meeting_opinions" ADD CONSTRAINT "FK_b37b346f4b2304af77b536431ab" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meeting_attendees" ADD CONSTRAINT "FK_8643679c49d7234b266433bc201" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meeting_opinions" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "meeting_attendees" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "meeting_sessions" ADD CONSTRAINT "FK_79bd95834df6a4229d47c89ddc9" FOREIGN KEY ("attendee_id") REFERENCES "meeting_attendees"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meeting_sessions" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "roles" ALTER COLUMN "id" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "users" ADD CONSTRAINT "FK_a2cecd1a3531c0b041e29ba46e1" FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "meetings" DROP COLUMN "participant_type"`);
-        await queryRunner.query(`DROP TYPE "public"."meetings_participant_type_enum"`);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `ALTER TABLE "ai_knowledge_base" DROP CONSTRAINT "FK_5d0b4754d35c7539f36aaa86bfd"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "ai_knowledge_base" DROP CONSTRAINT "FK_fa554fa15e67675623cdecf80a1"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "handbook_links" DROP CONSTRAINT "FK_08ca89b7c2d7ed362f8cbc46cbc"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_admissions" DROP CONSTRAINT "FK_52e8c691a7e540ba4502ef6e380"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_admissions" DROP CONSTRAINT "FK_e0b44af873f38222508c41c63da"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP CONSTRAINT "FK_a2cecd1a3531c0b041e29ba46e1"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "system_audit_logs" DROP CONSTRAINT "FK_4c946fb94a0a262fb72579b0a08"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_members" DROP CONSTRAINT "FK_59fcd9e0286d8c9009113772e5d"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_members" DROP CONSTRAINT "FK_3dcc38b247864e98e3e86e18f6d"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" DROP CONSTRAINT "FK_2b3335beefdad662520afc33dc8"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" DROP CONSTRAINT "FK_024d33513a12806d355e41c7a84"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" DROP CONSTRAINT "FK_13852a503d1ecbc89cebbf61676"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "disciplines" DROP CONSTRAINT "FK_db82b8b2bd57e5bcde1aa9e13a4"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "disciplines" DROP CONSTRAINT "FK_ac15435de2541a99ece22304683"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "commendations" DROP CONSTRAINT "FK_b8ce993df302ee3a9b8d96a7ff9"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "commendations" DROP CONSTRAINT "FK_b6145c47fe1c9fa7d25dda485af"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "annual_assessments" DROP CONSTRAINT "FK_f4159e49ff328fb4da0b6d5b0d0"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "annual_assessments" DROP CONSTRAINT "FK_0342cc197942a79f70c80b59056"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_fees" DROP CONSTRAINT "FK_d7d3391431eeb1c26d4fed940cd"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "admission_progress" DROP CONSTRAINT "FK_35840074ee49c531d63aa6bc5e3"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meetings" DROP CONSTRAINT "FK_5d9e6ff1adcbd2c4b1251646a79"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_documents" DROP CONSTRAINT "FK_71ce465252b5177f3a8734a66de"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_opinions" DROP CONSTRAINT "FK_197bbaf8030304b86ae73cbcc45"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_opinions" DROP CONSTRAINT "FK_b37b346f4b2304af77b536431ab"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_attendees" DROP CONSTRAINT "FK_5b652a28dc0c9357eab6f2c5bc5"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_attendees" DROP CONSTRAINT "FK_8643679c49d7234b266433bc201"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_sessions" DROP CONSTRAINT "FK_79bd95834df6a4229d47c89ddc9"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "ai_knowledge_base" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "handbooks" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "handbook_links" ADD CONSTRAINT "FK_08ca89b7c2d7ed362f8cbc46cbc" FOREIGN KEY ("handbook_id") REFERENCES "handbooks"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "handbook_links" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_admissions" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_admissions" ADD CONSTRAINT "FK_e0b44af873f38222508c41c63da" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "system_audit_logs" ADD CONSTRAINT "FK_4c946fb94a0a262fb72579b0a08" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_members" ADD CONSTRAINT "FK_3dcc38b247864e98e3e86e18f6d" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "disciplines" ADD CONSTRAINT "FK_db82b8b2bd57e5bcde1aa9e13a4" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "commendations" ADD CONSTRAINT "FK_b8ce993df302ee3a9b8d96a7ff9" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "annual_assessments" ADD CONSTRAINT "FK_f4159e49ff328fb4da0b6d5b0d0" FOREIGN KEY ("reviewer_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "ai_knowledge_base" ADD CONSTRAINT "FK_5d0b4754d35c7539f36aaa86bfd" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "system_audit_logs" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_members" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" ADD CONSTRAINT "FK_13852a503d1ecbc89cebbf61676" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_fees" ADD CONSTRAINT "FK_d7d3391431eeb1c26d4fed940cd" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_opinions" ADD CONSTRAINT "FK_197bbaf8030304b86ae73cbcc45" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_attendees" ADD CONSTRAINT "FK_5b652a28dc0c9357eab6f2c5bc5" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "disciplines" ADD CONSTRAINT "FK_ac15435de2541a99ece22304683" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "commendations" ADD CONSTRAINT "FK_b6145c47fe1c9fa7d25dda485af" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "annual_assessments" ADD CONSTRAINT "FK_0342cc197942a79f70c80b59056" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "admission_progress" ADD CONSTRAINT "FK_35840074ee49c531d63aa6bc5e3" FOREIGN KEY ("member_id") REFERENCES "party_members"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_positions" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" ADD CONSTRAINT "FK_024d33513a12806d355e41c7a84" FOREIGN KEY ("position_id") REFERENCES "party_positions"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "disciplines" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "commendations" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "annual_assessments" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_fees" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "admission_progress" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_cells" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_admissions" ADD CONSTRAINT "FK_52e8c691a7e540ba4502ef6e380" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_member_positions" ADD CONSTRAINT "FK_2b3335beefdad662520afc33dc8" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "party_members" ADD CONSTRAINT "FK_59fcd9e0286d8c9009113772e5d" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meetings" ADD CONSTRAINT "FK_5d9e6ff1adcbd2c4b1251646a79" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "ai_knowledge_base" ADD CONSTRAINT "FK_fa554fa15e67675623cdecf80a1" FOREIGN KEY ("party_cell_id") REFERENCES "party_cells"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meetings" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_documents" ADD CONSTRAINT "FK_71ce465252b5177f3a8734a66de" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_opinions" ADD CONSTRAINT "FK_b37b346f4b2304af77b536431ab" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_attendees" ADD CONSTRAINT "FK_8643679c49d7234b266433bc201" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_opinions" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_attendees" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_sessions" ADD CONSTRAINT "FK_79bd95834df6a4229d47c89ddc9" FOREIGN KEY ("attendee_id") REFERENCES "meeting_attendees"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meeting_sessions" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "roles" ALTER COLUMN "id" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" ADD CONSTRAINT "FK_a2cecd1a3531c0b041e29ba46e1" FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "meetings" DROP COLUMN "participant_type"`,
+    );
+    await queryRunner.query(
+      `DROP TYPE "public"."meetings_participant_type_enum"`,
+    );
+  }
 }

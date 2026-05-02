@@ -11,7 +11,7 @@ import { MinioService } from './minio.service';
 
 @Controller('documents')
 export class DocumentsController {
-  constructor(private readonly minioService: MinioService) { }
+  constructor(private readonly minioService: MinioService) {}
 
   private normalizeObjectKey(rawKey: string): string {
     let objectKey = decodeURIComponent(rawKey).replace(/^\/+/, '');

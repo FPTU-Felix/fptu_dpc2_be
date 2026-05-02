@@ -1,12 +1,12 @@
-import { Allow, IsString } from "class-validator";
+import { Allow, IsString } from 'class-validator';
 
 export class ClientCompleteMultipartUploadDto {
-    @IsString()
-    fileId: string;
+  @IsString()
+  fileId: string;
 
-    @Allow()
-    parts: {
-        etag: string;
-        part: number;
-    }[];
+  @Allow()
+  parts: {
+    etag: string;
+    part: number;
+  }[];
 }

@@ -58,9 +58,11 @@ describe('NotificationsService', () => {
     }).compile();
 
     service = module.get<NotificationsService>(NotificationsService);
-    repo = module.get<Repository<Notification>>(getRepositoryToken(Notification));
+    repo = module.get<Repository<Notification>>(
+      getRepositoryToken(Notification),
+    );
     mailService = module.get<MailService>(MailService);
-    
+
     // Xóa các vết gọi hàm cũ
     jest.clearAllMocks();
   });
@@ -74,7 +76,7 @@ describe('NotificationsService', () => {
         'user-uuid',
         'Title',
         'Content',
-        NotificationType.MEETING
+        NotificationType.MEETING,
       );
 
       expect(repo.create).toHaveBeenCalled();
@@ -92,7 +94,7 @@ describe('NotificationsService', () => {
         'Title',
         'Content',
         NotificationType.MEETING,
-        'user@example.com'
+        'user@example.com',
       );
 
       expect(mailService.sendMail).toHaveBeenCalled();
@@ -103,21 +105,23 @@ describe('NotificationsService', () => {
       mockRepo.save.mockResolvedValue(mockNotification);
       // Giả lập gửi mail lỗi
       mailService.sendMail.mockReturnValue(Promise.reject('SMTP Error'));
-      
-      const loggerSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+
+      const loggerSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
 
       const result = await service.createInternal(
         'user-uuid',
         'Title',
         'Content',
         NotificationType.MEETING,
-        'user@example.com'
+        'user@example.com',
       );
 
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(result).toBeDefined();
-      expect(loggerSpy).toHaveBeenCalled(); 
+      expect(loggerSpy).toHaveBeenCalled();
     });
   });
 
@@ -137,11 +141,11 @@ describe('NotificationsService', () => {
       const options = { page: 1, limit: 10 };
       await service.getUserNotifications('user-uuid', options, false);
 
-      const qb = (mockRepo.createQueryBuilder as jest.Mock).mock.results[0].value;
-      expect(qb.andWhere).toHaveBeenCalledWith(
-        'noti.is_read = :isRead',
-        { isRead: false }
-      );
+      const qb = (mockRepo.createQueryBuilder as jest.Mock).mock.results[0]
+        .value;
+      expect(qb.andWhere).toHaveBeenCalledWith('noti.is_read = :isRead', {
+        isRead: false,
+      });
     });
   });
 
@@ -170,7 +174,7 @@ describe('NotificationsService', () => {
       mockRepo.findOne.mockResolvedValue(null);
 
       await expect(service.findOne('wrong-id', 'user-uuid')).rejects.toThrow(
-        NotFoundException
+        NotFoundException,
       );
     });
   });

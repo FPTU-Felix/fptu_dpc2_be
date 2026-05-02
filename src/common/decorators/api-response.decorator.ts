@@ -27,7 +27,9 @@ export function buildResponseDecorator(
     decorators.push(ApiExtraModels(type));
 
     if (example) {
-      (options as ApiResponseOptions & { schema: Record<string, unknown> }).schema = {
+      (
+        options as ApiResponseOptions & { schema: Record<string, unknown> }
+      ).schema = {
         type: 'object',
         properties: {
           statusCode: { type: 'integer', example: status },
@@ -45,7 +47,9 @@ export function buildResponseDecorator(
       options.type = type;
     }
   } else if (example) {
-    (options as ApiResponseOptions & { schema: Record<string, unknown> }).schema = {
+    (
+      options as ApiResponseOptions & { schema: Record<string, unknown> }
+    ).schema = {
       type: 'object',
       properties: {
         statusCode: { type: 'integer', example: status },
@@ -302,7 +306,7 @@ export function ApiSuccessResponse<T>(
 ): MethodDecorator & ClassDecorator {
   const decorators: MethodDecorator[] = [ApiExtraModels(type)];
 
-  (decorators as MethodDecorator[]).push(
+  decorators.push(
     ApiResponse({
       status: 200,
       description,
@@ -357,7 +361,7 @@ export function ApiSuccessCreated<T>(
 ): MethodDecorator & ClassDecorator {
   const decorators: MethodDecorator[] = [ApiExtraModels(type)];
 
-  (decorators as MethodDecorator[]).push(
+  decorators.push(
     ApiResponse({
       status: 201,
       description,

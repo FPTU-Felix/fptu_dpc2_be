@@ -19,17 +19,28 @@ describe('AdmissionApplicationService (Utils & Private Methods)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdmissionApplicationService,
-        { provide: getRepositoryToken(PartyAdmissionApplicationEntity), useValue: {} },
+        {
+          provide: getRepositoryToken(PartyAdmissionApplicationEntity),
+          useValue: {},
+        },
         { provide: getRepositoryToken(PartyAdmissionStepEntity), useValue: {} },
-        { provide: getRepositoryToken(PartyAdmissionStepSubmissionEntity), useValue: {} },
-        { provide: getRepositoryToken(PartyAdmissionStepReviewEntity), useValue: {} },
+        {
+          provide: getRepositoryToken(PartyAdmissionStepSubmissionEntity),
+          useValue: {},
+        },
+        {
+          provide: getRepositoryToken(PartyAdmissionStepReviewEntity),
+          useValue: {},
+        },
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: getRepositoryToken(Role), useValue: {} },
         { provide: DataSource, useValue: {} },
       ],
     }).compile();
 
-    service = module.get<AdmissionApplicationService>(AdmissionApplicationService);
+    service = module.get<AdmissionApplicationService>(
+      AdmissionApplicationService,
+    );
   });
 
   // --- Test Group: generateApplicationCode ---
@@ -64,14 +75,18 @@ describe('AdmissionApplicationService (Utils & Private Methods)', () => {
   // --- Test Group: getRequiredDocumentTypesForStep ---
   describe('getRequiredDocumentTypesForStep', () => {
     it(' Trả về đúng danh sách giấy tờ cho bước APPLICATION', () => {
-      const docs = (service as any).getRequiredDocumentTypesForStep(AdmissionWorkflowStep.APPLICATION);
+      const docs = (service as any).getRequiredDocumentTypesForStep(
+        AdmissionWorkflowStep.APPLICATION,
+      );
       expect(docs).toContain(AdmissionDocumentType.DON_XIN_VAO_DANG);
       expect(docs).toContain(AdmissionDocumentType.LY_LICH_NGUOI_XIN_VAO_DANG);
       expect(docs.length).toBe(4);
     });
 
     it(' Bước không yêu cầu giấy tờ phải trả về mảng rỗng', () => {
-      const docs = (service as any).getRequiredDocumentTypesForStep(AdmissionWorkflowStep.CHI_UY_REVIEW);
+      const docs = (service as any).getRequiredDocumentTypesForStep(
+        AdmissionWorkflowStep.CHI_UY_REVIEW,
+      );
       expect(docs).toEqual([]);
     });
   });
@@ -84,11 +99,11 @@ describe('AdmissionApplicationService (Utils & Private Methods)', () => {
         // Thiếu Ly lich, Giay gioi thieu...
       };
 
-      expect(() => 
+      expect(() =>
         (service as any).validateRequiredDocumentsFromFormData(
-          AdmissionWorkflowStep.APPLICATION, 
-          incompleteFormData
-        )
+          AdmissionWorkflowStep.APPLICATION,
+          incompleteFormData,
+        ),
       ).toThrow(BadRequestException);
     });
 
@@ -100,11 +115,11 @@ describe('AdmissionApplicationService (Utils & Private Methods)', () => {
         [AdmissionDocumentType.GIAY_GIOI_THIEU_DANG_VIEN_2]: 'url',
       };
 
-      expect(() => 
+      expect(() =>
         (service as any).validateRequiredDocumentsFromFormData(
-          AdmissionWorkflowStep.APPLICATION, 
-          fullFormData
-        )
+          AdmissionWorkflowStep.APPLICATION,
+          fullFormData,
+        ),
       ).not.toThrow();
     });
   });
@@ -117,7 +132,7 @@ describe('AdmissionApplicationService (Utils & Private Methods)', () => {
         username: 'anhvu',
         password: 'secret_password', // Field này không nên có trong DTO
         email: 'vu@example.com',
-        role: { id: 'r1', name: 'QCUT' }
+        role: { id: 'r1', name: 'QCUT' },
       };
 
       const result = (service as any).mapUserSummary(rawUser);
@@ -133,12 +148,14 @@ describe('AdmissionApplicationService (Utils & Private Methods)', () => {
   describe('Role Validations', () => {
     it(' validateQcutRole nên throw ForbiddenException nếu sai role', () => {
       const user = { sub: 'u1', roleName: 'SECRETARY' };
-      expect(() => (service as any).validateQcutRole(user)).toThrow(ForbiddenException);
+      expect(() => (service as any).validateQcutRole(user)).toThrow(
+        ForbiddenException,
+      );
     });
 
     it(' validateQcutRole không throw lỗi nếu là QCUT hoặc OUTSTANDING_INDIVIDUAL', () => {
-        const user = { sub: 'u1', roleName: 'OUTSTANDING_INDIVIDUAL' };
-        expect(() => (service as any).validateQcutRole(user)).not.toThrow();
-      });
+      const user = { sub: 'u1', roleName: 'OUTSTANDING_INDIVIDUAL' };
+      expect(() => (service as any).validateQcutRole(user)).not.toThrow();
+    });
   });
 });

@@ -1,9 +1,9 @@
-import { 
-  Injectable, 
-  NotFoundException, 
-  BadRequestException, 
-  InternalServerErrorException, 
-  ConflictException 
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  InternalServerErrorException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not } from 'typeorm'; // <--- Quan trọng nhất ở đây
@@ -21,25 +21,37 @@ export class DocumentsService {
     private readonly minioService: MinioService,
   ) {}
 
-  async create(dto: CreateDocumentDto, file: Express.Multer.File, userId: string) {
+  async create(
+    dto: CreateDocumentDto,
+    file: Express.Multer.File,
+    userId: string,
+  ) {
     // 1. Kiểm tra file đầu vào
     if (!file) {
       throw new BadRequestException('Vui lòng chọn file tài liệu!');
     }
 
     // 2. Xử lý Slug (Tránh trùng lặp)
-    let generatedSlug = dto.slug || slugify(dto.title, { lower: true, strict: true });
-    
+    let generatedSlug =
+      dto.slug || slugify(dto.title, { lower: true, strict: true });
+
     try {
       let count = 1;
       const originalSlug = generatedSlug;
       // Vòng lặp kiểm tra slug trong DB (kể cả những bản ghi đã xóa mềm nếu cần)
-      while (await this.documentRepo.findOne({ where: { slug: generatedSlug }, withDeleted: true })) {
+      while (
+        await this.documentRepo.findOne({
+          where: { slug: generatedSlug },
+          withDeleted: true,
+        })
+      ) {
         generatedSlug = `${originalSlug}-${count}`;
         count++;
       }
     } catch (error) {
-      throw new InternalServerErrorException('Lỗi khi kiểm tra đường dẫn tài liệu (slug)');
+      throw new InternalServerErrorException(
+        'Lỗi khi kiểm tra đường dẫn tài liệu (slug)',
+      );
     }
 
     // 3. Tải file lên MinIO (Sử dụng try-catch cho dịch vụ bên thứ 3)
@@ -51,7 +63,9 @@ export class DocumentsService {
       });
     } catch (error) {
       console.error('MinIO Upload Error:', error);
-      throw new InternalServerErrorException('Không thể tải file lên hệ thống lưu trữ (MinIO)');
+      throw new InternalServerErrorException(
+        'Không thể tải file lên hệ thống lưu trữ (MinIO)',
+      );
     }
 
     // 4. Lưu thông tin vào Database
@@ -70,11 +84,13 @@ export class DocumentsService {
 
       return await this.documentRepo.save(newDocument);
     } catch (error) {
-      
-      if (error.code === '23505') { // Mã lỗi trùng lặp (Unique Violation) trong Postgres
+      if (error.code === '23505') {
+        // Mã lỗi trùng lặp (Unique Violation) trong Postgres
         throw new ConflictException('Đường dẫn (slug) hoặc dữ liệu đã tồn tại');
       }
-      throw new InternalServerErrorException('Lỗi khi lưu thông tin tài liệu vào database');
+      throw new InternalServerErrorException(
+        'Lỗi khi lưu thông tin tài liệu vào database',
+      );
     }
   }
 
@@ -89,8 +105,8 @@ export class DocumentsService {
       throw new InternalServerErrorException('Lỗi khi lấy danh sách tài liệu');
     }
   }
-async update(id: string, dto: UpdateDocumentDto, file?: Express.Multer.File) {
-    const document = await this.findOne(id); 
+  async update(id: string, dto: UpdateDocumentDto, file?: Express.Multer.File) {
+    const document = await this.findOne(id);
 
     // 1. Xử lý File mới (Giữ nguyên logic của bạn)
     if (file) {
@@ -104,13 +120,15 @@ async update(id: string, dto: UpdateDocumentDto, file?: Express.Multer.File) {
         document.fileUrl = uploadResult.objectName;
         document.fileType = file.originalname.split('.').pop()?.toLowerCase();
       } catch (error) {
-        throw new InternalServerErrorException('Lỗi khi thay thế file trên hệ thống MinIO');
+        throw new InternalServerErrorException(
+          'Lỗi khi thay thế file trên hệ thống MinIO',
+        );
       }
     }
 
     if (dto.categoryId && dto.categoryId !== document.categoryId) {
       document.categoryId = dto.categoryId;
-      document.category = null; 
+      document.category = null;
     }
 
     Object.assign(document, dto);
@@ -118,13 +136,15 @@ async update(id: string, dto: UpdateDocumentDto, file?: Express.Multer.File) {
     try {
       await this.documentRepo.save(document);
 
-      return await this.findOne(id); 
-
+      return await this.findOne(id);
     } catch (error) {
-      if (error.code === '23505') throw new ConflictException('Slug đã tồn tại');
-      throw new InternalServerErrorException('Lỗi khi cập nhật tài liệu database');
+      if (error.code === '23505')
+        throw new ConflictException('Slug đã tồn tại');
+      throw new InternalServerErrorException(
+        'Lỗi khi cập nhật tài liệu database',
+      );
     }
-}
+  }
   async findOne(id: string) {
     let document;
     try {
@@ -137,7 +157,9 @@ async update(id: string, dto: UpdateDocumentDto, file?: Express.Multer.File) {
     }
 
     if (!document) {
-      throw new NotFoundException('Không tìm thấy tài liệu hoặc tài liệu đã bị xóa');
+      throw new NotFoundException(
+        'Không tìm thấy tài liệu hoặc tài liệu đã bị xóa',
+      );
     }
     return document;
   }
@@ -154,7 +176,7 @@ async update(id: string, dto: UpdateDocumentDto, file?: Express.Multer.File) {
 
       return {
         message: 'Xóa tài liệu thành công (Soft Delete)',
-        id: id
+        id: id,
       };
     } catch (error) {
       throw new InternalServerErrorException('Lỗi khi thực hiện xóa tài liệu');
@@ -162,25 +184,29 @@ async update(id: string, dto: UpdateDocumentDto, file?: Express.Multer.File) {
   }
   // Thêm vào trong class DocumentsService
 
-async download(id: string) {
-  const document = await this.findOne(id);
+  async download(id: string) {
+    const document = await this.findOne(id);
 
-  try {
-    // 1. Tăng số lượt tải
-    document.downloadCount += 1;
-    await this.documentRepo.save(document);
+    try {
+      // 1. Tăng số lượt tải
+      document.downloadCount += 1;
+      await this.documentRepo.save(document);
 
-    // 2. Lấy stream từ MinIO 
-    // Giả định MinioService của bạn có hàm getFileStream
-    const fileStream = await this.minioService.getFileStream(document.fileUrl);
+      // 2. Lấy stream từ MinIO
+      // Giả định MinioService của bạn có hàm getFileStream
+      const fileStream = await this.minioService.getFileStream(
+        document.fileUrl,
+      );
 
-    return {
-      stream: fileStream,
-      fileName: document.fileName,
-      fileType: document.fileType
-    };
-  } catch (error) {
-    throw new InternalServerErrorException('Lỗi khi chuẩn bị tệp tin để tải xuống');
+      return {
+        stream: fileStream,
+        fileName: document.fileName,
+        fileType: document.fileType,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Lỗi khi chuẩn bị tệp tin để tải xuống',
+      );
+    }
   }
-}
 }

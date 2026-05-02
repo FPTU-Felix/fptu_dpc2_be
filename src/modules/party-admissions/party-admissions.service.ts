@@ -1,8 +1,8 @@
-import { 
-  Injectable, 
-  NotFoundException, 
-  BadRequestException, 
-  ForbiddenException 
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -22,7 +22,8 @@ export class PartyAdmissionsService {
       order: { createdAt: 'DESC' },
     });
 
-    if (!admission) throw new NotFoundException('Bạn hiện chưa có hồ sơ kết nạp nào.');
+    if (!admission)
+      throw new NotFoundException('Bạn hiện chưa có hồ sơ kết nạp nào.');
 
     return {
       success: true,
@@ -37,19 +38,36 @@ export class PartyAdmissionsService {
     };
   }
 
-  async manageProgress(id: string, nextStatus: AdmissionStatusEnum, userRole: string, remark?: string) {
+  async manageProgress(
+    id: string,
+    nextStatus: AdmissionStatusEnum,
+    userRole: string,
+    remark?: string,
+  ) {
     const admission = await this.findOne(id);
 
     if (nextStatus === AdmissionStatusEnum.CHECKED) {
-      if (userRole !== UserRole.COMMITTEE_MEMBER) 
-        throw new ForbiddenException('Chỉ Chi ủy mới có quyền duyệt nội dung thẩm tra.');
+      if (userRole !== UserRole.COMMITTEE_MEMBER)
+        throw new ForbiddenException(
+          'Chỉ Chi ủy mới có quyền duyệt nội dung thẩm tra.',
+        );
       if (admission.status !== AdmissionStatusEnum.SUBMITTED)
-        throw new BadRequestException('Chỉ có thể duyệt CHECKED khi hồ sơ đang ở trạng thái SUBMITTED.');
+        throw new BadRequestException(
+          'Chỉ có thể duyệt CHECKED khi hồ sơ đang ở trạng thái SUBMITTED.',
+        );
     }
 
-    if (nextStatus === AdmissionStatusEnum.VERIFIED || nextStatus === AdmissionStatusEnum.REJECTED) {
-      if (userRole !== UserRole.SECRETARY && userRole !== UserRole.DEPUTY_SECRETARY)
-        throw new ForbiddenException('Chỉ Bí thư hoặc Phó Bí thư mới có quyền Chốt hoặc Từ chối.');
+    if (
+      nextStatus === AdmissionStatusEnum.VERIFIED ||
+      nextStatus === AdmissionStatusEnum.REJECTED
+    ) {
+      if (
+        userRole !== UserRole.SECRETARY &&
+        userRole !== UserRole.DEPUTY_SECRETARY
+      )
+        throw new ForbiddenException(
+          'Chỉ Bí thư hoặc Phó Bí thư mới có quyền Chốt hoặc Từ chối.',
+        );
     }
 
     admission.status = nextStatus;
@@ -57,7 +75,8 @@ export class PartyAdmissionsService {
       const defaultRemarks = {
         [AdmissionStatusEnum.CHECKED]: 'Chi ủy đã duyệt nội dung hồ sơ.',
         [AdmissionStatusEnum.VERIFIED]: 'Đã hoàn tất xác minh. Chờ họp chi bộ.',
-        [AdmissionStatusEnum.REJECTED]: 'Hồ sơ bị từ chối. Vui lòng kiểm tra lại.',
+        [AdmissionStatusEnum.REJECTED]:
+          'Hồ sơ bị từ chối. Vui lòng kiểm tra lại.',
       };
       admission.remark = defaultRemarks[nextStatus] || admission.remark;
     } else {

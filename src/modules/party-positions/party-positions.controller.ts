@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { PartyPositionsService } from './party-positions.service';
 import { CreatePartyPositionDto } from './dto/create-party-position.dto';
 import { UpdatePartyPositionDto } from './dto/update-party-position.dto';
@@ -23,7 +31,10 @@ export class PartyPositionsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updatePartyPositionDto: UpdatePartyPositionDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updatePartyPositionDto: UpdatePartyPositionDto,
+  ) {
     return this.partyPositionsService.update(+id, updatePartyPositionDto);
   }
 

@@ -26,9 +26,13 @@ export class PartyAdmissionStepSubmissionEntity {
   @Column({ type: 'uuid' })
   applicationId: string;
 
-  @ManyToOne(() => PartyAdmissionApplicationEntity, (application) => application.submissions, {
-    onDelete: 'CASCADE',
-  })
+  @ManyToOne(
+    () => PartyAdmissionApplicationEntity,
+    (application) => application.submissions,
+    {
+      onDelete: 'CASCADE',
+    },
+  )
   @JoinColumn({ name: 'applicationId' })
   application: PartyAdmissionApplicationEntity;
 
@@ -65,10 +69,16 @@ export class PartyAdmissionStepSubmissionEntity {
   @Column({ type: 'boolean', default: true })
   isLatest: boolean;
 
-  @OneToMany(() => PartyAdmissionDocumentEntity, (document) => document.submission)
+  @OneToMany(
+    () => PartyAdmissionDocumentEntity,
+    (document) => document.submission,
+  )
   documents: PartyAdmissionDocumentEntity[];
 
-  @OneToMany(() => PartyAdmissionStepReviewEntity, (review) => review.submission)
+  @OneToMany(
+    () => PartyAdmissionStepReviewEntity,
+    (review) => review.submission,
+  )
   reviews: PartyAdmissionStepReviewEntity[];
 
   @CreateDateColumn()

@@ -10,7 +10,11 @@ import { MailModule } from '../mail/mail.module';
 import { PartyAdmissionsModule } from '../party-admissions/party-admissions.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Role]), MailModule, PartyAdmissionsModule],
+  imports: [
+    TypeOrmModule.forFeature([User, Role]),
+    MailModule,
+    PartyAdmissionsModule,
+  ],
   controllers: [
     UsersController,
     UsersAdminController,
