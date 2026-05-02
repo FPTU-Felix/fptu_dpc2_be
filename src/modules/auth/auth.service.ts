@@ -7,20 +7,27 @@ import { SigninDto } from './dto/signin.dto';
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
-    private jwtService: JwtService,
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
   ) {}
 
-  // --- 1. ĐĂNG NHẬP ---
   async signin(dto: SigninDto) {
     const user = await this.usersService.findOneByEmailOrUsername(dto.username);
-    if (!user) throw new ForbiddenException('Sai tài khoản hoặc mật khẩu');
+
+    if (!user) {
+      throw new ForbiddenException('Sai tài khoản hoặc mật khẩu');
+    }
 
     const passwordMatches = await bcrypt.compare(dto.password, user.password);
-    if (!passwordMatches)
+
+    if (!passwordMatches) {
       throw new ForbiddenException('Sai tài khoản hoặc mật khẩu');
-    if (user.isActive === false)
+    }
+
+    if (user.isActive === false) {
       throw new ForbiddenException('Tài khoản của bạn đã bị khóa');
+    }
+
     const tokens = await this.generateTokens(
       user.id,
       user.username,
@@ -28,64 +35,122 @@ export class AuthService {
     );
 
     await this.updateRefreshTokenHash(user.id, tokens.refreshToken);
+
     return {
       ...tokens,
       isFirstLogin: user.isFirstLogin,
       role: user.role?.name,
     };
   }
-  // --- 2. ĐĂNG XUẤT ---
+
   async logout(userId: string) {
     await this.usersService.updateRefreshToken(userId, null);
-    return { message: 'Đăng xuất thành công' };
+
+    return {
+      message: 'Đăng xuất thành công',
+    };
   }
 
-  // --- 3. LẤY TOKEN MỚI (REFRESH) ---
-  async refreshTokens(userId: string, rt: string) {
+  async refreshTokens(userId: string, refreshToken: string) {
     const user = await this.usersService.findOneById(userId);
-    console.log('USER REFRESH', user);
-    if (!user || !user.hashedRefreshToken)
-      throw new ForbiddenException('Từ chối truy cập');
 
-    const rtMatches = await bcrypt.compare(rt, user.hashedRefreshToken);
-    if (!rtMatches) throw new ForbiddenException('Token không hợp lệ');
+    if (!user || !user.hashedRefreshToken) {
+      throw new ForbiddenException('Từ chối truy cập');
+    }
+
+    const refreshTokenMatches = await bcrypt.compare(
+      refreshToken,
+      user.hashedRefreshToken,
+    );
+
+    if (!refreshTokenMatches) {
+      throw new ForbiddenException('Token không hợp lệ');
+    }
+
     const tokens = await this.generateTokens(
       user.id,
       user.username,
       user.role?.name,
     );
+
     await this.updateRefreshTokenHash(user.id, tokens.refreshToken);
 
     return tokens;
   }
 
-  async updateRefreshTokenHash(userId: string, rt: string | null) {
-    if (!rt) {
+  async updateRefreshTokenHash(userId: string, refreshToken: string | null) {
+    if (!refreshToken) {
       await this.usersService.updateRefreshToken(userId, null);
       return;
     }
-    const hash = await bcrypt.hash(rt, 10);
-    await this.usersService.updateRefreshToken(userId, hash);
+
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+
+    await this.usersService.updateRefreshToken(userId, hashedRefreshToken);
   }
 
-  async generateTokens(userId: string, username: string, roleName: string) {
+  async generateTokens(userId: string, username: string, roleName?: string) {
     const payload = {
       sub: userId,
       username,
       roleName,
     };
 
-    const [at, rt] = await Promise.all([
+    const accessSecret = process.env.JWT_ACCESS_SECRET;
+    const refreshSecret = process.env.JWT_REFRESH_SECRET;
+
+    if (!accessSecret || !refreshSecret) {
+      throw new Error('JWT secrets are not configured');
+    }
+
+    const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_ACCESS_SECRET,
+        secret: accessSecret,
         expiresIn: '15m',
       }),
       this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_REFRESH_SECRET,
+        secret: refreshSecret,
         expiresIn: '7d',
       }),
     ]);
 
-    return { accessToken: at, refreshToken: rt };
+    return {
+      accessToken,
+      refreshToken,
+    };
+  }
+
+  async googleLogin(googleUser: any) {
+    if (!googleUser?.email) {
+      throw new ForbiddenException('Thông tin từ Google không hợp lệ');
+    }
+
+    const user = await this.usersService.findOneByEmailOrUsername(
+      googleUser.email,
+    );
+
+    if (!user) {
+      throw new ForbiddenException(
+        'Tài khoản Email không tồn tại trong hệ thống',
+      );
+    }
+
+    if (user.isActive === false) {
+      throw new ForbiddenException('Tài khoản của bạn đã bị khóa');
+    }
+
+    const tokens = await this.generateTokens(
+      user.id,
+      user.username,
+      user.role?.name,
+    );
+
+    await this.updateRefreshTokenHash(user.id, tokens.refreshToken);
+
+    return {
+      ...tokens,
+      isFirstLogin: user.isFirstLogin,
+      role: user.role?.name,
+    };
   }
 }

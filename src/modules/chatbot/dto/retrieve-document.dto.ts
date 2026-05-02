@@ -17,7 +17,7 @@ export class RetrieveDocumentDto {
   @IsInt()
   @Min(1)
   @Max(20)
-  topK?: number = 5;
+  topK?: number = 10;
 
   @IsOptional()
   @IsUUID()

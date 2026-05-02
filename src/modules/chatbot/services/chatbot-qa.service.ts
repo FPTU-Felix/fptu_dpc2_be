@@ -29,15 +29,12 @@ type RetrievalReason =
 export type ChatbotQaResponse = {
   query: string;
   normalizedQuery?: string;
-
   canAnswer: boolean;
   needClarification: boolean;
   outOfScope: boolean;
   blocked: boolean;
-
   clarificationType?: ClarificationType | 'unknown';
   clarificationQuestion?: string;
-
   route:
   | RouteDecision
   | {
@@ -95,6 +92,7 @@ export class ChatbotQaService {
       userRole: params.userRole,
     });
 
+
     if (security.action === 'BLOCK') {
       return this.handleBlocked(
         { ...params, query: normalizedQuery },
@@ -111,7 +109,7 @@ export class ChatbotQaService {
     const effectiveQuery =
       security.action === 'SANITIZE_AND_CONTINUE'
         ? this.normalizeUserQuery(security.sanitizedQuery ?? normalizedQuery)
-        : normalizedQuery;
+        : normalizedQuery; ``
 
     const route = this.queryRouterService.decide(effectiveQuery);
 
@@ -131,19 +129,16 @@ export class ChatbotQaService {
   }
 
   private normalizeUserQuery(query: string): string {
-    if (!query) return '""';
+    if (!query) return '';
 
-    let q = query.trim();
-
-    q = q.replace(/^"+|"+$/g, '');
-
-    if (!q.endsWith('?')) {
-      q += '?';
-    }
-
-    return `"${q}"`;
+    return query
+      .normalize('NFC')
+      .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
+      .replace(/[?!.。]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
   }
-
   private async handleBlocked(
     params: AskParams,
     block: {
