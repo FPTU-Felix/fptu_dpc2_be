@@ -239,6 +239,9 @@ export class MeetingsService {
     });
 
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+    if (meeting.status === MeetingStatus.FINISHED) {
+      return { message: 'Không thể bật điểm danh cuộc họp đã kết thúc!' };
+    }
 
     const currentState = !!meeting.isCheckinActive;
     const newState = !currentState;
