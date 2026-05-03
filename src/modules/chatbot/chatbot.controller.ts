@@ -5,20 +5,17 @@ import {
   NotFoundException,
   Param,
   Post,
-  UnauthorizedException,
-  UseGuards,
 } from '@nestjs/common';
 import { RetrieveDocumentDto } from './dto/retrieve-document.dto';
 import { AskChatbotDto } from './dto/ask-chatbot.dto';
 import { ChatbotRetrievalService } from './services/chatbot-retrieval.service';
 import { ChatbotQaService } from './services/chatbot-qa.service';
 import { ChatbotHistoryService } from './services/chatbot-history.service';
-import { GetCurrentUser } from '../auth/decorators/get-user.decorator';
-import { AuthGuard } from '@nestjs/passport';
 
 @Controller('chatbot')
-@UseGuards(AuthGuard('jwt'))
 export class ChatbotController {
+  private readonly TEMP_USER_ID = 'dev-test-user';
+
   constructor(
     private readonly chatbotRetrievalService: ChatbotRetrievalService,
     private readonly chatbotQaService: ChatbotQaService,
@@ -41,13 +38,8 @@ export class ChatbotController {
   }
 
   @Post('ask')
-  async ask(
-    @Body() dto: AskChatbotDto,
-    @GetCurrentUser('sub') userId: string,
-  ) {
-    if (!userId) {
-      throw new UnauthorizedException('Người dùng chưa đăng nhập.');
-    }
+  async ask(@Body() dto: AskChatbotDto) {
+    const userId = this.TEMP_USER_ID;
 
     let conversation;
 
@@ -125,10 +117,8 @@ export class ChatbotController {
   }
 
   @Get('conversations')
-  async getConversations(@GetCurrentUser('sub') userId: string) {
-    if (!userId) {
-      throw new UnauthorizedException('Người dùng chưa đăng nhập.');
-    }
+  async getConversations() {
+    const userId = this.TEMP_USER_ID;
 
     const items = await this.chatbotHistoryService.getUserConversations(userId);
 
@@ -138,13 +128,8 @@ export class ChatbotController {
   }
 
   @Get('messages/:conversationId')
-  async getMessages(
-    @Param('conversationId') conversationId: string,
-    @GetCurrentUser('sub') userId: string,
-  ) {
-    if (!userId) {
-      throw new UnauthorizedException('Người dùng chưa đăng nhập.');
-    }
+  async getMessages(@Param('conversationId') conversationId: string) {
+    const userId = this.TEMP_USER_ID;
 
     const { conversation, messages } =
       await this.chatbotHistoryService.getConversationDetail({
