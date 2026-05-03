@@ -828,6 +828,9 @@ export class MeetingsService {
     });
 
     if (!meeting) throw new NotFoundException('Không tìm thấy cuộc họp');
+    if (meeting.status === MeetingStatus.FINISHED) {
+      return { message: 'Cuộc họp đã được kết thúc trước đó rồi!' };
+    }
     meeting.status = MeetingStatus.FINISHED;
     meeting.endTime = new Date();
     meeting.isCheckinActive = false;
@@ -844,14 +847,7 @@ export class MeetingsService {
         attendeesToUpdate = meeting.attendees.map((attendee) => {
           if (attendee.status === AttendeeStatus.EXCUSED) return attendee;
 
-          let finalDuration = attendee.onlineDuration || 0;
-          if (attendee.checkOutTime) {
-            const lastPing = new Date(attendee.checkOutTime).getTime();
-            const gapCuoi = Math.floor((end - lastPing) / 1000);
-            if (gapCuoi > 0 && gapCuoi < 300) {
-              finalDuration += gapCuoi;
-            }
-          }
+          const finalDuration = attendee.onlineDuration || 0;
 
           const isPass = finalDuration >= requiredSec;
           attendee.status = isPass
