@@ -244,7 +244,12 @@ export class MeetingsManagerController {
   }
 
   @Delete('documents/:docId')
-  @Roles(UserRole.ADMIN, UserRole.SECRETARY, UserRole.DEPUTY_SECRETARY)
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.SECRETARY,
+    UserRole.DEPUTY_SECRETARY,
+    UserRole.COMMITTEE_MEMBER,
+  )
   @ApiOperation({ summary: 'Xóa tài liệu cuộc họp' })
   async removeDocument(
     @Param('docId', ParseUUIDPipe) docId: string,
