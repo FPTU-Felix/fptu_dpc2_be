@@ -106,4 +106,12 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsDateString()
   officialDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Nơi ở hiện tại',
+    example: 'Hà Nội',
+  })
+  @IsOptional()
+  @IsString()
+  permanentAddress?: string;
 }
